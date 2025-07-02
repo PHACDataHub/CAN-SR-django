@@ -13,9 +13,10 @@
           rel="icon"
           type="image/x-icon"
           class="wb-init wb-favicon-inited">
-    <link rel="stylesheet" href="{{ static('third_party/css/bootstrap.min.css') }}" />
+    <link rel="stylesheet"
+          href="{{ static('third_party/css/bootstrap.min.css') }}" />
     <link rel="stylesheet" href="{{ static('site.css') }}" />
-    <script src="{{ static('third_party/js/jquery-3.2.1.min.js') }}"></script>
+    <script src="{{ static('third_party/js/jquery-3.7.1.min.js') }}"></script>
     <script src="{{ static('third_party/js/htmx.min.js') }}"></script>
     <script src="{{ static('third_party/js/idiomorph.min.js') }}"></script>
     <script src="{{ static('third_party/js/idiomorph-ext.min.js') }}"></script>
@@ -134,11 +135,19 @@
         <div class="row">
           <div class="col"></div>
           <div class="col-auto">
-            <object type="image/svg+xml" tabindex="-1" role="img" data="{{ static('third_party/img/wmms-blk.svg') }}" aria-label="Symbol of the Government of Canada" style="height: 2rem; margin: 1rem 0;"></object>
+            <object type="image/svg+xml"
+                    tabindex="-1"
+                    role="img"
+                    data="{{ static('third_party/img/wmms-blk.svg') }}"
+                    aria-label="Symbol of the Government of Canada"
+                    style="height: 2rem;
+                           margin: 1rem 0"></object>
           </div>
         </div>
       </div>
     </footer>
     <script src="{{ static('third_party/js/bootstrap.bundle.min.js') }}"></script>
+    {{ phac_aspc.phac_aspc_wet_session_timeout_dialog(dict(request=request) , 'root') }}
+    {{ phac_aspc.phac_aspc_wet_scripts(include_jquery=False) }}
   </body>
 </html>
