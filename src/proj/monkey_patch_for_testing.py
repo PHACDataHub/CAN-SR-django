@@ -1,5 +1,6 @@
 from django.test import signals
 
+from htpy.django import _HtpyTemplate
 from jinja2 import Template as Jinja2Template
 
 # Without this, response.context is not accessible in forms
@@ -16,3 +17,16 @@ def instrumented_render(template_object, *args, **kwargs):
 
 
 Jinja2Template.render = instrumented_render
+
+
+ORIGINAL_HTPY_RENDERER = _HtpyTemplate.render
+
+
+def instrumented_htpy_render(self, context, request):
+    signals.template_rendered.send(
+        sender=self.func, template=self.func, context=context
+    )
+    return ORIGINAL_HTPY_RENDERER(self, context, request)
+
+
+_HtpyTemplate.render = instrumented_htpy_render

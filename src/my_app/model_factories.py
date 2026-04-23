@@ -32,7 +32,6 @@ class ProjectFactory(factory.django.DjangoModelFactory):
     description_en = factory.Faker("text")
     description_fr = factory.Faker("text")
     project_type = factory.Iterator(ProjectType.objects.all())
-    business_key = factory.Faker("word")
 
 
 class ProjectTaskFactory(factory.django.DjangoModelFactory):

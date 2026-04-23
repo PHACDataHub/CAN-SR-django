@@ -22,7 +22,7 @@ def get_redirect_for_user(user):
 
 
 class LoginView(BaseLoginView):
-    template_name = "login.jinja2"
+    template_name = "proj.htpy.login_page.LoginPageTemplate"
 
     def get(self, request, *args, **kwargs):
         if request.user.is_authenticated:

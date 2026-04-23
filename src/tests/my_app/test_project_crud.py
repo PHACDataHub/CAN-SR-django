@@ -73,3 +73,10 @@ def test_edit_project(admin_client, admin_user):
     assert proj.description_fr == "C'est un test project"
     assert proj.project_type.code == "construction"
     assert proj.tags.first().name_en == "Expensive"
+
+
+def test_project_detail(admin_client):
+    proj = ProjectFactory()
+    url = reverse("project_detail", args=[proj.id])
+    response = admin_client.get(url)
+    assert response.status_code == 200

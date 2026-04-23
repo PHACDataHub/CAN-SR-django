@@ -1,1 +1,12 @@
+/* messages */
+#message-bar:has(.django-message) {
+    margin-top: -1rem;
+    margin-bottom: 1rem;
+}
 
+.alert.django-message {
+    border-radius: 0;
+    margin: 0;
+}
+
+/* end messages */

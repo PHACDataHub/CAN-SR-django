@@ -1,15 +1,18 @@
 django-debug-toolbar==4.4.6
 django-extensions==3.2.3
 django-htmx==1.21.0
-django-phac_aspc-helpers==3.1.1
-django-versionator==2.0.1
+django-phac_aspc-helpers==3.2.0
+# -e /Users/acl/Documents/code/django-phac_aspc-helpers
+django-routify==0.3.4
+django-versionator==2.1
 django-data-fetcher==2.2
-Django==5.1.2
+Django==6.0.1
 Faker==15.1.1
 gunicorn==22.0.0
+htpy==25.12.0
 ipython==8.10.0
 Jinja2==3.1.4
-psycopg2-binary==2.9.5
+psycopg[binary,pool]==3.2.3
 python-decouple==3.6
 pytz==2024.1
 requests==2.32.4

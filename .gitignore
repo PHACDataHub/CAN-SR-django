@@ -17,3 +17,5 @@ runserver.sh
 _old_myapp
 
 db.sqlite3
+
+notes.md
