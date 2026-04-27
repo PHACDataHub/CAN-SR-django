@@ -3,3 +3,4 @@
 #   by convention, we do it here
 from . import modal_demo, project_crud
 from . import background_tasks
+from . import llm_demo

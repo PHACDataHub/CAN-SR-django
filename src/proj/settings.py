@@ -23,8 +23,12 @@ from phac_aspc.django.settings.utils import (
     configure_middleware,
 )
 
+from .llm_settings import *
+
 # During tests, modify settings or monkeypatch things
-if "test" in sys.argv or any("pytest" in arg for arg in sys.argv):
+IS_RUNNING_PYTESTS = False
+if "test" in sys.argv or "pytest" in " ".join(sys.argv):
+    IS_RUNNING_PYTESTS = True
     from . import monkey_patch_for_testing
 
 

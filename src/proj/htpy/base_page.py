@@ -17,12 +17,14 @@ from proj.jinja_helpers import (
     message_type,
     url_to_other_lang,
 )
-from proj.text import tm
+from proj.text import tdt, tm
 
 from .util import HtpyComponent
 
 
 def static_no_cache(path):
+    if settings.DEBUG:
+        return static(path)
     return static(path) + f"?v={settings.STATIC_BUST_TOKEN}"
 
 
@@ -194,6 +196,10 @@ class BasePageTemplate(HtpyComponent):
                                         h.i(".fa.fa-power-off"),
                                         tm("logout"),
                                     ],
+                                    h.a(
+                                        ".dropdown-item",
+                                        href=reverse("llm_demo"),
+                                    )[tdt("LLM demo")],
                                 ],
                             ]
                             if user.is_authenticated
