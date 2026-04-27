@@ -22,4 +22,4 @@ def my_app_scoped_autofixture(django_db_setup, django_db_blocker):
 
 @pytest.fixture(scope="package", autouse=True)
 def create_seed_data(my_app_scoped_autofixture):
-    call_command("loaddata", "my_app/fixtures/lookups.yaml", verbosity=0)
+    call_command("loaddata", "lookups", verbosity=0)

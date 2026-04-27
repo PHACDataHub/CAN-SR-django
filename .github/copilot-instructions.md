@@ -24,6 +24,7 @@ Localization
 
 - All user-facing text should be externalized and rendered via tm(). In jinja, tm is a global, in python, it's `proj.text.tm`
 - Every (unique) tm() key should have an entry in the `src/proj/translations.py` dict. If adding new text, add translations at bottom of dict
+- if the task is prototype-ish in nature, don't worry about translations, but use `tdt` to mark strings, this way we don't risk forgetting translating literals later on. `tdt` is a no-op that just returns the string, but serves as a reminder to add the key to translations.py later
 
 Rendering
 

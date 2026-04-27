@@ -61,12 +61,20 @@ INSTALLED_APPS = configure_apps(
         "django.contrib.messages",
         "django.contrib.staticfiles",
         "django_extensions",
+        "django_database_task",
         "proj.apps.CoreAppConfig",
         "my_app.apps.MyAppConfig",
         *(["debug_toolbar"] if ENABLE_DEBUG_TOOLBAR else []),
         "django_htmx",
     ]
 )
+
+TASKS = {
+    "default": {
+        "BACKEND": "django_database_task.backends.DatabaseTaskBackend",
+        "QUEUES": [],
+    }
+}
 
 STATIC_URL = "/static/"
 STATICFILES_DIRS = (os.path.join("static"),)
