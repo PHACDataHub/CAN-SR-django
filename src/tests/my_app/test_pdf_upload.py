@@ -2,7 +2,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
 
-from my_app.models import Document
+from my_app.models import Document, DocumentMetadata
 
 
 def test_pdf_upload_creates_document_and_shows_list_and_detail(
@@ -36,11 +36,27 @@ def test_pdf_upload_creates_document_and_shows_list_and_detail(
         assert "Upload new PDF" in response.content.decode()
 
     document = Document.objects.get()
+    DocumentMetadata.objects.create(
+        document=document,
+        metadata={
+            "classification": "public",
+            "tags": ["pdf", "example"],
+            "reviewed": True,
+            "details": {"pages": 1},
+        },
+    )
     assert document.document_type == "pdf"
     assert document.uploaded_by.username == "admin"
     assert document.file.name == "documents/example.pdf"
     assert document.uploaded_at is not None
     assert (tmp_path / "documents" / "example.pdf").exists()
+
+    list_response = admin_client.get(reverse("document_list"))
+    assert list_response.status_code == 200
+    list_content = list_response.content.decode()
+    assert "Metadata" in list_content
+    assert "public" in list_content
+    assert "pdf" in list_content
 
     detail_response = admin_client.get(
         reverse("document_detail", args=[document.id])
@@ -51,3 +67,6 @@ def test_pdf_upload_creates_document_and_shows_list_and_detail(
     assert "Document detail" in detail_content
     assert "documents/example.pdf" in detail_content
     assert "Open file" in detail_content
+    assert "Document metadata" in detail_content
+    assert "classification" in detail_content
+    assert "reviewed" in detail_content

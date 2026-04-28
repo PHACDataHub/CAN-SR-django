@@ -78,3 +78,17 @@ class Document(models.Model):
 
     def __str__(self):
         return f"{self.document_type}: {self.file.name}"
+
+
+@add_to_admin
+class DocumentMetadata(models.Model):
+    document = fields.OneToOneField(
+        Document,
+        related_name="document_metadata",
+        on_delete=models.CASCADE,
+        verbose_name=tdt("Document"),
+    )
+    metadata = models.JSONField(default=dict, blank=True)
+
+    def __str__(self):
+        return f"{self.document_id} metadata"
