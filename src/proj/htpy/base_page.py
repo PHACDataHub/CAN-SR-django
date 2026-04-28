@@ -202,8 +202,8 @@ class BasePageTemplate(HtpyComponent):
                                     )[tdt("LLM demo")],
                                     h.a(
                                         ".dropdown-item",
-                                        href=reverse("upload_pdf"),
-                                    )[tm("upload_pdf")],
+                                        href=reverse("document_list"),
+                                    )[tm("documents")],
                                 ],
                             ]
                             if user.is_authenticated
