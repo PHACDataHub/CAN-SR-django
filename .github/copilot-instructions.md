@@ -67,6 +67,12 @@ UI/UX
 - Plain HTML/CSS > HTMX > Vanilla JS, NO jquery
 - Modals discouraged, follow existing pattern strictly
 
+Javascript
+
+- avoid writing custom JS when possible, prefer HTMX
+- inline JS in htpy script tags is ugly, if more than 3 lines, put it in a separate file in src/static, link with src=static_no_cache attr
+- translation in JS should be passed from python through `data-*` attributes and accessed via a small helper function. Unless demo purposes, then just use the tdt() global (available in JS as well)
+
 # Testing
 
 Write pytests in the src/tests/, focus on integration tests of views, unit tests for helpers
@@ -91,11 +97,11 @@ def test_something(vanilla_user_client):
 
 See existing tests for examples before writing new ones
 
-Tests can be run
+You may need to run pytests from the src/ dir. Example commands:
 
-- global `python src/manage.py test src/`
-- specific files `python src/manage.py test src/tests/test_foo.py`
-- single funcs `python src/manage.py test src/tests/test_foo.py::test_bar`
+- run all tests `pytest`
+- specific files `pytest src/tests/test_foo.py`
+- single funcs `pytest src/tests/test_foo.py::test_bar`
 
 # Formatting
 
