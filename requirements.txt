@@ -1,3 +1,4 @@
+beautifulsoup4==4.14.3
 django-debug-toolbar==4.4.6
 django-extensions==3.2.3
 django-htmx==1.21.0
@@ -10,6 +11,7 @@ django-database-task==0.2.4
 Django==6.0.1
 Faker==15.1.1
 gunicorn==22.0.0
+grobid-client-python==0.1.4
 htpy==25.12.0
 httpx==0.28.1
 ipython==8.10.0

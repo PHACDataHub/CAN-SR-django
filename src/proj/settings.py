@@ -25,6 +25,8 @@ from phac_aspc.django.settings.utils import (
 
 from .llm_settings import *
 
+GROBID_URL = config("GROBID_URL", default="")
+
 # During tests, modify settings or monkeypatch things
 IS_RUNNING_PYTESTS = False
 if "test" in sys.argv or "pytest" in " ".join(sys.argv):
