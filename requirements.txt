@@ -6,10 +6,12 @@ django-phac_aspc-helpers==3.2.0
 django-routify==0.3.4
 django-versionator==2.1
 django-data-fetcher==2.2
+django-database-task==0.2.4
 Django==6.0.1
 Faker==15.1.1
 gunicorn==22.0.0
 htpy==25.12.0
+httpx==0.28.1
 ipython==8.10.0
 Jinja2==3.1.4
 psycopg[binary,pool]==3.2.3
