@@ -82,6 +82,8 @@ TASKS = {
 
 STATIC_URL = "/static/"
 STATICFILES_DIRS = (os.path.join("static"),)
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 MIDDLEWARE = configure_middleware(
     [

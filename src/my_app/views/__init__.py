@@ -1,6 +1,4 @@
 # without explicit urls.py,
 #   we need to remember to import all view modules
 #   by convention, we do it here
-from . import modal_demo, project_crud
-from . import background_tasks
-from . import llm_demo
+from . import background_tasks, llm_demo, modal_demo, pdf_upload, project_crud

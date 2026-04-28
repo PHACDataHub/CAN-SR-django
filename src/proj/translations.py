@@ -54,4 +54,32 @@ translation_entries = {
         "en": "Close",
         "fr": "Fermer",
     },
+    "upload_pdf": {
+        "en": "Upload PDF",
+        "fr": "Téléverser un PDF",
+    },
+    "upload_pdf_title": {
+        "en": "Upload a PDF",
+        "fr": "Téléverser un PDF",
+    },
+    "upload_pdf_instructions": {
+        "en": "Choose a PDF file and store it in media/ for now.",
+        "fr": "Choisissez un fichier PDF et enregistrez-le dans media/ pour le moment.",
+    },
+    "pdf_file": {
+        "en": "PDF file",
+        "fr": "Fichier PDF",
+    },
+    "upload_pdf_submit": {
+        "en": "Upload",
+        "fr": "Téléverser",
+    },
+    "pdf_uploaded": {
+        "en": "PDF uploaded",
+        "fr": "PDF téléversé",
+    },
+    "back_to_list": {
+        "en": "Back to list",
+        "fr": "Retour à la liste",
+    },
 }
