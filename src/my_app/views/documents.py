@@ -5,9 +5,11 @@ from django.contrib import messages
 from django.core.validators import FileExtensionValidator
 from django.http import HttpResponseRedirect
 from django.middleware.csrf import get_token
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.text import get_valid_filename
 from django.utils.timezone import localtime
+from django.views import View
 from django.views.generic import DetailView, FormView, ListView
 
 import htpy as h
@@ -19,6 +21,7 @@ from proj.text import tdt, tm
 
 from my_app.models import Document, DocumentMetadata
 from my_app.router import route
+from my_app.tasks.process_document_task import process_document_metadata
 
 
 class UploadPdfForm(forms.Form):
@@ -159,6 +162,14 @@ class DocumentDetailPage(BasePageTemplate):
     def content(self):
         document = self.context["object"]
         document_metadata = self._get_document_metadata(document)
+        metadata_content = (
+            h.p(".text-muted")[tdt("No metadata available.")]
+            if document_metadata is None
+            else h.div(".border.rounded.p-3.bg-body-tertiary")[
+                self._render_json_value(document_metadata.metadata)
+            ]
+        )
+        process_action = self._render_process_metadata_form(document)
 
         return [
             h.h1[tm("document_detail_title")],
@@ -200,13 +211,8 @@ class DocumentDetailPage(BasePageTemplate):
                 ]
             ],
             h.h2(".h4.mt-4")[tdt("Document metadata")],
-            (
-                h.p(".text-muted")[tdt("No metadata available.")]
-                if document_metadata is None
-                else h.div(".border.rounded.p-3.bg-body-tertiary")[
-                    self._render_json_value(document_metadata.metadata)
-                ]
-            ),
+            process_action,
+            metadata_content,
         ]
 
     def _get_document_metadata(self, document):
@@ -244,6 +250,21 @@ class DocumentDetailPage(BasePageTemplate):
             return tm("yes") if value else tm("no")
 
         return value
+
+    def _render_process_metadata_form(self, document):
+        return h.form(
+            method="post",
+            action=reverse("process_file", args=[document.id]),
+        )[
+            h.input(
+                type="hidden",
+                name="csrfmiddlewaretoken",
+                value=get_token(self.request),
+            ),
+            h.button(".btn.btn-primary.mb-3", type="submit")[
+                tdt("Process PDF")
+            ],
+        ]
 
 
 @route("upload-pdf/", name="upload_pdf")
@@ -286,4 +307,15 @@ class DocumentDetailView(DetailView, HtpyTemplateMixin):
     def get_queryset(self):
         return Document.objects.select_related(
             "uploaded_by", "document_metadata"
+        )
+
+
+@route("process_file/<int:document_id>/", name="process_file")
+class ProcessDocumentFileView(View):
+    def post(self, request, document_id):
+        get_object_or_404(Document, pk=document_id)
+        process_document_metadata.enqueue(document_id=document_id)
+        messages.success(request, tdt("Document processing queued."))
+        return HttpResponseRedirect(
+            reverse("document_detail", args=[document_id])
         )

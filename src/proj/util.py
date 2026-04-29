@@ -1,6 +1,11 @@
 from collections import defaultdict
+from typing import Dict, List, Union
 
 from django.utils.translation import get_language
+
+JSONValue = Union[
+    str, int, float, bool, None, Dict[str, "JSONValue"], List["JSONValue"]
+]
 
 
 def group_by(iterable, key):

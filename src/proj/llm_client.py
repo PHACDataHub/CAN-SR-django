@@ -197,7 +197,7 @@ class TestLLMClient(LLMClient):
 
 
 def get_client() -> LLMClient:
-    mode = getattr(settings, "LLM_MODE", "local")
+    mode = settings.LLM_MODE
 
     if mode == "test_client":
         if not settings.IS_RUNNING_PYTESTS:
@@ -207,11 +207,14 @@ def get_client() -> LLMClient:
         return TestLLMClient()
 
     if mode == "local":
+        return TestLLMClient()
+
+    if mode == "ollama":
         return get_ollama_client()
 
     else:
         raise LLMConfigurationError(
-            f"Unsupported LLM_MODE '{mode}'. Only 'local' is supported."
+            f"Unsupported LLM_MODE '{mode}'. Only 'local', 'ollama' are supported"
         )
 
 
@@ -222,7 +225,7 @@ def get_ollama_client() -> OllamaLLMClient:
 
     if not base_url or not model:
         raise LLMConfigurationError(
-            "LLM_MODE=local requires LLM_OLLAMA_URL and LLM_OLLAMA_MODEL"
+            "LLM_MODE=ollama requires LLM_OLLAMA_URL and LLM_OLLAMA_MODEL"
         )
 
     return OllamaLLMClient(
@@ -233,4 +236,3 @@ def get_ollama_client() -> OllamaLLMClient:
 
 
 RequestsLLMHttpClient = HttpxLLMHttpClient
-DiffLLMClient = TestLLMClient

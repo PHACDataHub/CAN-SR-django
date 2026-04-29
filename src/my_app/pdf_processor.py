@@ -1,9 +1,13 @@
+import os
+import tempfile
 from abc import ABC, abstractmethod
 
 from django.conf import settings
 
 from bs4 import BeautifulSoup
 from grobid_client.grobid_client import GrobidClient
+
+from proj.util import JSONValue
 
 """
 This whole module is ideally never called from a django request, 
@@ -17,17 +21,41 @@ We can look into performance later:
     - or use alternative grobid-client lib that does this for us using async
     - for this reason, isolate all grobid interaction in case we need to swap out client
 - OR, tweaking background task concurrency settings 
+
+
+TODO: 
+- document consistent format/type we expect from processor
+    - change test/dev processors to return that format
+- split up any consistent types into proper model fields
+- the rest can go into json 
+- use lxml or BS4 to parse grobid's xml output and extract relevant metadata
+    - e.g. coordinates, pages, 
 """
 
 
 class PdfProcessor(ABC):
-    @abstractmethod
-    def process_pdf(self, file_descriptor):
-        pass
+
+    def process_pdf(self, file):
+        xml = self.pdf_to_xml(file)
+        return self.xml_to_json(xml)
+
+    def process_text(self, text):
+        xml = self.text_to_xml(text)
+        return self.xml_to_json(xml)
 
     @abstractmethod
-    def process_text(self, text):
-        pass
+    def pdf_to_xml(self, file_descriptor) -> JSONValue:
+        raise NotImplementedError
+
+    @abstractmethod
+    def text_to_xml(self, text) -> JSONValue:
+        raise NotImplementedError
+
+    def xml_to_json(self, xml_str) -> JSONValue:
+        # placeholder for actual XML parsing logic
+        soup = BeautifulSoup(xml_str, "xml")
+        # extract relevant metadata from the XML and return as dict
+        return {"xml_content": soup.prettify()}
 
 
 def get_grobid_client():
@@ -38,38 +66,59 @@ def get_grobid_client():
     )
 
 
+def get_xml_from_grobid(file):
+    grobid_client = get_grobid_client()
+    try:
+        # grobid client only accepts file paths,
+        # so we need to write the uploaded file to a temp location
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        tmp.write(file.read())
+        tmp.flush()
+        tmp.close()
+
+        _file, status, xml = grobid_client.process_pdf(
+            "processFulltextDocument",
+            tmp.name,
+            consolidate_header=True,
+            consolidate_citations=False,
+            segment_sentences=True,
+            tei_coordinates=True,
+            include_raw_citations=False,
+            include_raw_affiliations=False,
+            generateIDs=True,
+        )
+        return xml
+    finally:
+        os.unlink(tmp.name)
+
+
 class GrobidPdfProcessor(PdfProcessor):
     def __init__(self):
         self.grobid_client = get_grobid_client()
 
-    def process_pdf(self, file_descriptor):
-        return self.grobid_client.process(
-            "processFulltextDocument", file_descriptor
-        )
+    def pdf_to_xml(self, file):
+        xml = get_xml_from_grobid(file)
+        return {"xml": xml}
 
-    def process_text(self, text):
-        soup = BeautifulSoup(text, "html.parser")
-        return soup.get_text()
+    def text_to_xml(self, text):
+        raise Exception("TODO")
 
 
 class TestPdfProcessor(PdfProcessor):
-    def process_pdf(self, file_descriptor):
-        return "processed pdf"
+    def pdf_to_xml(self, file_descriptor):
+        return "<test>pdf content</test>"
 
-    def process_text(self, text):
-        return text
+    def text_to_xml(self, text):
+        return f"<test>{text}</test>"
 
 
-class MinimalDevPdfProcessor(PdfProcessor):
+class MinimalDevPdfProcessor(TestPdfProcessor):
     """
-    return constants or semi-random trivial metadata
+    same as test for now
+    maybe we should introduce some randomness in this one
     """
 
-    def process_pdf(self, file_descriptor):
-        return "processed pdf - minimal dev"
-
-    def process_text(self, text):
-        return text
+    pass
 
 
 def get_pdf_processor():

@@ -171,9 +171,9 @@ def test_get_client_returns_test_client_in_test_mode():
     assert isinstance(client, TestLLMClient)
 
 
-def test_get_client_returns_ollama_client_in_local_mode():
+def test_get_client_returns_ollama_client_in_ollama_mode():
     with override_settings(
-        LLM_MODE="local",
+        LLM_MODE="ollama",
         LLM_OLLAMA_URL="http://ollama.example",
         LLM_OLLAMA_MODEL="demo",
         LLM_OLLAMA_TIMEOUT=30,

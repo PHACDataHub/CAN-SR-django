@@ -2,7 +2,9 @@
 
 ## Configuring dev environment
 
-1. install python3.11 and postgresql as specified [here](https://github.com/PHACDataHub/phac-django-docs/blob/master/local-dev.md#installing-and-using-postgres-wout-sci-ops-on-windows)
+1. install python3.13
+2. Optional (sqlite won't support all features needed) install postgresql
+3. Also optional: install [grobid](#grobid) with docker 
 
 **setup virtualenv**
 
@@ -31,33 +33,61 @@ In the case your CI is failing due to formatting issues, you can run the followi
 
 1. `isort src --settings-path pyproject.toml`
 2. `black src/ --config pyproject.toml`
-3. `djlint --reformat src --configuration pyproject.toml`
 
 
-# Adapting this template to your new project
+# Starter .env file
 
-TODO: consider making this a cookie-cutter template? Might not be worth it...
+```env
+DEBUG=True
+ENABLE_DEBUG_TOOLBAR=True
+ALLOWED_HOSTS=*
+INTERNAL_IPS=127.0.0.1
+SECRET_KEY=abcdefg
+IS_LOCAL_DEV=True
 
-1. Delete the my_app stuff,
-    - my_app dir
-    - tests/my_app/
-    - loaddata and runscript steps in populate-db instructions above 
-2. use `django-admin startapp <newapp>` to create your own app (or do this later)
-3. Replace the following strings (search/replace) everywhere, including your .env and this README
-    - `my_app` -> `<newapp>`
-    - `sample_db` -> `<your_db_name>`
-    - `sample_db_user` -> `<your_db_user>`
-    - `sample_db_test` -> `<your_db_test_name>` (just add `_test` as a suffix to DB name)
-4. Follow the instructions in the "Configuring dev environment" section above and check that everything works 
-5. Delete this section and the next section of the README
-6. remove the .env file from the repo (you probably want to keep it locally though, maybe `git rm –cached .env`?)
+PHAC_ASPC_SESSION_COOKIE_AGE=99999999 # this doesn't seem to work?
+PHAC_ASPC_SESSION_COOKIE_SECURE=0
 
+USE_SQLITE=True
 
-# TODO: things to add to this template project
+LLM_MODE=local
 
-- HTMX example w/ project tasks, maybe multiple examples
-- extract utils into phac-helpers
-- Add excel export
+GROBID_URL=dev
 
+USE_IMMEDIATE_TASKS=1
+```
 
+# Configuration of advanced features 
 
+## Background tasks
+
+Background tasks use django's new task system. This is swappable based on the env var `USE_IMMEDIATE_TASKS`. 
+1. If `USE_IMMEDIATE_TASKS=True`, then tasks will be executed immediately in the same runserver process. This is just for development
+2. Otherwise, the app uses the [django-database-tasks](https://github.com/tokibito/django-database-task) library
+    - you can view tasks /phac_admin/django_database_task/databasetask/
+    - you can run these manually via `python -m manage run_database_tasks`, or setup a continuous process to run them via `python -m manage run_database_tasks --continuous`
+
+## Grobid
+
+1. get grobid running, e.g. with docker:
+```bash
+docker run --rm --init --ulimit core=0 -p 8070:8070 grobid/grobid:0.9.0-crf
+```
+2. add `GROBID_URL=http://localhost:8070/` to your .env
+
+If you don't want to use grobid, 
+
+## LLM configuration
+
+Two modes are supported as of now:
+
+1. using nothing at all (dummy dev client)
+2. using local ollama instance
+
+```
+LLM_MODE=local
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODELS='llama3.2:1b', 
+```
+
+OLLAMA_MODELS is a comma-separated list of models to load from ollama, but currently the settings only takes the first one.

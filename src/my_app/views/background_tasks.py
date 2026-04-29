@@ -12,7 +12,10 @@ from proj.text import tdt
 from my_app.htpy.background_tasks import BackgroundTasksPage
 from my_app.models import DemoTaskRun, Project
 from my_app.router import route
-from my_app.tasks import record_project_snapshot, record_project_snapshot_async
+from my_app.tasks.example_tasks import (
+    record_project_snapshot,
+    record_project_snapshot_async,
+)
 
 
 @route("background-tasks/", name="background_tasks_demo")

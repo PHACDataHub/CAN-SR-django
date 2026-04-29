@@ -8,7 +8,10 @@ from django_database_task.models import DatabaseTask
 
 from my_app.model_factories import ProjectFactory
 from my_app.models import DemoTaskRun
-from my_app.tasks import record_project_snapshot, record_project_snapshot_async
+from my_app.tasks.example_tasks import (
+    record_project_snapshot,
+    record_project_snapshot_async,
+)
 
 
 def test_background_tasks_demo_page_renders(admin_client):
