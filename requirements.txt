@@ -15,7 +15,6 @@ grobid-client-python==0.1.4
 htpy==25.12.0
 httpx==0.28.1
 ipython==8.10.0
-Jinja2==3.1.4
 psycopg[binary,pool]==3.2.3
 python-decouple==3.6
 pytz==2024.1

@@ -1,9 +1,12 @@
 from django.conf import settings
+from urllib.parse import urlparse, urlunparse
+
 from django.contrib.messages import get_messages
 from django.http import HttpRequest
 from django.middleware.csrf import get_token
 from django.templatetags.static import static
 from django.urls import reverse
+from django.utils.translation import get_language
 
 import htpy as h
 import phac_aspc.django.helpers.templatetags as phac_aspc
@@ -11,15 +14,73 @@ from data_fetcher.util import get_request
 from django_htmx.templatetags.django_htmx import django_htmx_script
 from markupsafe import Markup
 
-from proj.jinja_helpers import (
-    get_lang_code,
-    get_other_lang,
-    message_type,
-    url_to_other_lang,
-)
 from proj.text import tdt, tm
 
 from .util import HtpyComponent
+
+
+def get_lang_code():
+    """
+    Provides the language code for the current language
+    """
+    current_lang = get_language()
+    return current_lang.lower()
+
+
+def get_other_lang():
+    """
+    Returns the language not currently being used (Ex. if current lang
+    is en, then the other lang is French.  This is used as the label for the
+    button to switch languages)
+    """
+    current_lang = get_language()
+    if "en" in current_lang.lower():
+        return "Français"
+    return "English"
+
+
+def message_type(message):
+    # remaps the message level tag to the bootstrap alert type
+    if message.level_tag == "error":
+        return "danger"
+    else:
+        return f"{message.level_tag}"
+
+
+def convert_url_other_lang(url_str):
+    parsed_url = urlparse(url_str)
+    path = parsed_url.path
+    query = parsed_url.query
+
+    if "fr-ca" in path:
+        new_path = path.replace("/fr-ca", "")
+    else:
+        new_path = "/fr-ca" + path
+
+    new_url = parsed_url._replace(path=new_path)
+
+    if "login" in path and "next" in query:
+        if "fr-ca" in path:
+            new_query = query.replace("next=/fr-ca", "next=")
+        else:
+            new_query = query.replace("next=", "next=/fr-ca")
+    else:
+        new_query = query
+
+    new_url = new_url._replace(query=new_query)
+
+    return urlunparse(new_url)
+
+
+def url_to_other_lang():
+    """
+    Provides the URL to the other language:
+    For example, if current language is English then it will provide
+    the url to the French language.
+    """
+    request = get_request()
+    full_uri = request.get_full_path()
+    return convert_url_other_lang(full_uri)
 
 
 def static_no_cache(path):
@@ -171,7 +232,7 @@ class BasePageTemplate(HtpyComponent):
                         h.li(".nav-item")[
                             h.a(
                                 ".nav-link.text-white",
-                                href=url_to_other_lang(context),
+                                href=url_to_other_lang(),
                             )[get_other_lang()],
                         ],
                         (

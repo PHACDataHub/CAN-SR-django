@@ -9,10 +9,6 @@
   },
   "python.formatting.provider": "none",
   "python.linting.enabled": true,
-  "[html][django-html][jinja][jinja-html]": {
-    "editor.defaultFormatter": "monosans.djlint",
-    "editor.tabSize": 2
-  },
   "[css]": {
     "editor.defaultFormatter": "vscode.css-language-features"
   },

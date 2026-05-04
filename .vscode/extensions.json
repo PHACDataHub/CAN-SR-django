@@ -1,8 +1,6 @@
 {
     "recommendations": [
-        "samuelcolvin.jinjahtml",
         "ms-python.black-formatter",
-        "monosans.djlint",
         "ms-python.isort",
         "ms-python.python"
     ]

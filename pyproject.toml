@@ -28,11 +28,6 @@ sections=[ "FUTURE", "STDLIB", "DJANGO", "THIRDPARTY", "PROJ", "FIRSTPARTY", "LO
 skip_glob=['*/migrations/*.py']
 
 
-[tool.djlint]
-indent=2
-profile="jinja"
-extension='jinja2'
-preserve_blank_lines=true
 
 # Template linting is opinionated so we turned off some annoying errors.
 # We're not actively linting templates, but if errors get in the way 

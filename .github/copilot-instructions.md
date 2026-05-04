@@ -58,15 +58,13 @@ Views:
 Forms
 
 - ModelForm and proj.form_util.StandardFormMixin encouraged
-- Prefer rendering forms using macros and the generic_form jinja partial
-- Manual rendering of fields discouraged unless prompted
+- Prefer rendering forms using GenericForm component, manual rendering of individual fields is discouraged unless prompted
 
 Authorization
 
 - Use django-rules (rules.py), with test_rule checks in views.py as needed
 - Always import `phac_aspc.rules.test_rule`, dont import from local rules
 - Views with perm-logic should use a mixin, usually override dispatch()
-- in jinja use global `respects_rule()`
 
 UI/UX
 
@@ -113,11 +111,10 @@ You may need to run pytests from the src/ dir. Example commands:
 
 # Formatting
 
-We use black/isort/djlint to format .py/.jinja2. It can be run globally, but preferably with relevant file arguments:
+We use black/isort to format .py files. It can be run globally, but preferably with relevant file arguments:
 
 1. `isort src/`
 2. `black src/`
-3. `djlint --reformat src/` (rarely needed, only for jinja2)
 
 # Behavior instructions
 
