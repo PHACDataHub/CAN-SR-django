@@ -80,7 +80,7 @@ class BackgroundTasksPage(BasePageTemplate):
                     tdt("Task result ID"),
                     tdt("Kind"),
                     tdt("Label"),
-                    tdt("Project count"),
+                    tdt("SR count"),
                     tdt("Attempt"),
                     tdt("Completed at"),
                 ],
@@ -116,7 +116,7 @@ class BackgroundTasksPage(BasePageTemplate):
             h.td[str(task_run.task_result_id)],
             h.td[str(task_run.kind)],
             h.td[str(task_run.label)],
-            h.td[str(task_run.project_count)],
+            h.td[str(task_run.record_count)],
             h.td[str(task_run.attempt)],
             h.td[str(task_run.completed_at)],
         ]

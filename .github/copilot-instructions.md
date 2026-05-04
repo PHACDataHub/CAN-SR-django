@@ -1,11 +1,12 @@
 # What's in this repo
 
-It's a template django project, most often forked for internal government applications for the public health agency of Canada.
+This is evidence-synthesis / systematic-review workflow software for the public health agency of Canada.
 
 there are two main packages:
 
-- proj: configuration and things that could be re-used in other projects (e.g. settings, router, translations, custom fields). Much boilerplate
-- my_app: example app, a project-management app showcasing various features
+- proj: configuration and things that could be re-used in other projects (e.g. settings, router, custom fields). Much boilerplate.
+  - also includes all translations
+- my_app: the 'domain specific' application with all the models, views, etc.
 
 # App development notes
 
@@ -22,14 +23,19 @@ Commands: Always run `python src/manage.py {command}` to avoid path errors. Run 
 
 Localization
 
-- All user-facing text should be externalized and rendered via tm(). In jinja, tm is a global, in python, it's `proj.text.tm`
-- Every (unique) tm() key should have an entry in the `src/proj/translations.py` dict. If adding new text, add translations at bottom of dict
-- if the task is prototype-ish in nature, don't worry about translations, but use `tdt` to mark strings, this way we don't risk forgetting translating literals later on. `tdt` is a no-op that just returns the string, but serves as a reminder to add the key to translations.py later
+- Most of the time, we want prototypes generated, and want all new user-facing text to be wrapped in `tdt()`, this marks strings as "todo" for translation later.
+- If explicitly told we want translations, properly externalize strings as follows:
+  - text should be externalized and rendered via tm() (`proj.text.tm`)
+  - Every (unique) tm() key should have an entry in the `src/proj/translations.py` dict. If adding new text, add translations at bottom of dict
 
-Rendering
+Rendering or "templates"
 
-- use htpy to render markup, not plain strings
-- jinja2 is being phased out in favor of htpy
+- we use htpy to render, rather plain strings or string-based templates
+- this is react-like, but server-side
+- sometimes these are formal "templates", that receive a request and context object (and plug into django's template API), other times it's a simple function return htpy nodes
+- to DRY-out (dont repeat yourself) presentational code, prefer composition over inheritance
+- For complex presentation components, you can use class-based HtpyComponents, this unlocks inheritance and single-responsibility methods
+- Feel free to use data_fetcher's get_request() and derivative context-based approaches to get data into components, rather than passing everything through multiple layers of composition
 
 CSS
 
@@ -43,10 +49,11 @@ Models
 
 Views:
 
+- default to sync views, only ever use async if asked explicitly
 - use class-based views, django generic views encouraged
 - all views registered in urls.py
 - Use HtpyTemplateMixin when building views that need a traditional template_name, e.g. to interop with generic views
-- For smaller views with small responses, e.g. htmx endpoints, can return htpy nodes directly from the view
+- For smaller views with small responses (e.g. htmx endpoints) return htpy nodes directly from the view
 
 Forms
 
@@ -71,7 +78,8 @@ Javascript
 
 - avoid writing custom JS when possible, prefer HTMX
 - inline JS in htpy script tags is ugly, if more than 3 lines, put it in a separate file in src/static, link with src=static_no_cache attr
-- translation in JS should be passed from python through `data-*` attributes and accessed via a small helper function. Unless demo purposes, then just use the tdt() global (available in JS as well)
+- small bits of data, like ids, flags or labels, can be passed via `data-*` attributes and accessed via a small helper function
+  - this includes translations, although the tdt() function is also available in JS files for demo-text
 
 # Testing
 
@@ -84,14 +92,14 @@ Write pytests in the src/tests/, focus on integration tests of views, unit tests
 Most tests look something like this:
 
 ```
-def test_something(vanilla_user_client):
+def test_something(vanilla_client):
     some_record = Foo.objects.create(...)
     url = reverse("foo", args=[some_record.id])
     with patch_rules(can_access_foo=False):
-        resp = vanilla_user_client.get(url)
+        resp = vanilla_client.get(url)
         assert resp.status_code == 403
     with patch_rules(can_access_foo=True):
-        resp = vanilla_user_client.get(url)
+        resp = vanilla_client.get(url)
         assert resp.status_code == 200
 ```
 

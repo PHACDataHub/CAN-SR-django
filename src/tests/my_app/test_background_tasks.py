@@ -6,11 +6,11 @@ from django.urls import reverse
 import pytest
 from django_database_task.models import DatabaseTask
 
-from my_app.model_factories import ProjectFactory
+from my_app.model_factories import SystematicReviewFactory
 from my_app.models import DemoTaskRun
 from my_app.tasks.example_tasks import (
-    record_project_snapshot,
-    record_project_snapshot_async,
+    record_sr_snapshot,
+    record_sr_snapshot_async,
 )
 
 
@@ -28,7 +28,7 @@ def test_background_tasks_demo_page_renders(admin_client):
 
 
 def test_background_tasks_demo_sync_enqueue_and_worker_process(admin_client):
-    ProjectFactory()
+    SystematicReviewFactory()
 
     response = admin_client.post(
         reverse("background_tasks_demo"),
@@ -45,11 +45,11 @@ def test_background_tasks_demo_sync_enqueue_and_worker_process(admin_client):
 
     queued_task.refresh_from_db()
     assert queued_task.status == TaskResultStatus.SUCCESSFUL
-    assert queued_task.return_value_json["project_count"] == 1
+    assert queued_task.return_value_json["record_count"] == 1
 
     task_run = DemoTaskRun.objects.get(task_result_id=str(queued_task.id))
     assert task_run.kind == "sync"
-    assert task_run.project_count == 1
+    assert task_run.record_count == 1
     assert task_run.label == queued_task.kwargs_json["label"]
     assert task_run.attempt == 1
 
@@ -59,7 +59,7 @@ def test_background_tasks_demo_sync_enqueue_and_worker_process(admin_client):
     reason="SQLite locks async ORM writes in the worker test harness.",
 )
 def test_background_tasks_demo_async_enqueue_and_worker_process(admin_client):
-    ProjectFactory()
+    SystematicReviewFactory()
 
     response = admin_client.post(
         reverse("background_tasks_demo"),
@@ -71,25 +71,25 @@ def test_background_tasks_demo_async_enqueue_and_worker_process(admin_client):
 
     queued_task = DatabaseTask.objects.get()
     assert queued_task.status == TaskResultStatus.READY
-    assert queued_task.kwargs_json["project_count"] == 1
+    assert queued_task.kwargs_json["record_count"] == 1
 
     call_command("run_database_tasks", verbosity=0)
 
     queued_task.refresh_from_db()
     assert queued_task.status == TaskResultStatus.SUCCESSFUL
-    assert queued_task.return_value_json["project_count"] == 1
+    assert queued_task.return_value_json["record_count"] == 1
 
     task_run = DemoTaskRun.objects.get(task_result_id=str(queued_task.id))
     assert task_run.kind == "async"
-    assert task_run.project_count == 1
+    assert task_run.record_count == 1
     assert task_run.label == queued_task.kwargs_json["label"]
     assert task_run.attempt == 1
 
 
-def test_record_project_snapshot_enqueue_uses_database_backend():
-    ProjectFactory()
+def test_record_record_snapshot_enqueue_uses_database_backend():
+    SystematicReviewFactory()
 
-    task_result = record_project_snapshot.enqueue(label="manual-run")
+    task_result = record_sr_snapshot.enqueue(label="manual-run")
 
     assert task_result.status == TaskResultStatus.READY
     assert task_result.id
@@ -98,11 +98,11 @@ def test_record_project_snapshot_enqueue_uses_database_backend():
     assert queued_task.kwargs_json["label"] == "manual-run"
 
 
-def test_record_project_snapshot_async_enqueue_uses_database_backend():
-    ProjectFactory()
+def test_record_record_snapshot_async_enqueue_uses_database_backend():
+    SystematicReviewFactory()
 
-    task_result = record_project_snapshot_async.enqueue(
-        label="manual-run", project_count=1
+    task_result = record_sr_snapshot_async.enqueue(
+        label="manual-run", record_count=1
     )
 
     assert task_result.status == TaskResultStatus.READY
@@ -110,4 +110,4 @@ def test_record_project_snapshot_async_enqueue_uses_database_backend():
 
     queued_task = DatabaseTask.objects.get(pk=task_result.id)
     assert queued_task.kwargs_json["label"] == "manual-run"
-    assert queued_task.kwargs_json["project_count"] == 1
+    assert queued_task.kwargs_json["record_count"] == 1

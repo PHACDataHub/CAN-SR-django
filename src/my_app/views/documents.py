@@ -1,27 +1,32 @@
 from pathlib import Path
 
 from django import forms
-from django.contrib import messages
 from django.core.validators import FileExtensionValidator
-from django.http import HttpResponseRedirect
 from django.middleware.csrf import get_token
-from django.shortcuts import get_object_or_404
-from django.urls import reverse
 from django.utils.text import get_valid_filename
 from django.utils.timezone import localtime
-from django.views import View
-from django.views.generic import DetailView, FormView, ListView
 
 import htpy as h
-
-from proj.htpy.base_page import BasePageTemplate
-from proj.htpy.generic_form import GenericForm
-from proj.htpy.util import HtpyTemplateMixin
-from proj.text import tdt, tm
 
 from my_app.models import Document, DocumentMetadata
 from my_app.router import route
 from my_app.tasks.process_document_task import process_document_metadata
+from shortcuts import (
+    BasePageTemplate,
+    DetailView,
+    FormView,
+    GenericForm,
+    HtpyTemplatelessMixin,
+    HtpyTemplateMixin,
+    HttpResponseRedirect,
+    ListView,
+    View,
+    get_object_or_404,
+    messages,
+    reverse,
+    tdt,
+    tm,
+)
 
 
 class UploadPdfForm(forms.Form):
@@ -43,9 +48,7 @@ class PdfUploadPage(BasePageTemplate):
             h.form(
                 method="post", enctype="multipart/form-data", novalidate=True
             )[
-                GenericForm(
-                    self.context["form"], get_token(self.request)
-                ).render(),
+                GenericForm(self.context["form"]),
                 h.div(".text-end.mt-3")[
                     h.button(".btn.btn-primary", type="submit")[
                         tm("upload_pdf_submit")

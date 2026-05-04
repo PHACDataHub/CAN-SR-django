@@ -136,7 +136,7 @@ MIDDLEWARE = configure_middleware(
 
 
 LOGIN_URL = "/login"
-LOGIN_REDIRECT_URL = reverse_lazy("list_projects")
+LOGIN_REDIRECT_URL = reverse_lazy("systematic_review_list")
 
 
 ROOT_URLCONF = "proj.urls"

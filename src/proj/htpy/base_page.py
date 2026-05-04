@@ -48,7 +48,7 @@ def MessagesBar(request: HttpRequest):
         hx_swap_oob="beforeend",
         hx_swap="beforeend",
         tabindex="-1",
-        style="position: sticky; top: 0; z-index: 1031;",
+        style="position: sticky; top: 0; z-index: 998;",
         role="alert",
         aria_live="polite",
     )[

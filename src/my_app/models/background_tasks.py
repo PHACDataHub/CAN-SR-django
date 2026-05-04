@@ -18,9 +18,9 @@ class DemoTaskRun(models.Model):
         max_length=20, default="sync", verbose_name=tdt("Kind")
     )
     label = fields.CharField(max_length=200, verbose_name=tdt("Label"))
-    project_count = models.PositiveIntegerField()
+    record_count = models.PositiveIntegerField()
     attempt = models.PositiveIntegerField(default=1)
     completed_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.kind}: {self.label} ({self.project_count})"
+        return f"{self.kind}: {self.label} ({self.record_count})"

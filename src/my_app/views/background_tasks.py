@@ -10,11 +10,11 @@ from proj.htpy.util import HtpyTemplateMixin
 from proj.text import tdt
 
 from my_app.htpy.background_tasks import BackgroundTasksPage
-from my_app.models import DemoTaskRun, Project
+from my_app.models import DemoTaskRun, SystematicReview
 from my_app.router import route
 from my_app.tasks.example_tasks import (
-    record_project_snapshot,
-    record_project_snapshot_async,
+    record_sr_snapshot,
+    record_sr_snapshot_async,
 )
 
 
@@ -37,15 +37,15 @@ class BackgroundTasksDemo(TemplateView, HtpyTemplateMixin):
     def post(self, request, *args, **kwargs):
         label = timezone.now().isoformat(timespec="seconds")
         task_kind = request.POST.get("task_kind")
-        project_count = Project.objects.count()
+        record_count = SystematicReview.objects.count()
 
         if task_kind == "enqueue_async_demo_task":
-            record_project_snapshot_async.enqueue(
-                label=label, project_count=project_count
+            record_sr_snapshot_async.enqueue(
+                label=label, record_count=record_count
             )
             messages.success(request, tdt("Async demo task queued."))
         else:
-            record_project_snapshot.enqueue(label=label)
+            record_sr_snapshot.enqueue(label=label)
             messages.success(request, tdt("Sync demo task queued."))
 
         return redirect(reverse("background_tasks_demo"))

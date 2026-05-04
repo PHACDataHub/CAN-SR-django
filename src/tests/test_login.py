@@ -2,8 +2,6 @@ from django.urls import reverse
 
 from proj.models import User
 
-from my_app.model_factories import ProjectFactory
-
 
 def is_client_logged_in(client):
     response = client.get("/")
@@ -11,7 +9,7 @@ def is_client_logged_in(client):
     if response.url == reverse("login"):
         return False
 
-    if response.url == reverse("list_projects"):
+    if response.url == reverse("systematic_review_list"):
         return True
 
     raise Exception(f"Unexpected redirect to {response.url}")
@@ -35,7 +33,7 @@ def test_login_view(client):
         url, {"username": "testuser", "password": "testpass"}
     )
     assert response.status_code == 302
-    assert response.url == reverse("list_projects")
+    assert response.url == reverse("systematic_review_list")
     assert is_client_logged_in(client)
 
 

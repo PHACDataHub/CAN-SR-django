@@ -27,6 +27,16 @@ In repo root,
 3. `python manage.py runscript my_app.scripts.dev`
 
 
+## General documentation
+
+- See docs written for AI in [copilot-instructions.md](.github/copilot-instructions.md), for code-style, decisions, how to write and run tests, etc. 
+
+
+## Debugging
+
+As long as you're doing anything async, you can drop `import IPythonl; IPython.embed()` anywhere in the code to get an interactive prompt to inspect variables, run code, etc. This is great for tests and live server debugging, but if requests keep happening while you're debugging, the prompt can break and you may have to reset the server (or the parent terminal) process.
+
+
 ## Manually running auto-formatting
 
 In the case your CI is failing due to formatting issues, you can run the following commands to fix them all.
@@ -75,7 +85,7 @@ docker run --rm --init --ulimit core=0 -p 8070:8070 grobid/grobid:0.9.0-crf
 ```
 2. add `GROBID_URL=http://localhost:8070/` to your .env
 
-If you don't want to use grobid, 
+If you don't want to use grobid, just keep `GROBID_URL=dev`, this will use a dummy client that returns canned responses.
 
 ## LLM configuration
 

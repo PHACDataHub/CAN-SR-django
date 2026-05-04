@@ -44,14 +44,14 @@ class PdfProcessor(ABC):
         return self.xml_to_json(xml)
 
     @abstractmethod
-    def pdf_to_xml(self, file_descriptor) -> JSONValue:
+    def pdf_to_xml(self, file_descriptor) -> str:
         raise NotImplementedError
 
     @abstractmethod
-    def text_to_xml(self, text) -> JSONValue:
+    def text_to_xml(self, text) -> str:
         raise NotImplementedError
 
-    def xml_to_json(self, xml_str) -> JSONValue:
+    def xml_to_json(self, xml_str: str) -> JSONValue:
         # placeholder for actual XML parsing logic
         soup = BeautifulSoup(xml_str, "xml")
         # extract relevant metadata from the XML and return as dict
@@ -96,19 +96,19 @@ class GrobidPdfProcessor(PdfProcessor):
     def __init__(self):
         self.grobid_client = get_grobid_client()
 
-    def pdf_to_xml(self, file):
+    def pdf_to_xml(self, file) -> str:
         xml = get_xml_from_grobid(file)
-        return {"xml": xml}
+        return xml
 
-    def text_to_xml(self, text):
+    def text_to_xml(self, text) -> str:
         raise Exception("TODO")
 
 
 class TestPdfProcessor(PdfProcessor):
-    def pdf_to_xml(self, file_descriptor):
+    def pdf_to_xml(self, file_descriptor) -> str:
         return "<test>pdf content</test>"
 
-    def text_to_xml(self, text):
+    def text_to_xml(self, text) -> str:
         return f"<test>{text}</test>"
 
 
