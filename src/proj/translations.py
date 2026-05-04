@@ -22,33 +22,27 @@ translation_entries = {
     },
     "save": {
         "en": "Save",
-        "fr": None,
-        "translated_using": "Save",
-        "fr_auto": "Enregistrer",
+        "fr": "Enregistrer",
     },
     "edit": {
         "en": "Edit",
-        "fr": None,
-        "translated_using": "Edit",
-        "fr_auto": "Modifier",
+        "fr": "Modifier",
     },
     "delete": {
         "en": "Delete",
-        "fr": None,
-        "translated_using": "Delete",
-        "fr_auto": "Supprimer",
+        "fr": "Supprimer",
+    },
+    "submit": {
+        "en": "Submit",
+        "fr": "submit",
     },
     "yes": {
         "en": "Yes",
-        "fr": None,
-        "translated_using": "Yes",
-        "fr_auto": "Oui",
+        "fr": "Oui",
     },
     "no": {
         "en": "No",
-        "fr": None,
-        "translated_using": "No",
-        "fr_auto": "Non",
+        "fr": "Non",
     },
     "close": {
         "en": "Close",
@@ -129,5 +123,25 @@ translation_entries = {
     "no_documents_yet": {
         "en": "No documents yet.",
         "fr": "Aucun document pour le moment.",
+    },
+    "systematic_review": {
+        "en": "Systematic review",
+        "fr": "Revue systématique",
+    },
+    "systematic_reviews": {
+        "en": "Systematic reviews",
+        "fr": "Revues systématiques",
+    },
+    "systematic_review_title": {
+        "en": "Title",
+        "fr": "Titre",
+    },
+    "systematic_review_description": {
+        "en": "Description",
+        "fr": "Description",
+    },
+    "systematic_review_created_at": {
+        "en": "Created at",
+        "fr": "Créée le",
     },
 }

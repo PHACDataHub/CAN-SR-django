@@ -1,13 +1,15 @@
-from django.test.client import Client
-from django.urls import reverse
+from data_fetcher.middleware import GlobalRequest
 
 # creating a variable called test_rules triggers pytest to run it as a test! annoying!
-from phac_aspc.rules import patch_rules
 from phac_aspc.rules import test_rule as my_test_rule
 
 from proj.models import User
 
-from my_app.model_factories import ProjectFactory
+from my_app.model_factories import (
+    ProjectFactory,
+    SystematicReviewFactory,
+    SystematicReviewUserLinkFactory,
+)
 from my_app.services import (
     set_project_contributor,
     set_project_leader,
@@ -69,32 +71,25 @@ def test_spectator_role():
     assert not my_test_rule("can_modify_project_tasks", u, proj.id)
 
 
-def check_user_has_preview_access(user, project_id):
-    client = Client()
-    client.force_login(user)
-    resp = client.get(reverse("preview_project_modal", args=[project_id]))
-    return resp.status_code == 200
+def test_systematic_review_access_rule(admin_user):
+    linked_user = User.objects.create(username="linked-user")
+    other_user = User.objects.create(username="other-user")
+    linked_review = SystematicReviewFactory()
+    other_review = SystematicReviewFactory()
+    SystematicReviewUserLinkFactory(
+        user=linked_user, systematic_review=linked_review
+    )
 
-
-def check_user_can_use_modify_view(user, project_id):
-    client = Client()
-    client.force_login(user)
-    resp = client.get(reverse("edit_project", args=[project_id]))
-    return resp.status_code == 200
-
-
-def test_views_use_rules_via_mocks():
-    u = User.objects.create()
-    proj = ProjectFactory()
-
-    with patch_rules(can_modify_project=True):
-        assert check_user_can_use_modify_view(u, proj.id)
-
-    with patch_rules(can_modify_project=False):
-        assert not check_user_can_use_modify_view(u, proj.id)
-
-    with patch_rules(can_view_project=True):
-        assert check_user_has_preview_access(u, proj.id)
-
-    with patch_rules(can_view_project=False):
-        assert not check_user_has_preview_access(u, proj.id)
+    with GlobalRequest():
+        assert my_test_rule(
+            "can_access_systematic_review", admin_user, linked_review.id
+        )
+        assert my_test_rule(
+            "can_access_systematic_review", linked_user, linked_review.id
+        )
+        assert not my_test_rule(
+            "can_access_systematic_review", linked_user, other_review.id
+        )
+        assert not my_test_rule(
+            "can_access_systematic_review", other_user, linked_review.id
+        )

@@ -188,23 +188,7 @@ class BasePageTemplate(HtpyComponent):
                                 h.div(
                                     ".dropdown-menu",
                                     aria_labelledby="navbarDropdown",
-                                )[
-                                    h.a(
-                                        ".dropdown-item",
-                                        href=reverse("logout"),
-                                    )[
-                                        h.i(".fa.fa-power-off"),
-                                        tm("logout"),
-                                    ],
-                                    h.a(
-                                        ".dropdown-item",
-                                        href=reverse("llm_demo"),
-                                    )[tdt("LLM demo")],
-                                    h.a(
-                                        ".dropdown-item",
-                                        href=reverse("document_list"),
-                                    )[tm("documents")],
-                                ],
+                                )[get_top_right_dropdown_items(request)],
                             ]
                             if user.is_authenticated
                             else None
@@ -299,3 +283,27 @@ class BasePageComponent(BasePageTemplate):
 
     def content_fluid(self):
         return self.context.get("content_fluid") or super().content_fluid()
+
+
+def get_top_right_dropdown_items(request):
+    return [
+        h.a(
+            ".dropdown-item",
+            href=reverse("logout"),
+        )[
+            h.i(".fa.fa-power-off"),
+            tm("logout"),
+        ],
+        h.a(
+            ".dropdown-item",
+            href=reverse("llm_demo"),
+        )[tdt("LLM demo")],
+        h.a(
+            ".dropdown-item",
+            href=reverse("document_list"),
+        )[tm("documents")],
+        h.a(
+            ".dropdown-item",
+            href=reverse("systematic_review_list"),
+        )[tdt("Systematic reviews")],
+    ]

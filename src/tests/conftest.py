@@ -42,3 +42,20 @@ def admin_client(admin_user):
     client = Client()
     client.force_login(admin_user)
     return client
+
+
+@pytest.fixture
+def vanilla_user():
+    return User.objects.create_user(username="vanilla", password="password")
+
+
+@pytest.fixture
+def vanilla_client(vanilla_user):
+    client = Client()
+    client.force_login(vanilla_user)
+    return client
+
+
+@pytest.fixture
+def vanilla_user_client(vanilla_client):
+    return vanilla_client

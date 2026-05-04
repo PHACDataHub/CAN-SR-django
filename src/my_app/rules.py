@@ -2,6 +2,7 @@ from phac_aspc.rules import add_rule, auto_rule
 
 from .constants import ADMIN_USER_GROUP
 from .models import ProjectUserRole
+from .queries import get_accessible_systematic_reviews
 
 
 def get_roles(user, project_id):
@@ -35,6 +36,17 @@ def is_project_contributor(user, project_id):
 def is_project_spectator(user, project_id):
     roles = get_roles(user, project_id)
     return any(role.role == ProjectUserRole.SPECTATOR_ROLE for role in roles)
+
+
+@auto_rule
+def can_access_systematic_review(user, systematic_review_id):
+    if is_admin(user):
+        return True
+
+    accessible_reviews = get_accessible_systematic_reviews(user.id)
+    return any(
+        review.id == systematic_review_id for review in accessible_reviews
+    )
 
 
 # Rules can be combined using boolean operators
