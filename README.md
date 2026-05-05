@@ -45,7 +45,8 @@ In the case your CI is failing due to formatting issues, you can run the followi
 2. `black src/ --config pyproject.toml`
 
 
-# Starter .env file
+# Starter src/.env file
+
 
 ```env
 DEBUG=True

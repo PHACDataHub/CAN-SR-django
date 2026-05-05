@@ -20,3 +20,5 @@ db.sqlite3
 
 notes.md
 src/media/
+
+src/.env
