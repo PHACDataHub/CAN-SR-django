@@ -7,13 +7,13 @@ from my_app.htpy.systematic_review import (
 from my_app.models import SystematicReview, SystematicReviewUserLink
 from my_app.queries import get_accessible_systematic_reviews
 from my_app.router import route
+from my_app.views.view_utils import MustAccessSystematicReviewMixin
 from shortcuts import (
     CreateView,
     DetailView,
     HtpyTemplateMixin,
     ListView,
     ModelForm,
-    MustPassRuleMixin,
     StandardFormMixin,
     UpdateView,
     messages,
@@ -23,15 +23,6 @@ from shortcuts import (
     test_rule,
     transaction,
 )
-
-
-class MustAccessSystematicReviewMixin(MustPassRuleMixin):
-    def check_rule(self, user):
-        return test_rule(
-            "can_access_systematic_review",
-            user,
-            self.kwargs.get("pk"),
-        )
 
 
 class SystematicReviewForm(ModelForm, StandardFormMixin):

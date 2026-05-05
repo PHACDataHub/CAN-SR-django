@@ -72,6 +72,23 @@ class SystematicReviewEditPage(BasePageTemplate):
 class SystematicReviewDetailPage(BasePageTemplate):
     def content(self):
         review = self.context["object"]
+        citation_upload_url = reverse("citation_upload", args=[review.id])
+        import_citation_dataset_link = (
+            h.a(
+                href=citation_upload_url,
+                class_="btn btn-outline-primary disabled",
+                aria_disabled="true",
+                tabindex="-1",
+            )[
+                tdt("Import citation dataset"),
+                h.span(".ms-1", aria_hidden="true")["✓"],
+            ]
+            if review.citation_datasets.exists()
+            else h.a(
+                href=citation_upload_url,
+                class_="btn btn-outline-primary",
+            )[tdt("Import citation dataset")]
+        )
 
         return [
             bc.BreadcrumbTrailForSystematicReview(review),
@@ -84,6 +101,7 @@ class SystematicReviewDetailPage(BasePageTemplate):
                 h.a(href="#", class_="btn btn-outline-primary")[
                     tdt("Import references")
                 ],
+                import_citation_dataset_link,
                 h.a(href="#", class_="btn btn-outline-primary")[
                     tdt("Screening")
                 ],

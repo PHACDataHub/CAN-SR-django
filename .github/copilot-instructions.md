@@ -15,7 +15,8 @@ code style
 - classes
   - django.utils.functional.cached_property decorator encouraged, especially for form/formset/model instantiation
   - Split complex methods using the single-resp principle
-- prefer conditional blocks to ternary expr
+- prefer conditional blocks and extra variables to ternary expr
+  - especially if ternaries are nested or when both branches are non-null
 - prefer comprehensions to loops
 - Dont over-comment obvious code
 
@@ -53,6 +54,7 @@ Views:
 - use class-based views, django generic views encouraged
 - all views registered in urls.py
 - Use HtpyTemplateMixin when building views that need a traditional template_name, e.g. to interop with generic views
+  - if a view has a template, that template should take care of all presentational concerns, including even querying additional data used by render logic
 - For smaller views with small responses (e.g. htmx endpoints) return htpy nodes directly from the view
 
 Forms
