@@ -6,5 +6,6 @@ from . import (
     citation_upload,
     documents,
     llm_demo,
+    screening_criteria,
     systematic_review,
 )

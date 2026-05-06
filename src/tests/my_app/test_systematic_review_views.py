@@ -80,6 +80,37 @@ def test_detail_systematic_review_uses_rule(vanilla_user_client, vanilla_user):
         assert review.title in body
 
 
+def test_screening_criteria_page_uses_rule_and_detail_links_to_it(
+    vanilla_user_client, vanilla_user
+):
+    review = SystematicReviewFactory()
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
+
+    url = reverse("screening_criteria", args=[review.id])
+
+    with patch_rules(can_access_systematic_review=False):
+        response = vanilla_user_client.get(url)
+        assert response.status_code == 403
+
+    with patch_rules(can_access_systematic_review=True):
+        response = vanilla_user_client.get(url)
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert "Systematic Reviews" in body
+        assert review.title in body
+        assert "Screening criteria" in body
+
+    with patch_rules(can_access_systematic_review=True):
+        detail_body = vanilla_user_client.get(
+            reverse("systematic_review_detail", args=[review.id])
+        ).content.decode()
+
+    assert url in detail_body
+    assert "Screening criteria" in detail_body
+
+
 def test_list_systematic_reviews_only_shows_linked_reviews_for_user(
     vanilla_user_client, vanilla_user
 ):

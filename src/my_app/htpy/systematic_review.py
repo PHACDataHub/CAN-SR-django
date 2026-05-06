@@ -102,9 +102,10 @@ class SystematicReviewDetailPage(BasePageTemplate):
                     tdt("Import references")
                 ],
                 import_citation_dataset_link,
-                h.a(href="#", class_="btn btn-outline-primary")[
-                    tdt("Screening")
-                ],
+                h.a(
+                    href=reverse("screening_criteria", args=[review.id]),
+                    class_="btn btn-outline-primary",
+                )[tdt("Screening criteria")],
             ],
             h.div(".d-flex.gap-2")[
                 h.a(
