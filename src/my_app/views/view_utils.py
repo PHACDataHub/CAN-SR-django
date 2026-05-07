@@ -1,4 +1,5 @@
-from shortcuts import MustPassRuleMixin, test_rule
+from my_app.models import SystematicReview
+from shortcuts import MustPassRuleMixin, cached_property, test_rule
 
 
 class MustAccessSystematicReviewMixin(MustPassRuleMixin):
@@ -8,3 +9,7 @@ class MustAccessSystematicReviewMixin(MustPassRuleMixin):
             user,
             self.kwargs.get("pk"),
         )
+
+    @cached_property
+    def systematic_review(self):
+        return SystematicReview.objects.get(pk=self.kwargs["pk"])
