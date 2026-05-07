@@ -20,6 +20,10 @@ translation_entries = {
         "en": "Your username and password didn't match. Please try again.",
         "fr": "Votre nom d'utilisateur et votre mot de passe ne correspondent pas. Veuillez essayer de nouveau.",
     },
+    "entry": {
+        "en": "Entry",
+        "fr": "Entrée",
+    },
     "save": {
         "en": "Save",
         "fr": "Enregistrer",

@@ -1,16 +1,15 @@
-from django.conf import settings
 from urllib.parse import urlparse, urlunparse
 
+import htpy as h
+import phac_aspc.django.helpers.templatetags as phac_aspc
+from data_fetcher.util import get_request
+from django.conf import settings
 from django.contrib.messages import get_messages
 from django.http import HttpRequest
 from django.middleware.csrf import get_token
 from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.translation import get_language
-
-import htpy as h
-import phac_aspc.django.helpers.templatetags as phac_aspc
-from data_fetcher.util import get_request
 from django_htmx.templatetags.django_htmx import django_htmx_script
 from markupsafe import Markup
 
@@ -186,6 +185,7 @@ class BasePageTemplate(HtpyComponent):
             h.script(src=static("third_party/js/idiomorph.min.js")),
             h.script(src=static("third_party/js/idiomorph-ext.min.js")),
             h.script(src=static("third_party/js/bootstrap.bundle.min.js")),
+            h.script(src=static("dynamic_formsets.js")),
             Markup(django_htmx_script()) if is_debug else None,
             self.head_medias(),
             self.head_extra_scripts_css(),
