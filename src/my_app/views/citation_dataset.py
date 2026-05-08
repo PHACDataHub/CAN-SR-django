@@ -21,7 +21,10 @@ from shortcuts import messages, reverse, tdt
 
 
 class DeleteCitationDatasetForm(forms.Form):
-    pass
+    confirm = forms.BooleanField(
+        label=tdt("I confirm that I want to delete this dataset."),
+        required=True,
+    )
 
 
 class CitationDatasetDetailPage(BasePageTemplate):
@@ -60,7 +63,9 @@ class CitationDatasetDetailPage(BasePageTemplate):
                 ],
                 h.div[
                     h.strong[tdt("Columns")],
-                    h.ul(".mb-0.mt-2")[[h.li[column.name] for column in columns]],
+                    h.ul(".mb-0.mt-2")[
+                        [h.li[column.name] for column in columns]
+                    ],
                 ],
             ],
             h.div(".border.rounded.p-3.h-100")[
@@ -128,7 +133,10 @@ class DeleteCitationDatasetPage(BasePageTemplate):
             h.p(".text-danger")[
                 tdt("This will delete the dataset, rows, and columns.")
             ],
-            h.form(method="post", action=delete_url, novalidate=True)[
+            h.form(
+                method="post",
+                action=delete_url,
+            )[
                 GenericForm(self.context["form"]),
                 h.div(".d-flex.gap-2.justify-content-end.mt-3")[
                     h.a(
@@ -192,7 +200,9 @@ class DeleteCitationDatasetView(
         return HttpResponseRedirect(self.get_success_url())
 
     def get_success_url(self):
-        return reverse("systematic_review_detail", args=[self.systematic_review.id])
+        return reverse(
+            "systematic_review_detail", args=[self.systematic_review.id]
+        )
 
     @cached_property
     def _dataset(self):
