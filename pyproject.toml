@@ -64,3 +64,8 @@ disable = [
     "import-error", 
     "relative-beyond-top-level", 
 ]
+
+
+[tool.pylint.TYPECHECK]
+ignored-classes=Model
+
