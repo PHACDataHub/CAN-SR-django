@@ -2,7 +2,7 @@ import htpy as h
 
 from shortcuts import BasePageTemplate, GenericFormWithContainer
 from shortcuts import breadcrumbs as bc
-from shortcuts import get_token, reverse, tdt, tm
+from shortcuts import reverse, tdt
 
 
 class SystematicReviewListPage(BasePageTemplate):
@@ -70,44 +70,83 @@ class SystematicReviewEditPage(BasePageTemplate):
 
 
 class SystematicReviewDetailPage(BasePageTemplate):
+    def build_stage_card(self, title, description, href=None):
+        if href is None:
+            action = h.a(
+                href="#",
+                class_="btn btn-secondary disabled",
+                aria_disabled="true",
+                tabindex="-1",
+            )[tdt("Coming soon")]
+        else:
+            action = h.a(
+                href=href,
+                class_="btn btn-primary",
+            )[tdt("Open")]
+
+        return h.div(".card.h-100.shadow-sm")[
+            h.div(".card-body")[
+                h.div(".row.align-items-center.g-3")[
+                    h.div(".col-sm")[
+                        h.h3(".h5.card-title.mb-1")[title],
+                        h.p(".card-text.text-muted.mb-0")[description],
+                    ],
+                    h.div(".col-auto.d-flex.align-items-center")[action,],
+                ],
+            ]
+        ]
+
     def content(self):
         review = self.context["object"]
         citation_upload_url = reverse("citation_upload", args=[review.id])
-        import_citation_dataset_link = (
-            h.a(
-                href=citation_upload_url,
-                class_="btn btn-outline-primary disabled",
-                aria_disabled="true",
-                tabindex="-1",
-            )[
-                tdt("Import citation dataset"),
-                h.span(".ms-1", aria_hidden="true")["✓"],
-            ]
-            if review.citation_datasets.exists()
-            else h.a(
-                href=citation_upload_url,
-                class_="btn btn-outline-primary",
-            )[tdt("Import citation dataset")]
-        )
 
         return [
             bc.BreadcrumbTrailForSystematicReview(review),
             h.h1[review.title],
-            h.p[review.description],
-            h.div(".d-flex.flex-wrap.gap-2.mb-4")[
-                h.a(href="#", class_="btn btn-outline-primary")[
-                    tdt("Database search")
+            h.p(".text-muted.fs-5")[review.description],
+            h.div(".d-grid.gap-3.mb-4")[
+                h.div[
+                    self.build_stage_card(
+                        tdt("Database Search"),
+                        tdt("Select database and define search criteria"),
+                    )
                 ],
-                h.a(href="#", class_="btn btn-outline-primary")[
-                    tdt("Import references")
+                h.div[
+                    self.build_stage_card(
+                        tdt("Import references and criteria"),
+                        tdt(
+                            "Upload citation files, define eligibility criteria and review settings"
+                        ),
+                        citation_upload_url,
+                    )
                 ],
-                import_citation_dataset_link,
-                h.a(
-                    href=reverse("screening_criteria", args=[review.id]),
-                    class_="btn btn-outline-primary",
-                )[tdt("Screening criteria")],
+                h.div[
+                    self.build_stage_card(
+                        tdt("Title and abstract screening"),
+                        tdt(
+                            "Screen titles and abstracts to identify potentially eligible studies"
+                        ),
+                        reverse("screening_criteria", args=[review.id]),
+                    )
+                ],
+                h.div[
+                    self.build_stage_card(
+                        tdt("Full text review"),
+                        tdt(
+                            "Review full text articles and make inclusion/exclusion decisions"
+                        ),
+                    )
+                ],
+                h.div[
+                    self.build_stage_card(
+                        tdt("Extraction"),
+                        tdt(
+                            "Extract outcome and study parameters for included studies"
+                        ),
+                    )
+                ],
             ],
-            h.div(".d-flex.gap-2")[
+            h.div(".d-flex.gap-2.justify-content-end")[
                 h.a(
                     href=reverse("edit_systematic_review", args=[review.id]),
                     class_="btn btn-primary",
