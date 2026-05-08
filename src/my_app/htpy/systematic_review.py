@@ -1,5 +1,6 @@
 import htpy as h
 
+from my_app.models import CitationDataset
 from shortcuts import BasePageTemplate, GenericFormWithContainer
 from shortcuts import breadcrumbs as bc
 from shortcuts import reverse, tdt
@@ -70,20 +71,7 @@ class SystematicReviewEditPage(BasePageTemplate):
 
 
 class SystematicReviewDetailPage(BasePageTemplate):
-    def build_stage_card(self, title, description, href=None):
-        if href is None:
-            action = h.a(
-                href="#",
-                class_="btn btn-secondary disabled",
-                aria_disabled="true",
-                tabindex="-1",
-            )[tdt("Coming soon")]
-        else:
-            action = h.a(
-                href=href,
-                class_="btn btn-primary",
-            )[tdt("Open")]
-
+    def build_stage_card(self, title, description, action):
         return h.div(".card.h-100.shadow-sm")[
             h.div(".card-body")[
                 h.div(".row.align-items-center.g-3")[
@@ -98,7 +86,6 @@ class SystematicReviewDetailPage(BasePageTemplate):
 
     def content(self):
         review = self.context["object"]
-        citation_upload_url = reverse("citation_upload", args=[review.id])
 
         return [
             bc.BreadcrumbTrailForSystematicReview(review),
@@ -109,16 +96,16 @@ class SystematicReviewDetailPage(BasePageTemplate):
                     self.build_stage_card(
                         tdt("Database Search"),
                         tdt("Select database and define search criteria"),
+                        h.a(
+                            href="#",
+                            class_="btn btn-secondary disabled",
+                            aria_disabled="true",
+                            tabindex="-1",
+                        )[tdt("Coming soon")],
                     )
                 ],
                 h.div[
-                    self.build_stage_card(
-                        tdt("Import references and criteria"),
-                        tdt(
-                            "Upload citation files, define eligibility criteria and review settings"
-                        ),
-                        citation_upload_url,
-                    )
+                    self._build_dataset_stage_card(review),
                 ],
                 h.div[
                     self.build_stage_card(
@@ -126,7 +113,12 @@ class SystematicReviewDetailPage(BasePageTemplate):
                         tdt(
                             "Screen titles and abstracts to identify potentially eligible studies"
                         ),
-                        reverse("screening_criteria", args=[review.id]),
+                        h.a(
+                            href=reverse(
+                                "screening_criteria", args=[review.id]
+                            ),
+                            class_="btn btn-primary",
+                        )[tdt("Open")],
                     )
                 ],
                 h.div[
@@ -135,6 +127,12 @@ class SystematicReviewDetailPage(BasePageTemplate):
                         tdt(
                             "Review full text articles and make inclusion/exclusion decisions"
                         ),
+                        h.a(
+                            href="#",
+                            class_="btn btn-secondary disabled",
+                            aria_disabled="true",
+                            tabindex="-1",
+                        )[tdt("Coming soon")],
                     )
                 ],
                 h.div[
@@ -143,6 +141,12 @@ class SystematicReviewDetailPage(BasePageTemplate):
                         tdt(
                             "Extract outcome and study parameters for included studies"
                         ),
+                        h.a(
+                            href="#",
+                            class_="btn btn-secondary disabled",
+                            aria_disabled="true",
+                            tabindex="-1",
+                        )[tdt("Coming soon")],
                     )
                 ],
             ],
@@ -153,3 +157,29 @@ class SystematicReviewDetailPage(BasePageTemplate):
                 )[tdt("Edit systematic review")],
             ],
         ]
+
+    def _build_dataset_stage_card(self, review):
+        try:
+            review.citation_dataset
+        except CitationDataset.DoesNotExist:
+            return self.build_stage_card(
+                tdt("Import references and criteria"),
+                tdt(
+                    "Upload citation files, define eligibility criteria and review settings"
+                ),
+                h.a(
+                    href=reverse("citation_upload", args=[review.id]),
+                    class_="btn btn-primary",
+                )[tdt("Upload dataset")],
+            )
+
+        return self.build_stage_card(
+            tdt("Import references and criteria"),
+            tdt(
+                "Upload citation files, define eligibility criteria and review settings"
+            ),
+            h.a(
+                href=reverse("citation_dataset_detail", args=[review.id]),
+                class_="btn btn-success",
+            )[f"✓ ", tdt("View dataset")],
+        )

@@ -1,25 +1,16 @@
+import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-
-import pytest
-
 from phac_aspc.rules import patch_rules
 
-from my_app.models import (
-    CitationDataset,
-    CitationDatasetCell,
-    CitationDatasetColumn,
-    CitationDatasetRow,
-    SystematicReview,
-    SystematicReviewUserLink,
-)
+from my_app.models import (CitationDataset, CitationDatasetCell,
+                           CitationDatasetColumn, CitationDatasetRow,
+                           SystematicReview, SystematicReviewUserLink)
 from my_app.services.upload_citation_dataset_service import (
-    CsvCitationDatasetImportSource,
-    build_citation_dataset_from_source,
-    import_citation_dataset,
-)
+    CsvCitationDatasetImportSource, build_citation_dataset_from_source,
+    import_citation_dataset)
 
 
 class StubCitationDatasetImportSource:
@@ -90,7 +81,7 @@ def test_build_citation_dataset_from_source_rolls_back_on_row_length_mismatch():
     with pytest.raises(ValueError, match="same number of values"):
         build_citation_dataset_from_source(review, source)
 
-    assert review.citation_datasets.count() == 0
+    assert CitationDataset.objects.filter(systematic_review=review).count() == 0
 
 
 example_csv = """title,year,abstract,month,day
@@ -117,7 +108,7 @@ def test_import_citation_dataset_parses_uploaded_file():
     assert result.row_count == 6
     assert result.column_count == 5
     assert result.dataset.systematic_review == review
-    assert review.citation_datasets.count() == 1
+    assert CitationDataset.objects.filter(systematic_review=review).count() == 1
 
     assert result.dataset.columns.count() == 5
     assert result.dataset.rows.count() == 6
@@ -231,7 +222,6 @@ def test_systematic_review_detail_disables_import_button_when_dataset_exists(
 
     assert response.status_code == 200
     body = response.content.decode()
-    assert "Import citation dataset" in body
-    assert 'aria-disabled="true"' in body
-    assert "disabled" in body
+    assert "View dataset" in body
+    assert reverse("citation_dataset_detail", args=[review.id]) in body
     assert "✓" in body

@@ -3,6 +3,7 @@
 #   by convention, we do it here
 from . import (
     background_tasks,
+    citation_dataset,
     citation_upload,
     documents,
     llm_demo,

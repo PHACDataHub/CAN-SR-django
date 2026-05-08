@@ -1,5 +1,4 @@
 from django.db import models
-
 from phac_aspc.django import fields
 
 from proj.model_util import add_to_admin
@@ -10,9 +9,9 @@ from .systematic_review import SystematicReview
 
 @add_to_admin
 class CitationDataset(models.Model):
-    systematic_review = fields.ForeignKey(
+    systematic_review = fields.OneToOneField(
         SystematicReview,
-        related_name="citation_datasets",
+        related_name="citation_dataset",
         on_delete=models.CASCADE,
         verbose_name=tdt("Systematic review"),
     )
