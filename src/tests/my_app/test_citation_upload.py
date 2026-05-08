@@ -5,12 +5,18 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from phac_aspc.rules import patch_rules
 
-from my_app.models import (CitationDataset, CitationDatasetCell,
-                           CitationDatasetColumn, CitationDatasetRow,
-                           SystematicReview, SystematicReviewUserLink)
+from my_app.models import (
+    CitationDataset,
+    CitationDatasetColumn,
+    CitationDatasetRow,
+    SystematicReview,
+    SystematicReviewUserLink,
+)
 from my_app.services.upload_citation_dataset_service import (
-    CsvCitationDatasetImportSource, build_citation_dataset_from_source,
-    import_citation_dataset)
+    CsvCitationDatasetImportSource,
+    build_citation_dataset_from_source,
+    import_citation_dataset,
+)
 
 
 class StubCitationDatasetImportSource:
@@ -43,28 +49,28 @@ def test_build_citation_dataset_from_source_creates_expected_records():
         description="Review description",
     )
     source = StubCitationDatasetImportSource(
-        ["title", "year"],
-        [("First citation", "2020"), ("Second citation", "2021")],
+        [" TITLE ", "year", " abstract "],
+        [
+            ("First citation", "2020", "First abstract"),
+            ("Second citation", "2021", "Second abstract"),
+        ],
     )
 
     result = build_citation_dataset_from_source(review, source)
 
     assert result.row_count == 2
-    assert result.column_count == 2
+    assert result.column_count == 1
     assert result.dataset.systematic_review == review
 
     dataset = result.dataset
-    assert [column.name for column in dataset.columns.order_by("id")] == [
-        "title",
-        "year",
-    ]
+    assert [column.name for column in dataset.columns.order_by("id")] == ["year"]
     assert [row.order for row in dataset.rows.order_by("order")] == [1, 2]
-    assert [
-        cell.value for cell in dataset.rows.get(order=1).cells.order_by("id")
-    ] == ["First citation", "2020"]
-    assert [
-        cell.value for cell in dataset.rows.get(order=2).cells.order_by("id")
-    ] == ["Second citation", "2021"]
+    assert dataset.rows.get(order=1).title == "First citation"
+    assert dataset.rows.get(order=1).abstract == "First abstract"
+    assert dataset.rows.get(order=1).data == {"year": "2020"}
+    assert dataset.rows.get(order=2).title == "Second citation"
+    assert dataset.rows.get(order=2).abstract == "Second abstract"
+    assert dataset.rows.get(order=2).data == {"year": "2021"}
 
 
 def test_build_citation_dataset_from_source_rolls_back_on_row_length_mismatch():
@@ -106,28 +112,24 @@ def test_import_citation_dataset_parses_uploaded_file():
     )
 
     assert result.row_count == 6
-    assert result.column_count == 5
+    assert result.column_count == 3
     assert result.dataset.systematic_review == review
     assert CitationDataset.objects.filter(systematic_review=review).count() == 1
 
-    assert result.dataset.columns.count() == 5
+    assert result.dataset.columns.count() == 3
     assert result.dataset.rows.count() == 6
-    assert CitationDatasetCell.objects.count() == 30
 
     assert list(
         result.dataset.columns.values_list("name", flat=True).order_by("id")
-    ) == ["title", "year", "abstract", "month", "day"]
+    ) == ["year", "month", "day"]
 
     first_row = result.dataset.rows.get(order=1)
-    first_row_cells = first_row.cells.select_related("column").order_by(
-        "column__id"
-    )
-    assert {(cell.column.name, cell.value) for cell in first_row_cells} == {
-        ("title", "First citation"),
-        ("year", "2020"),
-        ("abstract", "An abstract"),
-        ("month", "January"),
-        ("day", "1"),
+    assert first_row.title == "First citation"
+    assert first_row.abstract == "An abstract"
+    assert first_row.data == {
+        "year": "2020",
+        "month": "January",
+        "day": "1",
     }
 
 
@@ -141,15 +143,15 @@ def test_import_citation_dataset_uses_bulk_inserts():
         result = import_citation_dataset(review, example_csv)
 
     assert result.row_count == 6
-    assert result.column_count == 5
+    assert result.column_count == 3
 
     insert_queries = [
         query["sql"]
         for query in queries
         if query["sql"].lstrip().upper().startswith("INSERT")
     ]
-    assert len(insert_queries) == 4
-    assert len(queries) <= 6
+    assert len(insert_queries) == 3
+    assert len(queries) <= 5
 
 
 def test_citation_upload_creates_dataset_and_redirects(
@@ -185,21 +187,17 @@ def test_citation_upload_creates_dataset_and_redirects(
 
     assert response.status_code == 200
     body = response.content.decode()
-    assert "Imported citation dataset with 2 rows and 2 columns." in body
+    assert "Imported citation dataset with 2 rows and 1 column." in body
 
     dataset = CitationDataset.objects.get(systematic_review=review)
-    assert CitationDatasetColumn.objects.filter(dataset=dataset).count() == 2
+    assert CitationDatasetColumn.objects.filter(dataset=dataset).count() == 1
     assert CitationDatasetRow.objects.filter(dataset=dataset).count() == 2
-    assert (
-        CitationDatasetCell.objects.filter(row__dataset=dataset).count() == 4
-    )
 
     rows = list(dataset.rows.all())
     assert [row.order for row in rows] == [1, 2]
-    assert [cell.value for cell in rows[0].cells.order_by("column_id")] == [
-        "First citation",
-        "2020",
-    ]
+    assert rows[0].title == "First citation"
+    assert rows[0].abstract == ""
+    assert rows[0].data == {"year": "2020"}
 
 
 def test_systematic_review_detail_disables_import_button_when_dataset_exists(

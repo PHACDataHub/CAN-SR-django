@@ -2,14 +2,10 @@ from functools import cached_property
 
 import htpy as h
 from django import forms
-from django.db.models import Count, Prefetch
+from django.db.models import Count
 from django.http import HttpResponseBadRequest
 
-from my_app.models import (
-    CitationDataset,
-    CitationDatasetCell,
-    SystematicReview,
-)
+from my_app.models import CitationDataset, SystematicReview
 from my_app.router import route
 from my_app.views.view_utils import MustAccessSystematicReviewMixin
 from shortcuts import (
@@ -37,6 +33,11 @@ class CitationDatasetDetailPage(BasePageTemplate):
         dataset = self._get_dataset(review)
         rows = self._get_rows(dataset)
         columns = list(dataset.columns.all())
+        table_columns = [
+            tdt("Title"),
+            tdt("Abstract"),
+            *[column.name for column in columns],
+        ]
         delete_url = reverse("delete_citation_dataset", args=[review.id])
 
         return [
@@ -59,9 +60,7 @@ class CitationDatasetDetailPage(BasePageTemplate):
                 ],
                 h.div[
                     h.strong[tdt("Columns")],
-                    h.ul(".mb-0.mt-2")[
-                        [h.li[column.name] for column in columns]
-                    ],
+                    h.ul(".mb-0.mt-2")[[h.li[column.name] for column in columns]],
                 ],
             ],
             h.div(".border.rounded.p-3.h-100")[
@@ -71,7 +70,7 @@ class CitationDatasetDetailPage(BasePageTemplate):
                     if dataset.row_count > 100
                     else h.p(".text-muted.mb-0")[tdt("Showing all rows.")]
                 ),
-                self._render_table(columns, rows),
+                self._render_table(table_columns, columns, rows),
             ],
         ]
 
@@ -88,34 +87,26 @@ class CitationDatasetDetailPage(BasePageTemplate):
         )
 
     def _get_rows(self, dataset):
-        return list(
-            dataset.rows.order_by("order", "id").prefetch_related(
-                Prefetch(
-                    "cells",
-                    queryset=CitationDatasetCell.objects.select_related(
-                        "column"
-                    ).order_by("id"),
-                )
-            )[:100]
-        )
+        return list(dataset.rows.order_by("order", "id")[:100])
 
-    def _render_table(self, columns, rows):
+    def _render_table(self, table_columns, columns, rows):
         if not rows:
             return h.p(".mt-3.mb-0")[tdt("No rows in dataset.")]
 
         return h.div(".table-responsive.mt-3")[
             h.table(".table.table-striped.table-sm.align-middle")[
-                h.thead[h.tr[[h.th[column.name] for column in columns]]],
+                h.thead[h.tr[[h.th[column] for column in table_columns]]],
                 h.tbody[[self._render_row(columns, row) for row in rows]],
             ]
         ]
 
     def _render_row(self, columns, row):
-        cells_by_column_id = {
-            cell.column_id: cell.value for cell in row.cells.all()
-        }
         return h.tr[
-            [h.td[cells_by_column_id.get(column.id, "")] for column in columns]
+            [
+                h.td[row.title],
+                h.td[row.abstract],
+                *[h.td[row.data.get(column.name, "")] for column in columns],
+            ]
         ]
 
 
@@ -135,7 +126,7 @@ class DeleteCitationDatasetPage(BasePageTemplate):
             ],
             h.h1[tdt("Delete dataset")],
             h.p(".text-danger")[
-                tdt("This will delete the dataset, rows, columns, and cells.")
+                tdt("This will delete the dataset, rows, and columns.")
             ],
             h.form(method="post", action=delete_url, novalidate=True)[
                 GenericForm(self.context["form"]),
@@ -201,9 +192,7 @@ class DeleteCitationDatasetView(
         return HttpResponseRedirect(self.get_success_url())
 
     def get_success_url(self):
-        return reverse(
-            "systematic_review_detail", args=[self.systematic_review.id]
-        )
+        return reverse("systematic_review_detail", args=[self.systematic_review.id])
 
     @cached_property
     def _dataset(self):

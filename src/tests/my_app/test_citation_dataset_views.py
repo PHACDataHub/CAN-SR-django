@@ -3,10 +3,8 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from phac_aspc.rules import patch_rules
 
-from my_app.models import (CitationDataset, SystematicReview,
-                           SystematicReviewUserLink)
-from my_app.services.upload_citation_dataset_service import \
-    import_citation_dataset
+from my_app.models import CitationDataset, SystematicReview, SystematicReviewUserLink
+from my_app.services.upload_citation_dataset_service import import_citation_dataset
 
 EXAMPLE_CSV = """title,year,abstract,month,day
 First citation,2020,An abstract,January,1
@@ -46,6 +44,7 @@ def test_citation_dataset_detail_shows_summary_and_rows(
     assert "Dataset summary" in body
     assert "Number of rows" in body
     assert "First citation" in body
+    assert "An abstract" in body
     assert "Sixth citation" in body
     assert "Delete dataset" in body
     assert reverse("delete_citation_dataset", args=[review.id]) in body

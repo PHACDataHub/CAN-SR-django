@@ -45,27 +45,10 @@ class CitationDatasetRow(models.Model):
         on_delete=models.CASCADE,
         verbose_name=tdt("Dataset"),
     )
+    title = fields.TextField(blank=True, default="", verbose_name=tdt("Title"))
+    abstract = fields.TextField(blank=True, default="", verbose_name=tdt("Abstract"))
+    data = models.JSONField(default=dict, blank=True, verbose_name=tdt("Data"))
     order = fields.IntegerField(verbose_name=tdt("Insertion order"))
 
     def __str__(self):
         return f"{self.dataset_id} row {self.order}"
-
-
-@add_to_admin
-class CitationDatasetCell(models.Model):
-    row = fields.ForeignKey(
-        CitationDatasetRow,
-        related_name="cells",
-        on_delete=models.CASCADE,
-        verbose_name=tdt("Row"),
-    )
-    column = fields.ForeignKey(
-        CitationDatasetColumn,
-        related_name="cells",
-        on_delete=models.CASCADE,
-        verbose_name=tdt("Column"),
-    )
-    value = fields.CharField(max_length=1000, verbose_name=tdt("Value"))
-
-    def __str__(self):
-        return f"{self.row_id}:{self.column_id}"

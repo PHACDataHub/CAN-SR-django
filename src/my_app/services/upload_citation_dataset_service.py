@@ -1,18 +1,12 @@
-from abc import ABC, abstractmethod
-import itertools
 import csv
 import io
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Iterable
 
 from django.db import transaction
 
-from my_app.models import (
-    CitationDataset,
-    CitationDatasetCell,
-    CitationDatasetColumn,
-    CitationDatasetRow,
-)
+from my_app.models import CitationDataset, CitationDatasetColumn, CitationDatasetRow
 
 
 @dataclass(frozen=True)
@@ -61,9 +55,7 @@ class CsvCitationDatasetImportSource(CitationDatasetImportSource):
         if not headers or any(not header for header in headers):
             raise ValueError("CSV header row must include column names.")
 
-        row_values = [
-            tuple(row) for row in reader if any(cell.strip() for cell in row)
-        ]
+        row_values = [tuple(row) for row in reader if any(cell.strip() for cell in row)]
         return cls(headers, row_values)
 
     def get_column_names(self) -> list[str]:
@@ -80,10 +72,11 @@ class CitationDatasetImporter:
 
     def run(self):
         column_names = list(self.source.get_column_names())
-        if not column_names or any(not name for name in column_names):
+        if not column_names or any(not name.strip() for name in column_names):
             raise ValueError("CSV header row must include column names.")
 
         row_values = [list(row) for row in self.source.iter_row_values()]
+        column_specs = self._get_column_specs(column_names)
 
         with transaction.atomic():
             dataset = CitationDataset.objects.create(
@@ -92,15 +85,15 @@ class CitationDatasetImporter:
             columns = [
                 CitationDatasetColumn(
                     dataset=dataset,
-                    name=column_name,
+                    name=column_spec["name"],
                 )
-                for column_name in column_names
+                for column_spec in column_specs["data_columns"]
             ]
             CitationDatasetColumn.objects.bulk_create(columns)
 
             rows = []
             for order, values in enumerate(row_values, start=1):
-                if len(values) != len(columns):
+                if len(values) != len(column_names):
                     raise ValueError(
                         "CSV rows must have the same number of values as the header."
                     )
@@ -109,19 +102,20 @@ class CitationDatasetImporter:
                     CitationDatasetRow(
                         dataset=dataset,
                         order=order,
+                        title=self._get_special_value(
+                            values, column_specs["title_index"]
+                        ),
+                        abstract=self._get_special_value(
+                            values, column_specs["abstract_index"]
+                        ),
+                        data={
+                            column_spec["name"]: values[column_spec["index"]]
+                            for column_spec in column_specs["data_columns"]
+                        },
                     )
                 )
 
             CitationDatasetRow.objects.bulk_create(rows)
-
-            cells = self._get_cell_iterator(rows, columns, row_values)
-            # separate cells in chunks of 200 to avoid memory issues
-            # ~2600 cells (100x26) takes 1.5s in local dev,
-            #   other tested chunk sizes seem slower
-            # may have to move to background task if slow
-            # and/or, use json-based rows instead of 1 record per cell
-            for chunk_of_cells in itertools.batched(cells, 200):
-                CitationDatasetCell.objects.bulk_create(chunk_of_cells)
 
         return CitationDatasetImportResult(
             dataset=dataset,
@@ -129,17 +123,38 @@ class CitationDatasetImporter:
             column_count=len(columns),
         )
 
-    def _get_cell_iterator(self, rows, columns, row_values):
-        # since we have cell-level records
-        # we deal with a huge amount of memory
-        # so we use a lazy iterator to chunk them
-        for row, values in zip(rows, row_values):
-            for column, value in zip(columns, values):
-                yield CitationDatasetCell(
-                    row=row,
-                    column=column,
-                    value=value,
-                )
+    def _get_column_specs(self, column_names):
+        special_indices = {"title": None, "abstract": None}
+        data_columns = []
+
+        for index, column_name in enumerate(column_names):
+            clean_name = column_name.strip()
+            normalized_name = clean_name.casefold()
+            if (
+                normalized_name in special_indices
+                and special_indices[normalized_name] is None
+            ):
+                special_indices[normalized_name] = index
+                continue
+
+            data_columns.append(
+                {
+                    "index": index,
+                    "name": clean_name,
+                }
+            )
+
+        return {
+            "title_index": special_indices["title"],
+            "abstract_index": special_indices["abstract"],
+            "data_columns": data_columns,
+        }
+
+    def _get_special_value(self, values, index):
+        if index is None:
+            return ""
+
+        return values[index]
 
 
 def build_citation_dataset_from_source(systematic_review, source):
