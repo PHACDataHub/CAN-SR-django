@@ -14,9 +14,8 @@ import os
 import sys
 from pathlib import Path
 
-from django.urls import reverse_lazy
-
 from decouple import Csv, config
+from django.urls import reverse_lazy
 from phac_aspc.django.settings import *
 from phac_aspc.django.settings.utils import (
     configure_apps,
@@ -54,6 +53,9 @@ if IS_LOCAL_DEV:
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=Csv())
 CORS_ALLOWED_ORIGINS = ["*"]
+
+FEATURE_FLAG = config("FEATURE_FLAG", default=False, cast=bool)
+
 
 # Application definition
 INSTALLED_APPS = configure_apps(
@@ -100,7 +102,6 @@ LLM_OLLAMA_URL = config("OLLAMA_URL", default="http://localhost:11434")
 LLM_OLLAMA_MODELS = config("OLLAMA_MODELS", cast=Csv())
 LLM_OLLAMA_MODEL = LLM_OLLAMA_MODELS[0]
 LLM_OLLAMA_TIMEOUT = config("LLM_OLLAMA_TIMEOUT", default=60, cast=int)
-
 
 # END LLM settings
 

@@ -10,3 +10,29 @@
 }
 
 /* end messages */
+
+
+button:focus,
+.btn:focus,
+.btn-close:focus,
+.form-select:focus,
+.form-control:focus,
+.phac_aspc_form_autocomplete_focus_ring.active,
+a:focus,
+div:focus,
+i:focus,
+input[type="checkbox"]:focus,
+input[type="radio"]:focus {
+    outline-offset: 0.125rem;
+    border-color: #0535d2;
+    box-shadow: 0 0 0 0.125rem white;
+    outline-color: rgb(5, 53, 210);
+    outline-style: solid;
+    outline-width: 0.25rem;
+}
+
+
+strong>span+label {
+    display: inline;
+    margin-left: 0.125rem;
+}
