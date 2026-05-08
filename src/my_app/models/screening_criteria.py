@@ -16,6 +16,10 @@ class AbstractScreeningQuestion(models.Model):
     def __str__(self):
         return self.question_text
 
+    @property
+    def title(self):
+        return self.question_text
+
 
 @add_to_admin
 class L1ScreeningQuestion(AbstractScreeningQuestion):
@@ -49,6 +53,14 @@ class AbstractScreeningQuestionOption(models.Model):
     def __str__(self):
         return self.option_text
 
+    @property
+    def title(self):
+        return self.option_text
+
+    @property
+    def description(self):
+        return self.option_value
+
 
 class L1ScreeningQuestionOption(AbstractScreeningQuestionOption):
     question = fields.ForeignKey(
@@ -76,10 +88,14 @@ class ParameterQuestion(models.Model):
         on_delete=models.CASCADE,
         verbose_name=tdt("Systematic review"),
     )
-    question_text = fields.TextField(verbose_name=tdt("Question text"))
+    question_text = fields.TextField(verbose_name=tdt("Parameter question"))
 
     def __str__(self):
         return f"{self.review_id} parameter question"
+
+    @property
+    def title(self):
+        return self.question_text
 
 
 @add_to_admin
@@ -99,3 +115,11 @@ class ParameterQuestionOption(models.Model):
 
     def __str__(self):
         return self.param_name
+
+    @property
+    def title(self):
+        return self.param_name
+
+    @property
+    def description(self):
+        return self.param_description

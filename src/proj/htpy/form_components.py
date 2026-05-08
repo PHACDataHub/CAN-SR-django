@@ -5,6 +5,7 @@ from django import forms
 from django.conf import settings
 from htpy import Node, Renderable
 from markupsafe import Markup
+from phac_aspc.vanilla import flatten
 
 from proj.htpy.context_providers import (
     WithAriaLabelledBy,
@@ -139,7 +140,7 @@ def InlineFormset(
         script = None
 
     debug_section = None
-    if settings.DEBUG:
+    if settings.FEATURE_FLAG:
         if aria_list_label:
             debug_section = htpy.div(".alert.alert-info.p-2.m-0")[
                 "formset aria_list_label: ",
@@ -167,4 +168,47 @@ def InlineFormset(
         htpy.div({"id": formset_container_id})[form_items],
         add_button,
         script,
+    ]
+
+
+def ErrorSummary(form_list: list[forms.Form]) -> Node:
+
+    has_errors = False
+    for form in form_list:
+        for field in form.visible_fields():
+            if field.errors:
+                has_errors = True
+                break
+
+        if has_errors:
+            break
+
+    if not has_errors:
+        return None
+
+    all_fields = flatten([form.visible_fields() for form in form_list])
+
+    return htpy.div(
+        {
+            "id": "form-error-summary",
+            "class": "alert alert-danger",
+            "tabindex": "0",
+            "role": "alert",
+            "autofocus": "true",
+        }
+    )[
+        htpy.h2({"class": "h4"})[tm("form_not_saved")],
+        htpy.ul[
+            (
+                htpy.li[
+                    htpy.a({"href": f"#{field.id_for_label}"})[
+                        htpy.strong[field.label],
+                        htpy.span[" - "],
+                        htpy.span[", ".join(field.errors)],
+                    ]
+                ]
+                for field in all_fields
+                if field.errors
+            )
+        ],
     ]

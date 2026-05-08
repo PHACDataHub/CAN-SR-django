@@ -17,10 +17,12 @@ from my_app.models import (
 )
 from my_app.router import route
 from my_app.views.view_utils import MustAccessSystematicReviewMixin
-from proj.htpy.form_components import InlineFormset
+from proj.htpy.form_components import ErrorSummary, InlineFormset
+from proj.htpy.modal_component import ModalComponent
 from shortcuts import (
     BasePageTemplate,
     GenericForm,
+    HtpyComponent,
     HtpyTemplateMixin,
     HttpResponse,
     ModelForm,
@@ -29,7 +31,7 @@ from shortcuts import (
     StandardFormMixin,
 )
 from shortcuts import breadcrumbs as bc
-from shortcuts import cached_property, dataclass, reverse, tdt, transaction
+from shortcuts import cached_property, dataclass, reverse, tdt, tm, transaction
 
 ChildType = L1ScreeningQuestion | L2ScreeningQuestion | ParameterQuestion
 OptionType = (
@@ -61,8 +63,8 @@ class FormsetAdapterMeta(abc.ABCMeta):
 
 
 class FormsetAdapter(abc.ABC, metaclass=FormsetAdapterMeta):
-    @abc.abstractmethod
-    def get_edit_url(self, obj):
+    @abc.abstractstaticmethod
+    def get_edit_url(obj):
         raise NotImplementedError
 
     @abc.abstractstaticmethod
@@ -74,9 +76,13 @@ class FormsetAdapter(abc.ABC, metaclass=FormsetAdapterMeta):
 
     @staticmethod
     def option_form_renderer(form):
-        return GenericForm(form)
+        return h.div[GenericForm(form)]
 
-    add_button_text = tdt("Add option")
+    add_button_text = tdt("Add question")
+
+    @classmethod
+    def get_section_name(cls):
+        return f"{cls.__name__.lower()}-section"
 
 
 class L1FormsetAdapter(FormsetAdapter):
@@ -99,7 +105,7 @@ class L1FormsetAdapter(FormsetAdapter):
 
     @staticmethod
     def get_edit_url(obj):
-        return reverse("edit_l1_question", args=[obj.pk])
+        return reverse("edit_l1_question", args=[obj.review_id, obj.pk])
 
 
 class L2FormsetAdapter(FormsetAdapter):
@@ -123,7 +129,7 @@ class L2FormsetAdapter(FormsetAdapter):
 
     @staticmethod
     def get_edit_url(obj):
-        return reverse("edit_l2_question", args=[obj.pk])
+        return reverse("edit_l2_question", args=[obj.review_id, obj.pk])
 
 
 class ParameterFormsetAdapter(FormsetAdapter):
@@ -147,63 +153,94 @@ class ParameterFormsetAdapter(FormsetAdapter):
 
     @staticmethod
     def get_edit_url(obj):
-        return reverse("edit_parameter_question", args=[obj.pk])
+        return reverse("edit_parameter_question", args=[obj.review_id, obj.pk])
+
+    add_button_text = tdt("Add Parameter")
 
 
-class ScreeningCriteriaPage(BasePageTemplate):
+class ScreeningCriteriaPageContent(HtpyComponent):
+    def __init__(self, review: SystematicReview):
+        self.review = review
 
-    def render_form_and_formset_section(self, adapter):
-        review = self.context["systematic_review"]
-        section_id = f"{adapter.__name__}-section"
+    def render_form_and_formset_section(self, adapter: type[FormsetAdapter]):
+        review = self.review
+        section_id = adapter.get_section_name()
         child_records = adapter.model.objects.filter(review=review)
 
         if child_records:
-            child_forms = h.fragment[
+            child_content = h.ul(".list-group")[
                 (
-                    ChildEditor(
-                        adapter=adapter,
-                        child=question,
-                        prefix=f"screening-question-{question.pk}",
-                    ).render()
-                    for question in child_records
+                    h.li(".list-group-item")[
+                        h.div(".d-flex.justify-content-between.mb-1")[
+                            h.div[child.title],
+                            h.div[
+                                h.button(
+                                    ".btn.btn-outline-primary.btn-sm",
+                                    hx_get=adapter.get_edit_url(child),
+                                    hx_target="#modal-slot",
+                                    # hx-preserve requires a stable ID
+                                    id=f"edit-{section_id}-{child.pk}-button",
+                                    hx_preserve="true",
+                                )[tm("edit")]
+                            ],
+                        ],
+                        h.div[tdt("options")],
+                        h.ul(".list-group")[
+                            (
+                                h.li(".list-group-item")[
+                                    h.div[option.title],
+                                    h.div(".small.text-secondary")[
+                                        option.description
+                                    ],
+                                ]
+                                for option in child.options.all()
+                            )
+                        ],
+                    ]
+                    for child in child_records
                 )
             ]
         else:
-            blank_editor = ChildEditor(
-                adapter=adapter,
-                child=adapter.model(review=review),
-                prefix=f"screening-question-new-{uuid.uuid4().hex}",
-            )
-            child_forms = h.fragment[blank_editor.render()]
+            child_content = h.p[tdt("No questions/parameters added yet.")]
 
         return h.fragment[
-            h.div(id=section_id)[h.div[child_forms],],
-            h.div(".text-center")[
+            h.div(
+                id=section_id,
+                tab_index=-1,
+                hx_swap_oob="true",
+            )[
+                h.div[child_content],
+            ],
+            h.div(".mt-1.mb-3")[
                 h.button(
                     hx_get=adapter.get_new_url(review),
-                    hx_target=f"#{section_id}",
-                    hx_swap="beforeend",
+                    hx_target="#modal-slot",
                     type="button",
                     class_="btn btn-primary",
                 )[adapter.add_button_text]
             ],
         ]
 
-    def content(self):
-        review = self.context["systematic_review"]
-
+    def render(self):
         return [
-            bc.BreadcrumbTrailForSystematicReview(review)[
+            bc.BreadcrumbTrailForSystematicReview(self.review)[
                 bc.BreadcrumbItem(label=tdt("Screening criteria"))
             ],
             h.h1[tdt("Screening criteria")],
             h.h2[tdt("L1 screening questions")],
             self.render_form_and_formset_section(L1FormsetAdapter),
             h.h2[tdt("L2 screening questions")],
-            # self.render_form_and_formset_section(L2FormsetAdapter),
+            self.render_form_and_formset_section(L2FormsetAdapter),
             h.h2[tdt("Parameters")],
-            # self.render_form_and_formset_section(ParameterFormsetAdapter),
+            self.render_form_and_formset_section(ParameterFormsetAdapter),
         ]
+
+
+class ScreeningCriteriaPage(BasePageTemplate):
+    def content(self):
+        return ScreeningCriteriaPageContent(
+            self.context["systematic_review"]
+        ).render()
 
 
 @route(
@@ -227,7 +264,7 @@ class ChildEditor:
 
     Design note:
 
-    A single Question(parameter) + its options are the unit of saving. They have a prefix that ties them together and ensure they are separable from other forms on the page/request
+    A single Question(parameter) + its options are the unit of saving
 
     This helper can be composed by the add vs. edit views, for both models
 
@@ -235,7 +272,6 @@ class ChildEditor:
 
     adapter: FormsetAdapter
     child: ChildType
-    prefix: str
     data: QueryDict | None = None
 
     @property
@@ -245,15 +281,18 @@ class ChildEditor:
         else:
             url = self.adapter.get_edit_url(self.child)
 
-        return url + "?" + urlencode({"prefix": self.prefix})
+        return url
 
     @cached_property
     def child_form(self):
         return self.adapter.FormClass(
             self.data,
             instance=self.child,
-            prefix=self.prefix,
         )
+
+    @property
+    def form_id(self):
+        return self.adapter.__name__
 
     @cached_property
     def option_formset(self):
@@ -270,33 +309,44 @@ class ChildEditor:
             extra=extra,
             can_delete=True,
         )
+
+        parent_instance = self.child
         return FormSetCls(
-            self.data,
-            instance=self.child,
-            prefix=f"{self.prefix}-options",
+            self.data, instance=parent_instance, prefix="options"
         )
 
+    def is_valid(self):
+        return self.child_form.is_valid() and self.option_formset.is_valid()
+
     def save(self):
+        self.is_valid()  # to populate cleaned_data and errors
         with transaction.atomic():
             child = self.child_form.save()
-
             formset = self.option_formset
-            if not formset.is_valid():
-                raise ValueError("Option formset is not valid")
+
             formset.save()
 
         return child
 
-    def render(self):
+    def render_form(self):
 
         post_url = self.post_url
+
+        error_summary = None
+        if self.data is not None:
+            error_summary = ErrorSummary(
+                [self.child_form, *self.option_formset.forms]
+            )
 
         return h.form(
             hx_post=post_url,
             hx_target="this",
             hx_swap="outerHTML",
+            hx_select=f"#{self.form_id}",
             class_="mb-4 border p-3 rounded",
+            id=self.form_id,
         )[
+            error_summary,
             self.adapter.form_renderer(self.child_form),
             InlineFormset(
                 self.option_formset,
@@ -305,84 +355,97 @@ class ChildEditor:
                 can_add=True,
                 aria_list_label=tdt("options"),
             ),
-            h.div(".text-end")[
-                h.button(type="submit", class_="btn btn-primary")[tdt("Save")],
-            ],
         ]
 
+    def render_modal(self):
+        body = self.render_form()
 
-class ChildEditorCreateView(MustAccessSystematicReviewMixin):
-    adapter: FormsetAdapter
+        footer = h.fragment[
+            h.button(
+                {
+                    "type": "button",
+                    "class": "btn btn-secondary",
+                    "data-modal-close": True,
+                }
+            )[tm("cancel")],
+            h.button(
+                {
+                    "type": "submit",
+                    "class": "btn btn-primary",
+                    "hx-disabled-elt": "this",
+                    "form": self.form_id,
+                }
+            )[tm("save")],
+        ]
+
+        return ModalComponent(
+            title=tdt("Edit question/parameter"),
+            footer=footer,
+            modal_id=f"{self.form_id}-modal",
+        )[body]
+
+
+class ChildEditorModalFormView(MustAccessSystematicReviewMixin):
+    adapter: type[FormsetAdapter]
+
+    editor: ChildEditor
+
+    def get(self, *args, **kwargs):
+        return HttpResponse(self.editor.render_modal())
+
+    def form_valid(self):
+        # re-render the entire parent page
+        # hx-swap-oob will take care of swapping updated data
+        content = ScreeningCriteriaPageContent(self.systematic_review).render()
+        resp = HttpResponse(content)
+        resp["HX-Trigger-After-Settle"] = "modal-close"
+        resp["Hx-Reswap"] = "none"
+
+        return resp
+
+    def form_invalid(self):
+        resp = HttpResponse(self.editor.render_modal())
+        resp["HX-Refocus"] = f"#{self.editor.form_id}-error-summary"
+        return resp
+
+    def post(self, *args, **kwargs):
+        if self.editor.is_valid():
+            self.editor.save()
+            return self.form_valid()
+        else:
+            return self.form_invalid()
+
+
+class ChildEditorCreateView(ChildEditorModalFormView):
 
     @cached_property
     def editor(self):
-        prefix = (
-            self.request.GET.get("prefix") or f"child-new-{uuid.uuid4().hex}"
-        )
         child = self.adapter.model(review=self.systematic_review)
         editor = ChildEditor(
             child=child,
-            prefix=prefix,
             data=self.request.POST or None,
             adapter=self.adapter,
         )
         return editor
 
-    def get(self, *args, **kwargs):
-        return HttpResponse(self.editor.render())
 
-    def post(self, *args, **kwargs):
-        self.editor.save()
-        content = self.editor.render()
-
-        return HttpResponse(content)
-
-
-class ChildEditorEditView(MustAccessSystematicReviewMixin):
-    # type of formsetadapter
-    adapter: type[FormsetAdapter]
+class ChildEditorEditView(ChildEditorModalFormView):
 
     @cached_property
     def editor(self):
-        prefix = self.request.GET["prefix"]
-        question_id = self.kwargs["pk"]
+        question_id = self.kwargs["question_pk"]
 
         try:
-            question = self.model.objects.get(pk=question_id)
-        except self.model.DoesNotExist:
+            question = self.adapter.model.objects.get(pk=question_id)
+        except self.adapter.model.DoesNotExist:
             raise ValueError("Invalid question ID")
 
         editor = ChildEditor(
             child=question,
-            prefix=prefix,
+            adapter=self.adapter,
             data=self.request.POST or None,
         )
         return editor
-
-    def get(self, *args, **kwargs):
-        return HttpResponse(self.editor.render())
-
-    def post(self, *args, **kwargs):
-        self.editor.save()
-        content = self.editor.render()
-
-        return HttpResponse(content)
-
-
-@route(
-    "systematic_reviews/<int:pk>/add_parameter_question",
-    name="add_parameter_question",
-)
-class AddParameterQuestionView(ChildEditorCreateView):
-    adapter = ParameterFormsetAdapter
-
-
-@route(
-    "parameter_questions/<int:pk>/edit",
-    name="edit_parameter_question",
-)
-class EditParameterQuestionView(ChildEditorEditView):
-    adapter = ParameterFormsetAdapter
 
 
 @route(
@@ -394,8 +457,40 @@ class AddL1ScreeningQuestionView(ChildEditorCreateView):
 
 
 @route(
-    "l1_screening_questions/<int:pk>/edit",
+    "systematic_reviews/<int:pk>/l1_screening_questions/<int:question_pk>/edit",
     name="edit_l1_question",
 )
 class EditL1ScreeningQuestionView(ChildEditorEditView):
     adapter = L1FormsetAdapter
+
+
+@route(
+    "systematic_reviews/<int:pk>/l2_screening_questions/add/",
+    name="add_l2_question",
+)
+class AddL2ScreeningQuestionView(ChildEditorCreateView):
+    adapter = L2FormsetAdapter
+
+
+@route(
+    "systematic_reviews/<int:pk>/l2_screening_questions/<int:question_pk>/edit",
+    name="edit_l2_question",
+)
+class EditL2ScreeningQuestionView(ChildEditorEditView):
+    adapter = L2FormsetAdapter
+
+
+@route(
+    "systematic_reviews/<int:pk>/parameters/add/",
+    name="add_parameter_question",
+)
+class AddParameterQuestionView(ChildEditorCreateView):
+    adapter = ParameterFormsetAdapter
+
+
+@route(
+    "systematic_reviews/<int:pk>/parameters/<int:question_pk>/edit",
+    name="edit_parameter_question",
+)
+class EditParameterQuestionView(ChildEditorEditView):
+    adapter = ParameterFormsetAdapter

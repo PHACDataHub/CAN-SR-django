@@ -40,6 +40,10 @@ translation_entries = {
         "en": "Submit",
         "fr": "submit",
     },
+    "cancel": {
+        "en": "Cancel",
+        "fr": "Annuler",
+    },
     "yes": {
         "en": "Yes",
         "fr": "Oui",
@@ -63,6 +67,10 @@ translation_entries = {
     "upload_pdf_instructions": {
         "en": "Choose a PDF file and store it in media/ for now.",
         "fr": "Choisissez un fichier PDF et enregistrez-le dans media/ pour le moment.",
+    },
+    "form_not_saved": {
+        "en": "Form not saved, please correct the errors below.",
+        "fr": "Formulaire non sauvegardé, veuillez corriger les erreurs ci-dessous.",
     },
     "pdf_file": {
         "en": "PDF file",
