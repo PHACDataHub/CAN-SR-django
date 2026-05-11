@@ -1,4 +1,5 @@
 from django.urls import reverse
+
 from phac_aspc.rules import patch_rules
 
 from my_app.model_factories import (

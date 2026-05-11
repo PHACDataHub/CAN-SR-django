@@ -2,7 +2,6 @@ from django.test import signals
 
 from htpy.django import _HtpyTemplate
 
-
 ORIGINAL_HTPY_RENDERER = _HtpyTemplate.render
 
 

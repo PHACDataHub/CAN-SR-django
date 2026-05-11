@@ -1,4 +1,3 @@
-import htpy as h
 from django.conf import settings
 from django.contrib import messages
 from django.middleware.csrf import get_token
@@ -6,7 +5,13 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import TemplateView
+
+import htpy as h
 from django_database_task.models import DatabaseTask
+
+from proj.htpy.base_page import BasePageTemplate
+from proj.htpy.util import HtpyTemplateMixin
+from proj.text import tdt
 
 from my_app.models import DemoTaskRun, SystematicReview
 from my_app.router import route
@@ -14,9 +19,6 @@ from my_app.tasks.example_tasks import (
     record_sr_snapshot,
     record_sr_snapshot_async,
 )
-from proj.htpy.base_page import BasePageTemplate
-from proj.htpy.util import HtpyTemplateMixin
-from proj.text import tdt
 
 
 def _render_table(rows, empty_text, headers, row_renderer):

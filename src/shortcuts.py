@@ -9,8 +9,6 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import htpy
-from data_fetcher import cache_within_request
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import QuerySet
@@ -28,6 +26,9 @@ from django.views.generic import (
     UpdateView,
     View,
 )
+
+import htpy
+from data_fetcher import cache_within_request
 from phac_aspc.rules import test_rule
 
 from proj.form_util import StandardFormMixin

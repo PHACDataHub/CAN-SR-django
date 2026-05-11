@@ -1,16 +1,18 @@
 import json
 from urllib.parse import quote_plus
 
-import htpy as h
 from django.http import HttpResponse, StreamingHttpResponse
 from django.urls import reverse
 from django.views.generic import TemplateView, View
 
-from my_app.router import route
+import htpy as h
+
 from proj.htpy.base_page import BasePageTemplate, static_no_cache
 from proj.htpy.util import HtpyTemplateMixin
 from proj.llm_client import LLMMessage, get_client
 from proj.text import tdt
+
+from my_app.router import route
 
 
 class LLMDemoPage(BasePageTemplate):

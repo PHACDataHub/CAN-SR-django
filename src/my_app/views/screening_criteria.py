@@ -2,10 +2,14 @@ import abc
 import uuid
 from urllib.parse import urlencode
 
-import htpy as h
 from django import forms
 from django.http import HttpResponseBadRequest
 from django.views.generic import TemplateView
+
+import htpy as h
+
+from proj.htpy.form_components import ErrorSummary, InlineFormset
+from proj.htpy.modal_component import ModalComponent
 
 from my_app.models import (
     CitationDataset,
@@ -19,8 +23,6 @@ from my_app.models import (
 )
 from my_app.router import route
 from my_app.views.view_utils import MustAccessSystematicReviewMixin
-from proj.htpy.form_components import ErrorSummary, InlineFormset
-from proj.htpy.modal_component import ModalComponent
 from shortcuts import (
     BasePageTemplate,
     GenericForm,

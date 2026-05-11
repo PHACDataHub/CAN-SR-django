@@ -1,9 +1,10 @@
 from functools import cached_property
 
-import htpy as h
 from django import forms
 from django.db.models import Count
 from django.http import HttpResponseBadRequest
+
+import htpy as h
 
 from my_app.models import CitationDataset, SystematicReview
 from my_app.router import route

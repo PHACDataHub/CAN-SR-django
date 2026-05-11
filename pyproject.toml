@@ -29,21 +29,6 @@ skip_glob=['*/migrations/*.py']
 
 
 
-# Template linting is opinionated so we turned off some annoying errors.
-# We're not actively linting templates, but if errors get in the way 
-# of you noticing important issues like unclosed tags 
-# feel free to add and document those error codes below
-
-ignore="H021,H008,T002,T003,T032,H017,H023,H030,H031"
-#T002 -> Double quotes should be used in tags
-#T003 -> endblocks must have names
-#T032 -> extra whitespace
-#H008 -> attrs should be in double quotes
-#H021 -> no inline styles
-#H017 -> unpaired tags should be self-closing (should probably disable this)
-#H023 -> do not sure entity references (e.g. &laquo;)
-#H030 -> Consider adding a meta description
-#H031 -> Consider adding meta keywords
 
 
 [tool.pylint]
@@ -62,10 +47,14 @@ disable = [
 
   # these fails because pylint runs from root dir, not src/
     "import-error", 
-    "relative-beyond-top-level", 
+    "relative-beyond-top-level"
 ]
 
 
 [tool.pylint.TYPECHECK]
-ignored-classes=Model
-
+generated-members = [
+  "objects",
+  "_meta",
+  "DoesNotExist",
+  "MultipleObjectsReturned",
+]

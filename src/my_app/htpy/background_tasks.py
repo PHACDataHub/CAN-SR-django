@@ -1,7 +1,8 @@
-import htpy as h
 from django.conf import settings
 from django.middleware.csrf import get_token
 from django.urls import reverse
+
+import htpy as h
 
 from proj.htpy.base_page import BasePageTemplate
 from proj.text import tdt

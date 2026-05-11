@@ -6,7 +6,11 @@ from typing import Iterable
 
 from django.db import transaction
 
-from my_app.models import CitationDataset, CitationDatasetColumn, CitationDatasetRow
+from my_app.models import (
+    CitationDataset,
+    CitationDatasetColumn,
+    CitationDatasetRow,
+)
 
 
 @dataclass(frozen=True)
@@ -55,7 +59,9 @@ class CsvCitationDatasetImportSource(CitationDatasetImportSource):
         if not headers or any(not header for header in headers):
             raise ValueError("CSV header row must include column names.")
 
-        row_values = [tuple(row) for row in reader if any(cell.strip() for cell in row)]
+        row_values = [
+            tuple(row) for row in reader if any(cell.strip() for cell in row)
+        ]
         return cls(headers, row_values)
 
     def get_column_names(self) -> list[str]:

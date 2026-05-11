@@ -1,11 +1,12 @@
 import factory
 
+from proj.models import User
+
 from my_app.models import (
     DemoTaskRun,
     SystematicReview,
     SystematicReviewUserLink,
 )
-from proj.models import User
 
 
 class DemoTaskRunFactory(factory.django.DjangoModelFactory):

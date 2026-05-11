@@ -1,8 +1,9 @@
 from typing import Callable
 
-import htpy
 from django import forms
 from django.conf import settings
+
+import htpy
 from htpy import Node, Renderable
 from markupsafe import Markup
 from phac_aspc.vanilla import flatten

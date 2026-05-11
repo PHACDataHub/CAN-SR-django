@@ -1,14 +1,18 @@
 from functools import cached_property
 
-import htpy as h
 from django import forms
 from django.core.validators import FileExtensionValidator
 
+import htpy as h
+
+from proj.form_util import StandardFormMixin
+
 from my_app.models import SystematicReview
 from my_app.router import route
-from my_app.services.upload_citation_dataset_service import import_citation_dataset
+from my_app.services.upload_citation_dataset_service import (
+    import_citation_dataset,
+)
 from my_app.views.view_utils import MustAccessSystematicReviewMixin
-from proj.form_util import StandardFormMixin
 from shortcuts import (
     BasePageTemplate,
     FormView,
@@ -38,7 +42,9 @@ class CitationUploadPage(BasePageTemplate):
 
         return [
             h.h1[tdt("Import citation dataset")],
-            h.p(".text-muted")[tdt("Upload a CSV file to create a citation dataset.")],
+            h.p(".text-muted")[
+                tdt("Upload a CSV file to create a citation dataset.")
+            ],
             h.form(
                 method="post",
                 enctype="multipart/form-data",
@@ -66,7 +72,9 @@ class CitationUploadPage(BasePageTemplate):
     "systematic-reviews/<int:pk>/citation-upload/",
     name="citation_upload",
 )
-class CitationUploadView(MustAccessSystematicReviewMixin, FormView, HtpyTemplateMixin):
+class CitationUploadView(
+    MustAccessSystematicReviewMixin, FormView, HtpyTemplateMixin
+):
     form_class = CitationUploadForm
     template_component = CitationUploadPage
 
@@ -98,11 +106,15 @@ class CitationUploadView(MustAccessSystematicReviewMixin, FormView, HtpyTemplate
                 row_label=tdt("row") if result.row_count == 1 else tdt("rows"),
                 columns=result.column_count,
                 column_label=(
-                    tdt("column") if result.column_count == 1 else tdt("columns")
+                    tdt("column")
+                    if result.column_count == 1
+                    else tdt("columns")
                 ),
             ),
         )
         return HttpResponseRedirect(self.get_success_url())
 
     def get_success_url(self):
-        return reverse("systematic_review_detail", args=[self.systematic_review.id])
+        return reverse(
+            "systematic_review_detail", args=[self.systematic_review.id]
+        )

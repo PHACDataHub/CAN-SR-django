@@ -1,5 +1,6 @@
-import pytest
 from django.urls import reverse
+
+import pytest
 from phac_aspc.rules import patch_rules
 
 from my_app.model_factories import (
