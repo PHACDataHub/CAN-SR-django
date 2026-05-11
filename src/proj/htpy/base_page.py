@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils.translation import get_language
 from django_htmx.templatetags.django_htmx import django_htmx_script
 from markupsafe import Markup
+from phac_aspc.rules import test_rule
 
 from proj.text import tdt, tm
 
@@ -357,6 +358,10 @@ def get_top_right_dropdown_items(request):
         ],
         h.a(
             ".dropdown-item",
+            href=reverse("systematic_review_list"),
+        )[tdt("Systematic reviews")],
+        h.a(
+            ".dropdown-item",
             href=reverse("llm_demo"),
         )[tdt("LLM demo")],
         h.a(
@@ -365,6 +370,11 @@ def get_top_right_dropdown_items(request):
         )[tm("documents")],
         h.a(
             ".dropdown-item",
-            href=reverse("systematic_review_list"),
-        )[tdt("Systematic reviews")],
+            href=reverse("background_tasks_demo"),
+        )[tdt("Background tasks demo")],
+        test_rule("is_admin", request.user)
+        and h.a(
+            ".dropdown-item",
+            href=reverse("admin:index"),
+        )[tdt("django-admin")],
     ]

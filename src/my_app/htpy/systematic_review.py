@@ -77,7 +77,7 @@ class SystematicReviewDetailPage(BasePageTemplate):
                 h.div(".row.align-items-center.g-3")[
                     h.div(".col-sm")[
                         h.h3(".h5.card-title.mb-1")[title],
-                        h.p(".card-text.text-muted.mb-0")[description],
+                        h.div(".card-text.text-muted.mb-0")[description],
                     ],
                     h.div(".col-auto.d-flex.align-items-center")[action,],
                 ],
@@ -86,6 +86,38 @@ class SystematicReviewDetailPage(BasePageTemplate):
 
     def content(self):
         review = self.context["object"]
+        dataset = getattr(review, "citation_dataset", None)
+
+        screening_text = tdt(
+            "Select which columns to include, identify L1/L2 criteria, and define parameters for extraction"
+        )
+        if dataset:
+            screening_criteria_card = self.build_stage_card(
+                tdt("Configure screening criteria"),
+                screening_text,
+                h.a(
+                    href=reverse("screening_criteria", args=[review.id]),
+                    class_="btn btn-primary",
+                )[tdt("Open")],
+            )
+        else:
+            screening_criteria_card = self.build_stage_card(
+                tdt("Configure screening criteria"),
+                h.div[
+                    screening_text,
+                    h.p(".fw-bold")[
+                        tdt(
+                            " You need to upload a dataset before you can configure screening criteria."
+                        )
+                    ],
+                ],
+                h.a(
+                    href="#",
+                    class_="btn btn-secondary disabled",
+                    aria_disabled="true",
+                    tabindex="-1",
+                )[tdt("Open")],
+            )
 
         return [
             bc.BreadcrumbTrailForSystematicReview(review),
@@ -104,9 +136,8 @@ class SystematicReviewDetailPage(BasePageTemplate):
                         )[tdt("Coming soon")],
                     )
                 ],
-                h.div[
-                    self._build_dataset_stage_card(review),
-                ],
+                h.div[self._build_dataset_stage_card(review),],
+                h.div[screening_criteria_card],
                 h.div[
                     self.build_stage_card(
                         tdt("Title and abstract screening"),
@@ -114,11 +145,11 @@ class SystematicReviewDetailPage(BasePageTemplate):
                             "Screen titles and abstracts to identify potentially eligible studies"
                         ),
                         h.a(
-                            href=reverse(
-                                "screening_criteria", args=[review.id]
-                            ),
-                            class_="btn btn-primary",
-                        )[tdt("Open")],
+                            href="#",
+                            class_="btn btn-secondary disabled",
+                            aria_disabled="true",
+                            tabindex="-1",
+                        )[tdt("Coming soon")],
                     )
                 ],
                 h.div[
@@ -164,9 +195,7 @@ class SystematicReviewDetailPage(BasePageTemplate):
         except CitationDataset.DoesNotExist:
             return self.build_stage_card(
                 tdt("Import references and criteria"),
-                tdt(
-                    "Upload citation files, define eligibility criteria and review settings"
-                ),
+                tdt("Upload citation files"),
                 h.a(
                     href=reverse("citation_upload", args=[review.id]),
                     class_="btn btn-primary",

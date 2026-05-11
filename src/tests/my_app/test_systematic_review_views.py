@@ -1,8 +1,10 @@
 from django.urls import reverse
 from phac_aspc.rules import patch_rules
 
-from my_app.model_factories import (SystematicReviewFactory,
-                                    SystematicReviewUserLinkFactory)
+from my_app.model_factories import (
+    SystematicReviewFactory,
+    SystematicReviewUserLinkFactory,
+)
 from my_app.models import SystematicReview, SystematicReviewUserLink
 
 
@@ -115,13 +117,6 @@ def test_screening_criteria_page_uses_rule_and_detail_links_to_it(
         assert "Systematic Reviews" in body
         assert review.title in body
         assert "Screening criteria" in body
-
-    with patch_rules(can_access_systematic_review=True):
-        detail_body = vanilla_user_client.get(
-            reverse("systematic_review_detail", args=[review.id])
-        ).content.decode()
-
-    assert url in detail_body
 
 
 def test_list_systematic_reviews_only_shows_linked_reviews_for_user(

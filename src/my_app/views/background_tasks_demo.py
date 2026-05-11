@@ -1,9 +1,21 @@
 import htpy as h
 from django.conf import settings
+from django.contrib import messages
 from django.middleware.csrf import get_token
+from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils import timezone
+from django.views.generic import TemplateView
+from django_database_task.models import DatabaseTask
 
+from my_app.models import DemoTaskRun, SystematicReview
+from my_app.router import route
+from my_app.tasks.example_tasks import (
+    record_sr_snapshot,
+    record_sr_snapshot_async,
+)
 from proj.htpy.base_page import BasePageTemplate
+from proj.htpy.util import HtpyTemplateMixin
 from proj.text import tdt
 
 
@@ -132,3 +144,36 @@ class BackgroundTasksPage(BasePageTemplate):
             h.td[str(task_run.attempt)],
             h.td[str(task_run.completed_at)],
         ]
+
+
+@route("background-tasks/", name="background_tasks_demo")
+class BackgroundTasksDemo(TemplateView, HtpyTemplateMixin):
+    template_component = BackgroundTasksPage
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["queued_tasks"] = list(
+            DatabaseTask.objects.order_by("-priority", "-enqueued_at", "-id")[
+                :10
+            ]
+        )
+        context["task_runs"] = list(
+            DemoTaskRun.objects.order_by("-completed_at", "-id")[:10]
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        label = timezone.now().isoformat(timespec="seconds")
+        task_kind = request.POST.get("task_kind")
+        record_count = SystematicReview.objects.count()
+
+        if task_kind == "enqueue_async_demo_task":
+            record_sr_snapshot_async.enqueue(
+                label=label, record_count=record_count
+            )
+            messages.success(request, tdt("Async demo task queued."))
+        else:
+            record_sr_snapshot.enqueue(label=label)
+            messages.success(request, tdt("Sync demo task queued."))
+
+        return redirect(reverse("background_tasks_demo"))

@@ -1,12 +1,11 @@
 from pathlib import Path
 
+import htpy as h
 from django import forms
 from django.core.validators import FileExtensionValidator
 from django.middleware.csrf import get_token
 from django.utils.text import get_valid_filename
 from django.utils.timezone import localtime
-
-import htpy as h
 
 from my_app.models import Document, DocumentMetadata
 from my_app.router import route
@@ -73,6 +72,11 @@ class DocumentListPage(BasePageTemplate):
 
         return [
             h.h1[tm("document_list_title")],
+            h.p()[
+                tdt(
+                    "This is more of a demo of tasks and grobid than anything else. First upload, then go to that document's detail page and click 'Process PDF' to enqueue the processing task."
+                )
+            ],
             h.div(".mb-3")[
                 h.a(
                     href=reverse("upload_pdf"),

@@ -16,15 +16,16 @@ In repo root,
 
 **Set up DB and user**
 
-1. psql -U postgres -c "CREATE ROLE sample_db_user with login"
-2. psql -U postgres -c "ALTER ROLE sample_db_user createdb"
-3. createdb -U sample_db_user sample_db
+Depending on which features you're using, postgres is optional, you can also optionally just use the postgres admin user instead too
+
+1. psql -U postgres -c "CREATE ROLE hail_django_db_user with login"
+2. psql -U postgres -c "ALTER ROLE hail_django_db_user createdb"
+3. createdb -U hail_django_db_user hail_django_db
 
 **populate DB**
 
 1. `python manage.py migrate`
-2. `python manage.py loaddata my_app/fixtures/lookups.yaml`
-3. `python manage.py runscript my_app.scripts.dev`
+2. `python manage.py runscript my_app.scripts.dev`
 
 
 ## General documentation
@@ -34,7 +35,7 @@ In repo root,
 
 ## Debugging
 
-As long as you're doing anything async, you can drop `import IPythonl; IPython.embed()` anywhere in the code to get an interactive prompt to inspect variables, run code, etc. This is great for tests and live server debugging, but if requests keep happening while you're debugging, the prompt can break and you may have to reset the server (or the parent terminal) process.
+As long as you're not doing anything async, you can drop `import IPython; IPython.embed()` anywhere in the code to get an interactive prompt to inspect variables, run code, etc. This is great for tests and live server debugging, but if requests keep happening while you're debugging, the prompt can break and you may have to reset the server (or the parent terminal) process.
 
 
 ## Manually running auto-formatting
@@ -60,6 +61,14 @@ PHAC_ASPC_SESSION_COOKIE_AGE=99999999 # this doesn't seem to work?
 PHAC_ASPC_SESSION_COOKIE_SECURE=0
 
 USE_SQLITE=True
+# OR, for postgres:
+TEST_DB_NAME=hail_django_db_test
+DB_NAME=hail_django_db
+DB_USER=hail_django_db_user
+DB_PASSWORD=""
+DB_HOST=localhost
+DB_PORT=5432
+
 
 LLM_MODE=local
 
@@ -76,7 +85,7 @@ Background tasks use django's new task system. This is swappable based on the en
 1. If `USE_IMMEDIATE_TASKS=True`, then tasks will be executed immediately in the same runserver process. This is just for development
 2. Otherwise, the app uses the [django-database-tasks](https://github.com/tokibito/django-database-task) library
     - you can view tasks /phac_admin/django_database_task/databasetask/
-    - you can run these manually via `python -m manage run_database_tasks`, or setup a continuous process to run them via `python -m manage run_database_tasks --continuous`
+    - These won't run without a separate CLI process running: `python -m manage run_database_tasks` for a single batch, or setup a continuous process to run them via `python -m manage run_database_tasks --continuous interval=5`
 
 ## Grobid
 
