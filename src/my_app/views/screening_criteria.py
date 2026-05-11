@@ -4,9 +4,11 @@ from urllib.parse import urlencode
 
 import htpy as h
 from django import forms
+from django.http import HttpResponseBadRequest
 from django.views.generic import TemplateView
 
 from my_app.models import (
+    CitationDataset,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L2ScreeningQuestion,
@@ -162,6 +164,65 @@ class ScreeningCriteriaPageContent(HtpyComponent):
     def __init__(self, review: SystematicReview):
         self.review = review
 
+    @cached_property
+    def dataset(self):
+        try:
+            return CitationDataset.objects.prefetch_related(
+                "columns",
+                "screening_columns",
+            ).get(systematic_review=self.review)
+        except CitationDataset.DoesNotExist:
+            return None
+
+    def render_screening_columns_section(self):
+        dataset = self.dataset
+        if dataset is None:
+            return h.div[
+                h.h2(".h5")[tdt("Screening columns")],
+                h.p(".mb-0")[tdt("No citation dataset yet.")],
+            ]
+
+        screening_columns = list(dataset.screening_columns.order_by("id"))
+
+        columns_content = h.ul(".list-group")[
+            h.li(".list-group-item.list-group-item-secondary")[tdt("Title"),],
+            h.li(".list-group-item.list-group-item-secondary")[
+                tdt("Abstract"),
+            ],
+            *[
+                h.li(".list-group-item")[column.name]
+                for column in screening_columns
+            ],
+        ]
+
+        header_children = [h.h2(".h5.mb-0")[tdt("Screening columns")]]
+        edit_button = None
+        if dataset is not None:
+            edit_button = h.button(
+                ".btn.btn-outline-primary.btn-sm",
+                hx_get=reverse(
+                    "edit_screening_columns", args=[self.review.pk]
+                ),
+                hx_target="#modal-slot",
+                id="edit-screening-columns-button",
+                hx_preserve="true",
+                type="button",
+            )[tm("edit")]
+            header_children.append(edit_button)
+
+        return h.div(
+            id="screening-columns-section",
+            hx_swap_oob="true",
+        )[
+            h.div(".d-flex.justify-content-between.align-items-start.mb-2")[
+                header_children
+            ],
+            h.p(".small.text-muted.mb-0.mt-2")[
+                tdt("Title and Abstract are always included")
+            ],
+            columns_content,
+        ]
+
     def render_form_and_formset_section(self, adapter: type[FormsetAdapter]):
         review = self.review
         section_id = adapter.get_section_name()
@@ -216,7 +277,7 @@ class ScreeningCriteriaPageContent(HtpyComponent):
                     hx_get=adapter.get_new_url(review),
                     hx_target="#modal-slot",
                     type="button",
-                    class_="btn btn-primary",
+                    class_="btn btn-primary btn-sm",
                 )[adapter.add_button_text]
             ],
         ]
@@ -227,11 +288,12 @@ class ScreeningCriteriaPageContent(HtpyComponent):
                 bc.BreadcrumbItem(label=tdt("Screening criteria"))
             ],
             h.h1[tdt("Screening criteria")],
-            h.h2[tdt("L1 screening questions")],
+            self.render_screening_columns_section(),
+            h.h2(".h5.mb-0.mt-3")[tdt("L1 screening questions")],
             self.render_form_and_formset_section(L1FormsetAdapter),
-            h.h2[tdt("L2 screening questions")],
+            h.h2(".h5.mb-0.mt-3")[tdt("L2 screening questions")],
             self.render_form_and_formset_section(L2FormsetAdapter),
-            h.h2[tdt("Parameters")],
+            h.h2(".h5.mb-0.mt-3")[tdt("Parameters")],
             self.render_form_and_formset_section(ParameterFormsetAdapter),
         ]
 
@@ -494,3 +556,105 @@ class AddParameterQuestionView(ChildEditorCreateView):
 )
 class EditParameterQuestionView(ChildEditorEditView):
     adapter = ParameterFormsetAdapter
+
+
+class ScreeningColumnsSelectionForm(ModelForm, StandardFormMixin):
+    class Meta:
+        model = CitationDataset
+        fields = ["screening_columns"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.fields["screening_columns"]
+        field.queryset = self.instance.columns.all()
+        field.required = False
+
+
+@route(
+    "systematic_reviews/<int:pk>/edit-screening-columns/",
+    name="edit_screening_columns",
+)
+class EditScreeningColumnsModal(MustAccessSystematicReviewMixin):
+    @cached_property
+    def dataset(self):
+        try:
+            return self.systematic_review.citation_dataset
+        except CitationDataset.DoesNotExist:
+            return None
+
+    @cached_property
+    def form(self):
+        return ScreeningColumnsSelectionForm(
+            self.request.POST or None,
+            instance=self.dataset,
+        )
+
+    def _render_page(self):
+        return ScreeningCriteriaPageContent(self.systematic_review).render()
+
+    def _render_modal(self):
+        footer = h.fragment[
+            h.button(
+                {
+                    "type": "button",
+                    "class": "btn btn-secondary",
+                    "data-modal-close": True,
+                }
+            )[tm("cancel")],
+            h.button(
+                {
+                    "type": "submit",
+                    "class": "btn btn-primary",
+                    "hx-disabled-elt": "this",
+                    "form": "screening-columns-form",
+                }
+            )[tm("save")],
+        ]
+
+        return ModalComponent(
+            title=tdt("Edit screening columns"),
+            modal_id="screening-columns-modal",
+            footer=footer,
+        )[
+            h.p(".small.text-muted.mb-0")[
+                tdt("Title and Abstract are always included")
+            ],
+            h.form(
+                hx_post=reverse(
+                    "edit_screening_columns", args=[self.systematic_review.pk]
+                ),
+                hx_target="this",
+                hx_swap="outerHTML",
+                hx_select="#screening-columns-form",
+                id="screening-columns-form",
+            )[
+                GenericForm(self.form),
+            ],
+        ]
+
+    def get(self, *args, **kwargs):
+        if self.dataset is None:
+            return HttpResponseBadRequest(tdt("Dataset not found."))
+
+        return HttpResponse(self._render_modal())
+
+    def post(self, *args, **kwargs):
+        if self.dataset is None:
+            return HttpResponseBadRequest(tdt("Dataset not found."))
+
+        if self.form.is_valid():
+            return self.form_valid()
+        return self.form_invalid()
+
+    def form_valid(self):
+        self.form.save()
+
+        resp = HttpResponse(self._render_page())
+        resp["HX-Trigger-After-Settle"] = "modal-close"
+        resp["Hx-Reswap"] = "none"
+        return resp
+
+    def form_invalid(self):
+        resp = HttpResponse(self._render_modal())
+        resp["HX-Refocus"] = "#screening-columns-form"
+        return resp

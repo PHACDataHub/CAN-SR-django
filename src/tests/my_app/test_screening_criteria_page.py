@@ -7,6 +7,8 @@ from my_app.model_factories import (
     SystematicReviewUserLinkFactory,
 )
 from my_app.models import (
+    CitationDataset,
+    CitationDatasetColumn,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L2ScreeningQuestion,
@@ -200,6 +202,21 @@ def _linked_review(title, user):
     return review
 
 
+def _create_dataset(review, column_names):
+    dataset = CitationDataset.objects.create(systematic_review=review)
+    columns = [
+        CitationDatasetColumn.objects.create(dataset=dataset, name=name)
+        for name in column_names
+    ]
+    return dataset, columns
+
+
+def _create_review_with_dataset(vanilla_user, column_names):
+    review = _linked_review("Dataset review", vanilla_user)
+    dataset, columns = _create_dataset(review, column_names)
+    return review, dataset, columns
+
+
 def _get_page_body(vanilla_user_client, review):
     url = reverse("screening_criteria", args=[review.id])
     with patch_rules(can_access_systematic_review=True):
@@ -264,6 +281,12 @@ def test_screening_criteria_page_renders_empty_sections(
 ):
     review = _linked_review("Empty screening review", vanilla_user)
 
+    body = _get_page_body(vanilla_user_client, review)
+
+    assert "Screening columns" in body
+    assert "No citation dataset yet." in body
+    assert 'id="edit-screening-columns-button"' not in body
+
 
 def test_screening_criteria_page_renders_existing_questions(
     vanilla_user_client, vanilla_user
@@ -296,6 +319,134 @@ def test_screening_criteria_page_renders_existing_questions(
         f'id="edit-parameterformsetadapter-section-{parameter_question.pk}-button"'
         in body
     )
+
+
+def test_screening_criteria_page_renders_screening_columns(
+    vanilla_user_client, vanilla_user
+):
+    review, dataset, columns = _create_review_with_dataset(
+        vanilla_user,
+        ["year", "month", "day"],
+    )
+    dataset.screening_columns.set([columns[0], columns[2]])
+
+    body = _get_page_body(vanilla_user_client, review)
+
+    assert "Screening columns" in body
+    assert "year" in body
+    assert "day" in body
+    assert "month" not in body
+    assert 'id="edit-screening-columns-button"' in body
+
+
+def test_edit_screening_columns_modal_gets_current_values(
+    vanilla_user_client, vanilla_user
+):
+    review, dataset, columns = _create_review_with_dataset(
+        vanilla_user,
+        ["year", "month", "day"],
+    )
+    dataset.screening_columns.set([columns[0], columns[2]])
+    url = reverse("edit_screening_columns", args=[review.id])
+
+    with patch_rules(can_access_systematic_review=True):
+        response = vanilla_user_client.get(url)
+
+    _assert_modal_smoke(
+        response,
+        "screening-columns-form",
+        "Edit screening columns",
+        "year",
+        "month",
+        "day",
+    )
+    body = response.content.decode()
+    assert f'value="{columns[0].pk}"' in body
+    assert f'value="{columns[1].pk}"' in body
+    assert f'value="{columns[2].pk}"' in body
+    assert (
+        f'value="{columns[0].pk}" id="id_screening_columns_0" checked' in body
+    )
+    assert (
+        f'value="{columns[2].pk}" id="id_screening_columns_2" checked' in body
+    )
+
+
+def test_edit_screening_columns_modal_saves_and_returns_page(
+    vanilla_user_client, vanilla_user
+):
+    review, dataset, columns = _create_review_with_dataset(
+        vanilla_user,
+        ["year", "month", "day"],
+    )
+    dataset.screening_columns.set([columns[0]])
+    url = reverse("edit_screening_columns", args=[review.id])
+
+    with patch_rules(can_access_systematic_review=True):
+        response = vanilla_user_client.post(
+            url,
+            {
+                "screening_columns": [
+                    str(columns[1].pk),
+                    str(columns[2].pk),
+                ]
+            },
+        )
+
+    assert response.status_code == 200
+    assert response["HX-Trigger-After-Settle"] == "modal-close"
+    assert response["Hx-Reswap"] == "none"
+
+    dataset.refresh_from_db()
+    assert list(
+        dataset.screening_columns.order_by("id").values_list("name", flat=True)
+    ) == ["month", "day"]
+
+    body = response.content.decode()
+    assert 'id="screening-columns-section"' in body
+    assert 'hx-swap-oob="true"' in body
+    assert "month" in body
+    assert "day" in body
+    assert "year" not in body
+
+
+def test_edit_screening_columns_modal_rejects_invalid_choice(
+    vanilla_user_client, vanilla_user
+):
+    review, dataset, columns = _create_review_with_dataset(
+        vanilla_user,
+        ["year", "month", "day"],
+    )
+    dataset.screening_columns.set([columns[0]])
+    url = reverse("edit_screening_columns", args=[review.id])
+
+    with patch_rules(can_access_systematic_review=True):
+        response = vanilla_user_client.post(
+            url,
+            {"screening_columns": ["999999"]},
+        )
+
+    assert response.status_code == 200
+    assert response["HX-Refocus"] == "#screening-columns-form"
+    dataset.refresh_from_db()
+    assert list(
+        dataset.screening_columns.order_by("id").values_list("name", flat=True)
+    ) == ["year"]
+
+    body = response.content.decode()
+    assert "Select a valid choice" in body
+    assert "Edit screening columns" in body
+
+
+def test_screening_criteria_page_shows_message_without_dataset(
+    vanilla_user_client, vanilla_user
+):
+    review = _linked_review("No dataset review", vanilla_user)
+
+    body = _get_page_body(vanilla_user_client, review)
+
+    assert "No citation dataset yet." in body
+    assert 'id="edit-screening-columns-button"' not in body
 
 
 def test_add_l1_question_modal_saves_valid_data(

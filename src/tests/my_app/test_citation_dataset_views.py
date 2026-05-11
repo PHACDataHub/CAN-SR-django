@@ -3,8 +3,14 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from phac_aspc.rules import patch_rules
 
-from my_app.models import CitationDataset, SystematicReview, SystematicReviewUserLink
-from my_app.services.upload_citation_dataset_service import import_citation_dataset
+from my_app.models import (
+    CitationDataset,
+    SystematicReview,
+    SystematicReviewUserLink,
+)
+from my_app.services.upload_citation_dataset_service import (
+    import_citation_dataset,
+)
 
 EXAMPLE_CSV = """title,year,abstract,month,day
 First citation,2020,An abstract,January,1
@@ -84,10 +90,14 @@ def test_delete_citation_dataset_removes_dataset_and_redirects(
     assert "Delete dataset" in response.content.decode()
 
     with patch_rules(can_access_systematic_review=True):
-        response = vanilla_user_client.post(url, follow=True)
+        response = vanilla_user_client.post(
+            url, {"confirm": True}, follow=True
+        )
 
     assert response.status_code == 200
     assert response.redirect_chain[-1][0] == reverse(
         "systematic_review_detail", args=[review.id]
     )
-    assert not CitationDataset.objects.filter(systematic_review=review).exists()
+    assert not CitationDataset.objects.filter(
+        systematic_review=review
+    ).exists()
