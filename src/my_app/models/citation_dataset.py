@@ -3,7 +3,8 @@ from django.db import models
 from phac_aspc.django import fields
 
 from proj.model_util import add_to_admin
-from proj.text import tdt
+
+from shortcuts import List, tdt
 
 from .systematic_review import SystematicReview
 
@@ -62,3 +63,16 @@ class CitationDatasetRow(models.Model):
 
     def __str__(self):
         return f"{self.dataset_id} row {self.order}"
+
+    def serialize_for_prompt(self, columns: List[CitationDatasetColumn]):
+        # could be used to flexibly include different columns in the prompt
+        column_data = [
+            (col.name, self.data.get(col.name, "")) for col in columns
+        ]
+        included_data = [
+            ("Title", self.title),
+            ("Abstract", self.abstract),
+            *column_data,
+        ]
+
+        return "\n".join([f"{pair[0]}: {pair[1]}" for pair in included_data])
