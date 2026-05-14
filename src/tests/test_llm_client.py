@@ -119,6 +119,31 @@ def test_ollama_client_uses_transport_for_complete():
     assert result == "reply"
 
 
+def test_ollama_client_complete_prompt_uses_single_user_message():
+    seen = {}
+
+    def handler(request):
+        seen["request"] = request
+        return httpx.Response(200, json={"message": {"content": "reply"}})
+
+    sync_client, async_client = build_httpx_clients(handler)
+    http_client = HttpxLLMHttpClient(
+        "http://ollama.example",
+        sync_client=sync_client,
+        async_client=async_client,
+    )
+    client = OllamaLLMClient(http_client=http_client, model="demo")
+
+    result = client.complete_prompt("hello")
+
+    assert result == "reply"
+    assert json.loads(seen["request"].content) == {
+        "model": "demo",
+        "messages": [{"role": "user", "content": "hello"}],
+        "stream": False,
+    }
+
+
 def test_ollama_client_async_complete_uses_transport():
     def handler(request):
         return httpx.Response(200, json={"message": {"content": "reply"}})
@@ -137,6 +162,32 @@ def test_ollama_client_async_complete_uses_transport():
         )
 
     assert async_to_sync(consume)() == "reply"
+
+
+def test_ollama_client_async_complete_prompt_uses_single_user_message():
+    seen = {}
+
+    def handler(request):
+        seen["request"] = request
+        return httpx.Response(200, json={"message": {"content": "reply"}})
+
+    sync_client, async_client = build_httpx_clients(handler)
+    http_client = HttpxLLMHttpClient(
+        "http://ollama.example",
+        sync_client=sync_client,
+        async_client=async_client,
+    )
+    client = OllamaLLMClient(http_client=http_client, model="demo")
+
+    async def consume():
+        return await client.acomplete_prompt("hello")
+
+    assert async_to_sync(consume)() == "reply"
+    assert json.loads(seen["request"].content) == {
+        "model": "demo",
+        "messages": [{"role": "user", "content": "hello"}],
+        "stream": False,
+    }
 
 
 def test_ollama_client_streams_content():

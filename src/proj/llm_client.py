@@ -1,3 +1,10 @@
+"""
+This is a bit messy, we can probably gut most of this because we don't need
+- streaming
+- (probably) async support
+- we rarely use the 'test' or 'dev' clients, instead mocking higher up levels
+"""
+
 from __future__ import annotations
 
 import json
@@ -109,6 +116,16 @@ class HttpxLLMHttpClient(LLMHttpClient):
 
 
 class LLMClient(ABC):
+    def _prompt_messages(self, prompt: str) -> Sequence[LLMMessage]:
+        return [LLMMessage(role="user", content=prompt)]
+
+    def complete_prompt(self, prompt: str) -> str:
+        # Convenience method for simple prompt-based interactions
+        return self.complete(self._prompt_messages(prompt))
+
+    async def acomplete_prompt(self, prompt: str) -> str:
+        return await self.acomplete(self._prompt_messages(prompt))
+
     @abstractmethod
     def complete(self, messages: Sequence[LLMMessage]) -> str:
         raise NotImplementedError
