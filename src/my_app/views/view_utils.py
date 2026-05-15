@@ -13,3 +13,14 @@ class MustAccessSystematicReviewMixin(MustPassRuleMixin):
     @cached_property
     def systematic_review(self):
         return SystematicReview.objects.get(pk=self.kwargs["pk"])
+
+    @property
+    def review(self):
+        return self.systematic_review
+
+    def get_context_data(self, *args, **kwargs):
+        return {
+            **super().get_context_data(*args, **kwargs),
+            "review": self.systematic_review,
+            "systematic_review": self.systematic_review,
+        }

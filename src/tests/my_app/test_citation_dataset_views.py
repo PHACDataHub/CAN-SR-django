@@ -8,9 +8,7 @@ from my_app.model_factories import (
     SystematicReviewFactory,
     SystematicReviewUserLinkFactory,
 )
-from my_app.models import (
-    CitationDataset,
-)
+from my_app.models import CitationDataset
 from my_app.services.upload_citation_dataset_service import (
     import_citation_dataset,
 )
@@ -30,7 +28,9 @@ def _create_review_with_dataset(vanilla_user):
         title="Review",
         description="Review description",
     )
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     import_citation_dataset(review, EXAMPLE_CSV)
     return review
 
@@ -54,7 +54,7 @@ def test_citation_dataset_detail_shows_summary_and_rows(
     assert "Sixth citation" in body
     assert "Delete dataset" in body
     assert reverse("delete_citation_dataset", args=[review.id]) in body
-    assert len(queries) <= 13
+    assert len(queries) <= 14
 
 
 def test_citation_dataset_detail_returns_400_when_dataset_missing(
@@ -64,7 +64,9 @@ def test_citation_dataset_detail_returns_400_when_dataset_missing(
         title="Review",
         description="Review description",
     )
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
 
     with patch_rules(can_access_systematic_review=True):
         response = vanilla_user_client.get(

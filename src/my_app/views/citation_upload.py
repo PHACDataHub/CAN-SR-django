@@ -78,15 +78,6 @@ class CitationUploadView(
     form_class = CitationUploadForm
     template_component = CitationUploadPage
 
-    @cached_property
-    def systematic_review(self):
-        return SystematicReview.objects.get(pk=self.kwargs["pk"])
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["systematic_review"] = self.systematic_review
-        return context
-
     def form_valid(self, form):
         try:
             result = import_citation_dataset(

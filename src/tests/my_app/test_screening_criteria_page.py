@@ -227,7 +227,9 @@ def test_screening_criteria_page_renders_empty_sections(
     vanilla_user_client, vanilla_user
 ):
     review = SystematicReviewFactory(title="Empty screening review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
 
     body = _get_page_body(vanilla_user_client, review)
 
@@ -240,7 +242,9 @@ def test_screening_criteria_page_renders_existing_questions(
     vanilla_user_client, vanilla_user
 ):
     review = SystematicReviewFactory(title="Populated screening review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     l1_question = L1ScreeningQuestionFactory(
         review=review,
         question_text="L1 question",
@@ -298,7 +302,9 @@ def test_screening_criteria_page_renders_screening_columns(
     vanilla_user_client, vanilla_user
 ):
     review = SystematicReviewFactory(title="Dataset review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     dataset = CitationDatasetFactory(systematic_review=review)
     columns = [
         CitationDatasetColumnFactory(dataset=dataset, name=name)
@@ -319,7 +325,9 @@ def test_edit_screening_columns_modal_gets_current_values(
     vanilla_user_client, vanilla_user
 ):
     review = SystematicReviewFactory(title="Dataset review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     dataset = CitationDatasetFactory(systematic_review=review)
     columns = [
         CitationDatasetColumnFactory(dataset=dataset, name=name)
@@ -355,7 +363,9 @@ def test_edit_screening_columns_modal_saves_and_returns_page(
     vanilla_user_client, vanilla_user
 ):
     review = SystematicReviewFactory(title="Dataset review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     dataset = CitationDatasetFactory(systematic_review=review)
     columns = [
         CitationDatasetColumnFactory(dataset=dataset, name=name)
@@ -396,7 +406,9 @@ def test_edit_screening_columns_modal_rejects_invalid_choice(
     vanilla_user_client, vanilla_user
 ):
     review = SystematicReviewFactory(title="Dataset review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     dataset = CitationDatasetFactory(systematic_review=review)
     columns = [
         CitationDatasetColumnFactory(dataset=dataset, name=name)
@@ -427,7 +439,9 @@ def test_screening_criteria_page_shows_message_without_dataset(
     vanilla_user_client, vanilla_user
 ):
     review = SystematicReviewFactory(title="No dataset review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
 
     body = _get_page_body(vanilla_user_client, review)
 
@@ -439,7 +453,9 @@ def test_add_l1_question_modal_saves_valid_data(
     vanilla_user_client, vanilla_user
 ):
     review = SystematicReviewFactory(title="Create L1 review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     url = reverse("add_l1_question", args=[review.pk])
     data = {
         "question_text": "Is this a test question?",
@@ -478,7 +494,9 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
     vanilla_user_client, vanilla_user
 ):
     review = SystematicReviewFactory(title="Invalid L1 review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     url = reverse("add_l1_question", args=[review.pk])
     data = {
         "question_text": "Is this a test question?",
@@ -541,7 +559,9 @@ def test_other_screening_criteria_modals_render(
     expected_texts,
 ):
     review = SystematicReviewFactory(title=f"{form_id} review")
-    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
 
     if route_name == "add_l2_question":
         url = reverse(route_name, args=[review.pk])
