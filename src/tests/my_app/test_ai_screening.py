@@ -5,18 +5,19 @@ from django.test import override_settings
 
 import pytest
 
-from my_app.model_factories import SystematicReviewFactory
+from my_app.model_factories import (
+    CitationDatasetFactory,
+    CitationDatasetRowFactory,
+    L1ScreeningQuestionFactory,
+    L1ScreeningQuestionOptionFactory,
+    SystematicReviewFactory,
+)
 from my_app.models import (
-    CitationDataset,
-    CitationDatasetRow,
-    L1ScreeningQuestion,
-    L1ScreeningQuestionOption,
     L1ScreeningResult,
     ScreeningResultStatus,
 )
 from my_app.prompts.screening_prompt import (
     get_l1_screening_results,
-    get_mock_l1_screening_results,
 )
 from my_app.services.ai_screening import (
     DeferredL1ScreeningService,
@@ -24,47 +25,35 @@ from my_app.services.ai_screening import (
 )
 
 
-def _create_dataset(review):
-    return CitationDataset.objects.create(systematic_review=review)
-
-
-def _create_row(dataset, order, title):
-    return CitationDatasetRow.objects.create(
+def test_deferred_l1_screening_service_enqueues_created_results():
+    review = SystematicReviewFactory()
+    dataset = CitationDatasetFactory(systematic_review=review)
+    row_1 = CitationDatasetRowFactory(
         dataset=dataset,
-        order=order,
-        title=title,
-        abstract=f"{title} abstract",
+        order=1,
+        title="Row 1",
+        abstract="Row 1 abstract",
     )
-
-
-def _create_question(review, question_text="Is this citation relevant?"):
-    return L1ScreeningQuestion.objects.create(
+    row_2 = CitationDatasetRowFactory(
+        dataset=dataset,
+        order=2,
+        title="Row 2",
+        abstract="Row 2 abstract",
+    )
+    question = L1ScreeningQuestionFactory(
         review=review,
-        question_text=question_text,
+        question_text="Is this citation relevant?",
     )
-
-
-def _create_options(question):
-    include_option = L1ScreeningQuestionOption.objects.create(
+    L1ScreeningQuestionOptionFactory(
         question=question,
         option_text="Include",
         option_value="Include the citation",
     )
-    exclude_option = L1ScreeningQuestionOption.objects.create(
+    L1ScreeningQuestionOptionFactory(
         question=question,
         option_text="Exclude",
         option_value="Exclude the citation",
     )
-    return include_option, exclude_option
-
-
-def test_deferred_l1_screening_service_enqueues_created_results():
-    review = SystematicReviewFactory()
-    dataset = _create_dataset(review)
-    row_1 = _create_row(dataset, order=1, title="Row 1")
-    row_2 = _create_row(dataset, order=2, title="Row 2")
-    question = _create_question(review)
-    _create_options(question)
 
     existing_result = L1ScreeningResult.objects.create(
         citation=row_1,
@@ -102,13 +91,47 @@ def test_deferred_l1_screening_service_enqueues_created_results():
 
 def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and_questions():
     review = SystematicReviewFactory()
-    dataset = _create_dataset(review)
-    target_row = _create_row(dataset, order=1, title="Target row")
-    untouched_row = _create_row(dataset, order=2, title="Untouched row")
-    question = _create_question(review)
-    other_question = _create_question(review, question_text="Other question")
-    _create_options(question)
-    _create_options(other_question)
+    dataset = CitationDatasetFactory(systematic_review=review)
+    target_row = CitationDatasetRowFactory(
+        dataset=dataset,
+        order=1,
+        title="Target row",
+        abstract="Target row abstract",
+    )
+    untouched_row = CitationDatasetRowFactory(
+        dataset=dataset,
+        order=2,
+        title="Untouched row",
+        abstract="Untouched row abstract",
+    )
+    question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="Is this citation relevant?",
+    )
+    other_question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="Other question",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Include",
+        option_value="Include the citation",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Exclude",
+        option_value="Exclude the citation",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=other_question,
+        option_text="Include",
+        option_value="Include the citation",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=other_question,
+        option_text="Exclude",
+        option_value="Exclude the citation",
+    )
 
     target_result = L1ScreeningResult.objects.create(
         citation=target_row,
@@ -179,10 +202,27 @@ def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and
 @override_settings(HAS_LLM=True)
 def test_get_l1_screening_results_returns_exact_matching_option():
     review = SystematicReviewFactory()
-    dataset = _create_dataset(review)
-    row = _create_row(dataset, order=1, title="Row")
-    question = _create_question(review)
-    include_option, _ = _create_options(question)
+    dataset = CitationDatasetFactory(systematic_review=review)
+    row = CitationDatasetRowFactory(
+        dataset=dataset,
+        order=1,
+        title="Row",
+        abstract="Row abstract",
+    )
+    question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="Is this citation relevant?",
+    )
+    include_option = L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Include",
+        option_value="Include the citation",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Exclude",
+        option_value="Exclude the citation",
+    )
 
     client = MagicMock()
     client.complete_prompt.return_value = json.dumps(
@@ -207,10 +247,27 @@ def test_get_l1_screening_results_returns_exact_matching_option():
 @override_settings(HAS_LLM=True)
 def test_get_l1_screening_results_raises_when_llm_returns_unknown_option():
     review = SystematicReviewFactory()
-    dataset = _create_dataset(review)
-    row = _create_row(dataset, order=1, title="Row")
-    question = _create_question(review)
-    _create_options(question)
+    dataset = CitationDatasetFactory(systematic_review=review)
+    row = CitationDatasetRowFactory(
+        dataset=dataset,
+        order=1,
+        title="Row",
+        abstract="Row abstract",
+    )
+    question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="Is this citation relevant?",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Include",
+        option_value="Include the citation",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Exclude",
+        option_value="Exclude the citation",
+    )
 
     client = MagicMock()
     client.complete_prompt.return_value = json.dumps(
@@ -234,10 +291,29 @@ def test_get_l1_screening_results_raises_when_llm_returns_unknown_option():
 @override_settings(HAS_LLM=False)
 def test_process_l1_screening_service_uses_mock_results_helper():
     review = SystematicReviewFactory()
-    dataset = _create_dataset(review)
-    row = _create_row(dataset, order=1, title="Row")
-    question = _create_question(review)
-    options = _create_options(question)
+    dataset = CitationDatasetFactory(systematic_review=review)
+    row = CitationDatasetRowFactory(
+        dataset=dataset,
+        order=1,
+        title="Row",
+        abstract="Row abstract",
+    )
+    question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="Is this citation relevant?",
+    )
+    options = (
+        L1ScreeningQuestionOptionFactory(
+            question=question,
+            option_text="Include",
+            option_value="Include the citation",
+        ),
+        L1ScreeningQuestionOptionFactory(
+            question=question,
+            option_text="Exclude",
+            option_value="Exclude the citation",
+        ),
+    )
 
     result = L1ScreeningResult.objects.create(
         citation=row,

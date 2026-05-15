@@ -4,10 +4,12 @@ from django.urls import reverse
 
 from phac_aspc.rules import patch_rules
 
+from my_app.model_factories import (
+    SystematicReviewFactory,
+    SystematicReviewUserLinkFactory,
+)
 from my_app.models import (
     CitationDataset,
-    SystematicReview,
-    SystematicReviewUserLink,
 )
 from my_app.services.upload_citation_dataset_service import (
     import_citation_dataset,
@@ -24,14 +26,11 @@ Sixth citation,2025,Extra abstract,June,6
 
 
 def _create_review_with_dataset(vanilla_user):
-    review = SystematicReview.objects.create(
+    review = SystematicReviewFactory(
         title="Review",
         description="Review description",
     )
-    SystematicReviewUserLink.objects.create(
-        user=vanilla_user,
-        systematic_review=review,
-    )
+    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
     import_citation_dataset(review, EXAMPLE_CSV)
     return review
 
@@ -61,14 +60,11 @@ def test_citation_dataset_detail_shows_summary_and_rows(
 def test_citation_dataset_detail_returns_400_when_dataset_missing(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReview.objects.create(
+    review = SystematicReviewFactory(
         title="Review",
         description="Review description",
     )
-    SystematicReviewUserLink.objects.create(
-        user=vanilla_user,
-        systematic_review=review,
-    )
+    SystematicReviewUserLinkFactory(user=vanilla_user, systematic_review=review)
 
     with patch_rules(can_access_systematic_review=True):
         response = vanilla_user_client.get(
