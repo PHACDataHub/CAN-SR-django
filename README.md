@@ -85,7 +85,7 @@ Background tasks use django's new task system. This is swappable based on the en
 1. If `USE_IMMEDIATE_TASKS=True`, then tasks will be executed immediately in the same runserver process. This is just for development
 2. Otherwise, the app uses the [django-database-tasks](https://github.com/tokibito/django-database-task) library
     - you can view tasks /phac_admin/django_database_task/databasetask/
-    - These won't run without a separate CLI process running: `python -m manage run_database_tasks` for a single batch, or setup a continuous process to run them via `python -m manage run_database_tasks --continuous interval=5`
+    - These won't run without a separate CLI process running: `python -m manage run_database_tasks` for a single batch, or setup a continuous process to run them via `python -m manage run_database_tasks --continuous --interval=10`
 
 ## Grobid
 
