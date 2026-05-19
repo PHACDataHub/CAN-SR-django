@@ -3,11 +3,14 @@ Covers L1 and L2 screening, not full-text
 
 """
 
+import json
 from typing import List
 
 from django.db import transaction
 from django.tasks import task
+from django.utils import timezone
 
+import pydantic
 from data_fetcher.util import GlobalRequest, clear_request_caches
 
 from my_app.models import (
@@ -18,6 +21,7 @@ from my_app.models import (
     SystematicReview,
 )
 from my_app.prompts.screening_prompt import get_l1_screening_results
+from shortcuts import logger
 
 
 class L1ScreeningService:
@@ -88,11 +92,20 @@ class ImmediateL1ScreeningService(L1ScreeningService):
     """
 
     def process_screening(self, result_id: int):
+        logger.info(
+            "Immediately processing L1 screening for result_id=%s",
+            result_id,
+        )
+
         ProcessL1ScreeningService(result_id=result_id).perform()
 
 
 class DeferredL1ScreeningService(L1ScreeningService):
     def process_screening(self, result_id: int):
+        logger.info(
+            "Enqueuing background L1 screening processing for result_id=%s",
+            result_id,
+        )
         from my_app.tasks.ai_screening import process_l1_screening_task
 
         process_l1_screening_task.enqueue(result_id=result_id)
@@ -107,7 +120,18 @@ class ProcessL1ScreeningService:
     def __init__(self, result_id: int):
         self.result_id = result_id
 
+    def _mark_abandoned(self, result: L1ScreeningResult, error: Exception):
+        result.status = ScreeningResultStatus.ABANDONED
+        result.abandoned_at = timezone.now()
+        result.explanation = (
+            f"Screening could not be completed: {error.__class__.__name__}"
+        )
+
     def perform(self):
+        logger.info(
+            "Starting processing of L1 screening for result_id=%s",
+            self.result_id,
+        )
         result = L1ScreeningResult.objects.select_related(
             "question", "citation"
         ).get(id=self.result_id)
@@ -120,11 +144,25 @@ class ProcessL1ScreeningService:
             result.confidence = screening_results.confidence
             result.explanation = screening_results.explanation
             result.status = ScreeningResultStatus.COMPLETED
+        except (
+            json.JSONDecodeError,
+            ValueError,
+            pydantic.ValidationError,
+        ) as exc:
+            logger.exception(
+                "Permanent error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                self.result_id,
+                question.id,
+                citation.id,
+            )
+            self._mark_abandoned(result, exc)
         except Exception:
-            # TODO: better error handling, logging,
-            # depending on the error, the result should bail
-            # if it's a task, it can re-enqueue itself, otherwise retry?
-            # increment some sort of circuit-breaker threshold?
-            result.status = ScreeningResultStatus.ABANDONED
+            logger.exception(
+                "Transient error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                self.result_id,
+                question.id,
+                citation.id,
+            )
+            raise
 
         result.save()

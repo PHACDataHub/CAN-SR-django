@@ -42,5 +42,6 @@ from proj.htpy.util import (
     Markup,
     as_safe_renderable,
 )
+from proj.logging import logger
 from proj.text import tdt, tm
 from proj.view_util import MustPassRuleMixin
