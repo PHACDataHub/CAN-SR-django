@@ -14,7 +14,7 @@ from my_app.models import (
     ParameterQuestion,
 )
 from my_app.queries import options_for_question
-from shortcuts import List, dataclass
+from shortcuts import List, dataclass, logger
 
 # the sub-prompt gets used for
 KEY_INFO_SUB_PROMPT_TEMPLATE = """
@@ -118,8 +118,10 @@ def get_l1_screening_results(
     question: L1ScreeningQuestion, citation: CitationDatasetRow
 ):
     if not settings.HAS_LLM:
+        logger.warning("LLM is not available, using mock results.")
         return get_mock_l1_screening_results(question, citation)
 
+    logger.warning("LLM is available, using real LLM results for screening")
     prompt_builder = L1ScreeningPromptBuilder(question, citation)
     prompt = prompt_builder.build_str()
 
