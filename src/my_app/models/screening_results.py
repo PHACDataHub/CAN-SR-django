@@ -17,10 +17,10 @@ class ScreeningResultStatus(models.TextChoices):
     # Screening is considered not-started if a result doesn't exist
     # i.e. not_started will never be in the DB
     # but this type is re-used elsewhere
-    NOT_STARTED = "not_started"
-    PENDING = "pending"
-    COMPLETED = "completed"
-    ABANDONED = "abandoned"
+    NOT_STARTED = ("not_started", tdt("Not Started"))
+    PENDING = ("pending", tdt("Pending"))
+    COMPLETED = ("completed", tdt("Completed"))
+    ABANDONED = ("abandoned", tdt("Abandoned"))
 
 
 class CitationQueryResult(models.Model):
