@@ -185,8 +185,6 @@ class BasePageTemplate(HtpyComponent):
             h.link(rel="stylesheet", href=static_no_cache("site.css")),
             h.script(src=static("third_party/js/jquery-3.7.1.min.js")),
             h.script(src=static("third_party/js/htmx.min.js")),
-            h.script(src=static("third_party/js/idiomorph.min.js")),
-            h.script(src=static("third_party/js/idiomorph-ext.min.js")),
             h.script(src=static("third_party/js/bootstrap.bundle.min.js")),
             h.script(src=static("dynamic_formsets.js")),
             Markup(django_htmx_script()) if is_debug else None,
@@ -293,7 +291,7 @@ class BasePageTemplate(HtpyComponent):
     def render(self):
         return h.html(lang="en")[
             self.head(),
-            h.body(hx_ext="morph")[
+            h.body[
                 h.div(".d-none")[h.div(id="dummy-target")],
                 h.div(id="modal-slot", data_modal_slot=True),
                 h.script(
