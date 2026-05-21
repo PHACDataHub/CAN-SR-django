@@ -9,6 +9,8 @@ from django.conf import settings
 
 import httpx
 
+from shortcuts import logger
+
 
 class LLMConfigurationError(RuntimeError):
     pass
@@ -76,10 +78,12 @@ class HttpxLLMHttpClient(LLMHttpClient):
             response.raise_for_status()
             return response.json()
         except httpx.HTTPError as exc:
+            logger.exception(exc)
             raise ClientFailureError(
                 f"LLM client request failed for {path}"
             ) from exc
         except ValueError as exc:
+            logger.exception(exc)
             raise ClientFailureError(
                 f"LLM client returned invalid JSON for {path}"
             ) from exc
