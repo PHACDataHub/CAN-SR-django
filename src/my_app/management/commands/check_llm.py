@@ -59,10 +59,10 @@ def parse_smoke_test_response(raw_response: str) -> SmokeTestResponse:
 
 
 def validate_smoke_test_response(
-    raw_response: str,
+    json_response: dict,
     expected_selected: str = EXPECTED_SELECTED,
 ) -> SmokeTestResponse:
-    parsed_response = parse_smoke_test_response(raw_response)
+    parsed_response = parse_smoke_test_response(json.dumps(json_response))
     if parsed_response.selected != expected_selected:
         raise ValueError(
             "LLM returned an unexpected answer "
@@ -93,12 +93,13 @@ class Command(BaseCommand):
             client = get_client()
             raw_response = client.complete_prompt(SMOKE_TEST_PROMPT)
             logger.info(
-                "\n\n✅ configuration and connection check passed  \n\n"
+                "\n\n✅ 1/3 configuration and connection check passed  \n\n"
             )
-            logger.info("Raw LLM response: %s", raw_response)
-            parsed_response = validate_smoke_test_response(raw_response)
+            json_response = json.loads(raw_response)
+            logger.info("\n\n✅ 2/3 LLM returning single JSON value \n\n")
+            parsed_response = validate_smoke_test_response(json_response)
             logger.info(
-                "\n\n✅ capability (format, semantic/type) check passed \n\n"
+                "\n\n✅ 3/3 format, capabilities, semantics & type checks passed \n\n"
             )
         except Exception as exc:
             raise CommandError(f"LLM smoke test failed: {exc}") from exc

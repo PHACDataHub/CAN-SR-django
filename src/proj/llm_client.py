@@ -124,6 +124,7 @@ class OllamaLLMClient(LLMClient):
         return {
             "model": self.model,
             "messages": [_message_to_payload(message) for message in messages],
+            "stream": False,
         }
 
     def complete(self, messages: Sequence[LLMMessage]) -> str:

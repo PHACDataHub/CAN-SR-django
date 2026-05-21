@@ -33,7 +33,9 @@ def test_requests_http_client_posts_expected_payload():
         return httpx.Response(200, json={"message": {"content": "hello"}})
 
     sync_client = build_httpx_clients(handler)
-    client = HttpxLLMHttpClient("http://ollama.example", sync_client=sync_client)
+    client = HttpxLLMHttpClient(
+        "http://ollama.example", sync_client=sync_client
+    )
 
     payload = {
         "model": "demo",
@@ -52,7 +54,9 @@ def test_ollama_client_uses_transport_for_complete():
         return httpx.Response(200, json={"message": {"content": "reply"}})
 
     sync_client = build_httpx_clients(handler)
-    http_client = HttpxLLMHttpClient("http://ollama.example", sync_client=sync_client)
+    http_client = HttpxLLMHttpClient(
+        "http://ollama.example", sync_client=sync_client
+    )
     client = OllamaLLMClient(http_client=http_client, model="demo")
 
     result = client.complete([LLMMessage(role="user", content="hello")])
@@ -68,7 +72,9 @@ def test_ollama_client_complete_prompt_uses_single_user_message():
         return httpx.Response(200, json={"message": {"content": "reply"}})
 
     sync_client = build_httpx_clients(handler)
-    http_client = HttpxLLMHttpClient("http://ollama.example", sync_client=sync_client)
+    http_client = HttpxLLMHttpClient(
+        "http://ollama.example", sync_client=sync_client
+    )
     client = OllamaLLMClient(http_client=http_client, model="demo")
 
     result = client.complete_prompt("hello")
@@ -77,6 +83,7 @@ def test_ollama_client_complete_prompt_uses_single_user_message():
     assert json.loads(seen["request"].content) == {
         "model": "demo",
         "messages": [{"role": "user", "content": "hello"}],
+        "stream": False,
     }
 
 
@@ -85,7 +92,9 @@ def test_requests_http_client_wraps_status_errors():
         return httpx.Response(500, json={"error": "boom"})
 
     sync_client = build_httpx_clients(handler)
-    client = HttpxLLMHttpClient("http://ollama.example", sync_client=sync_client)
+    client = HttpxLLMHttpClient(
+        "http://ollama.example", sync_client=sync_client
+    )
 
     with pytest.raises(ClientFailureError, match="request failed"):
         client.complete(
@@ -102,7 +111,9 @@ def test_requests_http_client_wraps_timeout_errors():
         raise httpx.ReadTimeout("timed out", request=request)
 
     sync_client = build_httpx_clients(handler)
-    client = HttpxLLMHttpClient("http://ollama.example", sync_client=sync_client)
+    client = HttpxLLMHttpClient(
+        "http://ollama.example", sync_client=sync_client
+    )
 
     with pytest.raises(ClientFailureError, match="request failed"):
         client.complete(
