@@ -1,17 +1,7 @@
-"""
-This is a bit messy, we can probably gut most of this because we don't need
-- streaming
-- (probably) async support
-- we rarely use the 'test' or 'dev' clients, instead mocking higher up levels
-"""
-
 from __future__ import annotations
 
-import json
-import os
-import sys
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Callable
 
@@ -47,18 +37,6 @@ class LLMHttpClient(ABC):
     def complete(self, path: str, payload: dict) -> dict:
         raise NotImplementedError
 
-    @abstractmethod
-    async def acomplete(self, path: str, payload: dict) -> dict:
-        raise NotImplementedError
-
-    @abstractmethod
-    def stream(self, path: str, payload: dict) -> Iterable[dict]:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def astream(self, path: str, payload: dict) -> AsyncIterator[dict]:
-        raise NotImplementedError
-
 
 class HttpxLLMHttpClient(LLMHttpClient):
     def __init__(
@@ -66,7 +44,6 @@ class HttpxLLMHttpClient(LLMHttpClient):
         base_url: str,
         timeout: int = 60,
         sync_client: httpx.Client | None = None,
-        async_client: httpx.AsyncClient | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -74,13 +51,6 @@ class HttpxLLMHttpClient(LLMHttpClient):
             base_url=self.base_url,
             timeout=self.timeout,
         )
-        self.async_client = async_client or httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=self.timeout,
-        )
-
-    def _url(self, path: str) -> str:
-        return f"{self.base_url}{path}"
 
     def complete(self, path: str, payload: dict) -> dict:
         response = self.sync_client.post(
@@ -89,39 +59,6 @@ class HttpxLLMHttpClient(LLMHttpClient):
         )
         response.raise_for_status()
         return response.json()
-
-    async def acomplete(self, path: str, payload: dict) -> dict:
-        response = await self.async_client.post(
-            path,
-            json=payload,
-        )
-        response.raise_for_status()
-        return response.json()
-
-    def stream(self, path: str, payload: dict) -> Iterable[dict]:
-        with self.sync_client.stream(
-            "POST",
-            path,
-            json=payload,
-        ) as response:
-            response.raise_for_status()
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                yield json.loads(line)
-
-    async def astream(self, path: str, payload: dict) -> AsyncIterator[dict]:
-
-        async with self.async_client.stream(
-            "POST",
-            path,
-            json=payload,
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
-                yield json.loads(line)
 
 
 class LLMClient(ABC):
@@ -132,21 +69,8 @@ class LLMClient(ABC):
         # Convenience method for simple prompt-based interactions
         return self.complete(self._prompt_messages(prompt))
 
-    async def acomplete_prompt(self, prompt: str) -> str:
-        return await self.acomplete(self._prompt_messages(prompt))
-
     @abstractmethod
     def complete(self, messages: Sequence[LLMMessage]) -> str:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def acomplete(self, messages: Sequence[LLMMessage]) -> str:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def astream(
-        self, messages: Sequence[LLMMessage]
-    ) -> AsyncIterator[str]:
         raise NotImplementedError
 
 
@@ -172,31 +96,16 @@ class OllamaLLMClient(LLMClient):
         self.http_client = http_client
         self.model = model
 
-    def _payload(self, messages: Sequence[LLMMessage], stream: bool) -> dict:
+    def _payload(self, messages: Sequence[LLMMessage]) -> dict:
         return {
             "model": self.model,
             "messages": [_message_to_payload(message) for message in messages],
-            "stream": stream,
         }
 
     def complete(self, messages: Sequence[LLMMessage]) -> str:
-        payload = self._payload(messages, stream=False)
+        payload = self._payload(messages)
         response = self.http_client.complete("/api/chat", payload)
         return response.get("message", {}).get("content", "")
-
-    async def acomplete(self, messages: Sequence[LLMMessage]) -> str:
-        payload = self._payload(messages, stream=False)
-        response = await self.http_client.acomplete("/api/chat", payload)
-        return response.get("message", {}).get("content", "")
-
-    async def astream(
-        self, messages: Sequence[LLMMessage]
-    ) -> AsyncIterator[str]:
-        payload = self._payload(messages, stream=True)
-        async for chunk in self.http_client.astream("/api/chat", payload):
-            content = chunk.get("message", {}).get("content", "")
-            if content:
-                yield content
 
 
 class TestLLMClient(LLMClient):
@@ -212,14 +121,6 @@ class TestLLMClient(LLMClient):
 
     def complete(self, messages: Sequence[LLMMessage]) -> str:
         return self._render(messages)
-
-    async def acomplete(self, messages: Sequence[LLMMessage]) -> str:
-        return self._render(messages)
-
-    async def astream(
-        self, messages: Sequence[LLMMessage]
-    ) -> AsyncIterator[str]:
-        yield self._render(messages)
 
 
 def _build_test_client() -> LLMClient:

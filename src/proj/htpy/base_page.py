@@ -357,10 +357,6 @@ def get_top_right_dropdown_items(request):
         )[tdt("Systematic reviews")],
         h.a(
             ".dropdown-item",
-            href=reverse("llm_demo"),
-        )[tdt("LLM demo")],
-        h.a(
-            ".dropdown-item",
             href=reverse("document_list"),
         )[tm("documents")],
         h.a(

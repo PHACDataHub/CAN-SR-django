@@ -29,17 +29,14 @@ def test_check_llm_runs_smoke_test_against_real_client():
             base_url,
             timeout=60,
             sync_client=None,
-            async_client=None,
         ):
             self.base_url = base_url
             self.timeout = timeout
             self.sync_client = sync_client
-            self.async_client = async_client
 
         def complete(self, path, payload):
             assert path == "/api/chat"
             assert payload["model"] == "demo"
-            assert payload["stream"] is False
             assert payload["messages"] == [
                 {"role": "user", "content": SMOKE_TEST_PROMPT}
             ]
@@ -54,16 +51,6 @@ def test_check_llm_runs_smoke_test_against_real_client():
                     )
                 }
             }
-
-        async def acomplete(self, path, payload):
-            return self.complete(path, payload)
-
-        def stream(self, path, payload):
-            return iter(())
-
-        async def astream(self, path, payload):
-            if False:
-                yield None
 
     stdout = StringIO()
 
@@ -92,7 +79,6 @@ def test_check_llm_rejects_unexpected_selected_option():
             base_url,
             timeout=60,
             sync_client=None,
-            async_client=None,
         ):
             pass
 
@@ -111,16 +97,6 @@ def test_check_llm_rejects_unexpected_selected_option():
                     )
                 }
             }
-
-        async def acomplete(self, path, payload):
-            return self.complete(path, payload)
-
-        def stream(self, path, payload):
-            return iter(())
-
-        async def astream(self, path, payload):
-            if False:
-                yield None
 
     with override_settings(
         LLM_MODE="ollama",
