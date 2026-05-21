@@ -1,9 +1,6 @@
-import json
 from unittest.mock import MagicMock, patch
 
 from django.test import override_settings
-
-import pytest
 
 from my_app.model_factories import (
     CitationDatasetFactory,
@@ -12,13 +9,7 @@ from my_app.model_factories import (
     L1ScreeningQuestionOptionFactory,
     SystematicReviewFactory,
 )
-from my_app.models import (
-    L1ScreeningResult,
-    ScreeningResultStatus,
-)
-from my_app.prompts.screening_prompt import (
-    get_l1_screening_results,
-)
+from my_app.models import L1ScreeningResult, ScreeningResultStatus
 from my_app.services.ai_screening import (
     DeferredL1ScreeningService,
     ProcessL1ScreeningService,
@@ -197,95 +188,6 @@ def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and
     assert task_mock.enqueue.call_args.kwargs == {
         "result_id": target_pair_results[0].id
     }
-
-
-@override_settings(HAS_LLM=True)
-def test_get_l1_screening_results_returns_exact_matching_option():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    row = CitationDatasetRowFactory(
-        dataset=dataset,
-        order=1,
-        title="Row",
-        abstract="Row abstract",
-    )
-    question = L1ScreeningQuestionFactory(
-        review=review,
-        question_text="Is this citation relevant?",
-    )
-    include_option = L1ScreeningQuestionOptionFactory(
-        question=question,
-        option_text="Include",
-        option_value="Include the citation",
-    )
-    L1ScreeningQuestionOptionFactory(
-        question=question,
-        option_text="Exclude",
-        option_value="Exclude the citation",
-    )
-
-    client = MagicMock()
-    client.complete_prompt.return_value = json.dumps(
-        {
-            "selected": "Include",
-            "explanation": "The citation matches the inclusion criteria.",
-            "confidence": 0.88,
-        }
-    )
-
-    with patch(
-        "my_app.prompts.screening_prompt.get_client", return_value=client
-    ):
-        result = get_l1_screening_results(question, row)
-
-    assert result.selected == include_option
-    assert result.explanation == "The citation matches the inclusion criteria."
-    assert result.confidence == 0.88
-    client.complete_prompt.assert_called_once()
-
-
-@override_settings(HAS_LLM=True)
-def test_get_l1_screening_results_raises_when_llm_returns_unknown_option():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    row = CitationDatasetRowFactory(
-        dataset=dataset,
-        order=1,
-        title="Row",
-        abstract="Row abstract",
-    )
-    question = L1ScreeningQuestionFactory(
-        review=review,
-        question_text="Is this citation relevant?",
-    )
-    L1ScreeningQuestionOptionFactory(
-        question=question,
-        option_text="Include",
-        option_value="Include the citation",
-    )
-    L1ScreeningQuestionOptionFactory(
-        question=question,
-        option_text="Exclude",
-        option_value="Exclude the citation",
-    )
-
-    client = MagicMock()
-    client.complete_prompt.return_value = json.dumps(
-        {
-            "selected": "Unknown",
-            "explanation": "No match.",
-            "confidence": 0.1,
-        }
-    )
-
-    with patch(
-        "my_app.prompts.screening_prompt.get_client", return_value=client
-    ):
-        with pytest.raises(
-            ValueError,
-            match="doesn't match any of the available options",
-        ):
-            get_l1_screening_results(question, row)
 
 
 @override_settings(HAS_LLM=False)

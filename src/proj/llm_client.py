@@ -14,6 +14,21 @@ class LLMConfigurationError(RuntimeError):
     pass
 
 
+class UnexpectedLLMOutputError(RuntimeError):
+    # Typically raised by business-logic
+    # More frequent for dumber LLMS
+    # used to trigger retry logic
+    pass
+
+
+class ClientFailureError(RuntimeError):
+    # Raised when the client fails to complete the request
+    # e.g. network error, invalid response, etc.
+    # usually is not retried
+    # although a circuit breaker pattern might help with this
+    pass
+
+
 @dataclass(frozen=True)
 class LLMMessage:
     role: str
@@ -53,12 +68,21 @@ class HttpxLLMHttpClient(LLMHttpClient):
         )
 
     def complete(self, path: str, payload: dict) -> dict:
-        response = self.sync_client.post(
-            path,
-            json=payload,
-        )
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = self.sync_client.post(
+                path,
+                json=payload,
+            )
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPError as exc:
+            raise ClientFailureError(
+                f"LLM client request failed for {path}"
+            ) from exc
+        except ValueError as exc:
+            raise ClientFailureError(
+                f"LLM client returned invalid JSON for {path}"
+            ) from exc
 
 
 class LLMClient(ABC):

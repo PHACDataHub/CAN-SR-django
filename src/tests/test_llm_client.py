@@ -3,8 +3,10 @@ import json
 from django.test import override_settings
 
 import httpx
+import pytest
 
 from proj.llm_client import (
+    ClientFailureError,
     HttpxLLMHttpClient,
     LLMConfigurationError,
     LLMMessage,
@@ -76,6 +78,40 @@ def test_ollama_client_complete_prompt_uses_single_user_message():
         "model": "demo",
         "messages": [{"role": "user", "content": "hello"}],
     }
+
+
+def test_requests_http_client_wraps_status_errors():
+    def handler(request):
+        return httpx.Response(500, json={"error": "boom"})
+
+    sync_client = build_httpx_clients(handler)
+    client = HttpxLLMHttpClient("http://ollama.example", sync_client=sync_client)
+
+    with pytest.raises(ClientFailureError, match="request failed"):
+        client.complete(
+            "/api/chat",
+            {
+                "model": "demo",
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+        )
+
+
+def test_requests_http_client_wraps_timeout_errors():
+    def handler(request):
+        raise httpx.ReadTimeout("timed out", request=request)
+
+    sync_client = build_httpx_clients(handler)
+    client = HttpxLLMHttpClient("http://ollama.example", sync_client=sync_client)
+
+    with pytest.raises(ClientFailureError, match="request failed"):
+        client.complete(
+            "/api/chat",
+            {
+                "model": "demo",
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+        )
 
 
 def test_get_client_returns_test_client_in_test_mode():

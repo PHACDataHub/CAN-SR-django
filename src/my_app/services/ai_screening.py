@@ -13,6 +13,8 @@ from django.utils import timezone
 import pydantic
 from data_fetcher.util import GlobalRequest, clear_request_caches
 
+from proj.llm_client import ClientFailureError
+
 from my_app.models import (
     CitationDatasetRow,
     L1ScreeningQuestion,
@@ -20,7 +22,10 @@ from my_app.models import (
     ScreeningResultStatus,
     SystematicReview,
 )
-from my_app.prompts.screening_prompt import get_l1_screening_results
+from my_app.prompts.screening_prompt import (
+    UnexpectedLLMOutputError,
+    get_l1_screening_results,
+)
 from shortcuts import logger
 
 
@@ -144,21 +149,28 @@ class ProcessL1ScreeningService:
             result.confidence = screening_results.confidence
             result.explanation = screening_results.explanation
             result.status = ScreeningResultStatus.COMPLETED
-        except (
-            json.JSONDecodeError,
-            ValueError,
-            pydantic.ValidationError,
-        ) as exc:
+        except UnexpectedLLMOutputError as exc:
             logger.exception(
-                "Permanent error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                "error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
                 self.result_id,
                 question.id,
                 citation.id,
             )
+            # TODO: this case should be retried
+            # NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT times before being marked as abandoned
             self._mark_abandoned(result, exc)
+        except ClientFailureError:
+            logger.exception(
+                "API failure processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                self.result_id,
+                question.id,
+                citation.id,
+            )
+            # this is likely a transient error, so we want to retry
+            raise
         except Exception:
             logger.exception(
-                "Transient error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                "Unexpected error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
                 self.result_id,
                 question.id,
                 citation.id,

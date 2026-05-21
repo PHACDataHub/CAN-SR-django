@@ -5,7 +5,7 @@ from django.conf import settings
 
 import pydantic
 
-from proj.llm_client import TestLLMClient, get_client
+from proj.llm_client import UnexpectedLLMOutputError, get_client
 
 from my_app.models import (
     CitationDatasetRow,
@@ -121,6 +121,7 @@ def get_l1_screening_results(
         logger.warning("LLM is not available, using mock results.")
         return get_mock_l1_screening_results(question, citation)
 
+    options = options_for_question(L1ScreeningQuestionOption, question.id)
     logger.warning("LLM is available, using real LLM results for screening")
     prompt_builder = L1ScreeningPromptBuilder(question, citation)
     prompt = prompt_builder.build_str()
@@ -128,22 +129,37 @@ def get_l1_screening_results(
     llm_client = get_client()
     raw_answer = llm_client.complete_prompt(prompt)
 
-    answer = RawL1ScreeningPromptResult(**json.loads(raw_answer))
+    try:
+        json_answer = json.loads(raw_answer)
+        answer = RawL1ScreeningPromptResult(**json_answer)
+    except json.JSONDecodeError as exc:
+        raise UnexpectedLLMOutputError(
+            f"LLM returned invalid JSON: {raw_answer}"
+        ) from exc
+    except pydantic.ValidationError as exc:
+        raise UnexpectedLLMOutputError(
+            f"LLM returned JSON that doesn't match expected schema: {json_answer}"
+        ) from exc
 
-    options = options_for_question(L1ScreeningQuestionOption, question.id)
     selected_option = next(
-        (opt for opt in options if opt.option_text == answer.selected), None
+        (opt for opt in options if opt.option_text == answer.selected),
+        None,
     )
-    if not selected_option:
-        raise ValueError(
-            f"LLM returned an option that doesn't match any of the available options for the question {question.id}"
+    if selected_option is None:
+        raise UnexpectedLLMOutputError(
+            f"LLM returned option doesn't match available options for question {question.id}"
         )
 
-    return L1ScreeningPromptResult(
-        selected=selected_option,
-        explanation=answer.explanation,
-        confidence=answer.confidence,
-    )
+    try:
+        typed_result = L1ScreeningPromptResult(
+            selected=selected_option,
+            explanation=answer.explanation,
+            confidence=answer.confidence,
+        )
+    except pydantic.ValidationError as exc:
+        raise UnexpectedLLMOutputError() from exc
+
+    return typed_result
 
 
 def get_mock_l1_screening_results(
