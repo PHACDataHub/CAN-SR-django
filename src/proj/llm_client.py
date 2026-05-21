@@ -13,6 +13,7 @@ import sys
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Iterable, Sequence
 from dataclasses import dataclass
+from typing import Callable
 
 from django.conf import settings
 
@@ -27,6 +28,14 @@ class LLMConfigurationError(RuntimeError):
 class LLMMessage:
     role: str
     content: str
+
+
+@dataclass(frozen=True)
+class LLMClientSpec:
+    mode: str
+    label: str
+    is_real: bool
+    factory: Callable[[], "LLMClient"]
 
 
 def _message_to_payload(message: LLMMessage) -> dict[str, str]:
@@ -213,6 +222,56 @@ class TestLLMClient(LLMClient):
         yield self._render(messages)
 
 
+def _build_test_client() -> LLMClient:
+    return TestLLMClient()
+
+
+def _build_ollama_client() -> LLMClient:
+    return get_ollama_client()
+
+
+LLM_CLIENT_SPECS: dict[str, LLMClientSpec] = {
+    "local": LLMClientSpec(
+        mode="local",
+        label="dummy local client",
+        is_real=False,
+        factory=_build_test_client,
+    ),
+    "test_client": LLMClientSpec(
+        mode="test_client",
+        label="test client",
+        is_real=False,
+        factory=_build_test_client,
+    ),
+    "ollama": LLMClientSpec(
+        mode="ollama",
+        label="ollama",
+        is_real=True,
+        factory=_build_ollama_client,
+    ),
+}
+
+
+def get_client_spec(mode: str) -> LLMClientSpec:
+    try:
+        return LLM_CLIENT_SPECS[mode]
+    except KeyError as exc:
+        available_modes = ", ".join(sorted(LLM_CLIENT_SPECS))
+        raise LLMConfigurationError(
+            f"Unsupported LLM_MODE '{mode}'. Supported modes are: {available_modes}"
+        ) from exc
+
+
+def get_real_client_modes() -> tuple[str, ...]:
+    return tuple(
+        spec.mode for spec in LLM_CLIENT_SPECS.values() if spec.is_real
+    )
+
+
+def is_real_client_mode(mode: str) -> bool:
+    return get_client_spec(mode).is_real
+
+
 def get_client() -> LLMClient:
     mode = settings.LLM_MODE
 
@@ -221,18 +280,8 @@ def get_client() -> LLMClient:
             raise LLMConfigurationError(
                 "LLM_MODE=test_client is only supported during tests"
             )
-        return TestLLMClient()
-
-    if mode == "local":
-        return TestLLMClient()
-
-    if mode == "ollama":
-        return get_ollama_client()
-
-    else:
-        raise LLMConfigurationError(
-            f"Unsupported LLM_MODE '{mode}'. Only 'local', 'ollama' are supported"
-        )
+    spec = get_client_spec(mode)
+    return spec.factory()
 
 
 def get_ollama_client() -> OllamaLLMClient:

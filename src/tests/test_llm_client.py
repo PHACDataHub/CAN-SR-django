@@ -255,3 +255,18 @@ def test_get_client_rejects_unknown_mode():
             assert "Unsupported LLM_MODE" in str(exc)
         else:
             raise AssertionError("Expected LLMConfigurationError")
+
+
+def test_get_ollama_client_requires_explicit_configuration():
+    with override_settings(
+        LLM_MODE="ollama",
+        LLM_OLLAMA_URL="",
+        LLM_OLLAMA_MODEL="",
+        LLM_OLLAMA_TIMEOUT=30,
+    ):
+        try:
+            get_client()
+        except LLMConfigurationError as exc:
+            assert "requires LLM_OLLAMA_URL and LLM_OLLAMA_MODEL" in str(exc)
+        else:
+            raise AssertionError("Expected LLMConfigurationError")

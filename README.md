@@ -111,3 +111,5 @@ OLLAMA_MODELS='llama3.2:1b',
 ```
 
 OLLAMA_MODELS is a comma-separated list of models to load from ollama, but currently the settings only takes the first one.
+
+You can check LLM configuration and connection by running `python -m manage check_llm` which will attempt to make a test call to the configured LLM
