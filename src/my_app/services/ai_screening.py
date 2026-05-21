@@ -122,6 +122,8 @@ class ProcessL1ScreeningService:
     meant to be used in a task for background processing
     """
 
+    NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT = 3
+
     def __init__(self, result_id: int):
         self.result_id = result_id
 
@@ -132,49 +134,75 @@ class ProcessL1ScreeningService:
             f"Screening could not be completed: {error.__class__.__name__}"
         )
 
+    def _get_l1_screening_results_with_retries(
+        self,
+        question: L1ScreeningQuestion,
+        citation: CitationDatasetRow,
+    ):
+        for retry_num in range(self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT + 1):
+            try:
+                return get_l1_screening_results(question, citation)
+            except UnexpectedLLMOutputError:
+                if retry_num == self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT:
+                    raise
+                logger.warning(
+                    "Retrying retry_num=%s after unexpected LLM output for result_id=%s question_id=%s citation_id=%s, retrying...",
+                    retry_num,
+                    self.result_id,
+                    question.id,
+                    citation.id,
+                )
+
     def perform(self):
         logger.info(
             "Starting processing of L1 screening for result_id=%s",
             self.result_id,
         )
-        result = L1ScreeningResult.objects.select_related(
-            "question", "citation"
-        ).get(id=self.result_id)
-        question = result.question
-        citation = result.citation
+        with transaction.atomic():
+            result = L1ScreeningResult.objects.select_related(
+                "question", "citation"
+            ).get(id=self.result_id)
+            question = result.question
+            citation = result.citation
 
-        try:
-            screening_results = get_l1_screening_results(question, citation)
+            try:
+                screening_results = (
+                    self._get_l1_screening_results_with_retries(
+                        question,
+                        citation,
+                    )
+                )
+            except UnexpectedLLMOutputError as exc:
+                logger.exception(
+                    "error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                    self.result_id,
+                    question.id,
+                    citation.id,
+                )
+                self._mark_abandoned(result, exc)
+                result.save()
+                return
+            except ClientFailureError:
+                logger.exception(
+                    "API failure processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                    self.result_id,
+                    question.id,
+                    citation.id,
+                )
+                # this is likely a transient error, so we want to retry
+                raise
+            except Exception:
+                logger.exception(
+                    "Unexpected error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                    self.result_id,
+                    question.id,
+                    citation.id,
+                )
+                raise
+
             result.selected_option = screening_results.selected
             result.confidence = screening_results.confidence
             result.explanation = screening_results.explanation
             result.status = ScreeningResultStatus.COMPLETED
-        except UnexpectedLLMOutputError as exc:
-            logger.exception(
-                "error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
-                self.result_id,
-                question.id,
-                citation.id,
-            )
-            # TODO: this case should be retried
-            # NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT times before being marked as abandoned
-            self._mark_abandoned(result, exc)
-        except ClientFailureError:
-            logger.exception(
-                "API failure processing L1 screening for result_id=%s question_id=%s citation_id=%s",
-                self.result_id,
-                question.id,
-                citation.id,
-            )
-            # this is likely a transient error, so we want to retry
-            raise
-        except Exception:
-            logger.exception(
-                "Unexpected error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
-                self.result_id,
-                question.id,
-                citation.id,
-            )
-            raise
 
-        result.save()
+            result.save()

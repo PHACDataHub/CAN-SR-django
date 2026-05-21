@@ -1,6 +1,11 @@
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.test import override_settings
+
+import pytest
+
+from proj.llm_client import ClientFailureError, UnexpectedLLMOutputError
 
 from my_app.model_factories import (
     CitationDatasetFactory,
@@ -234,3 +239,157 @@ def test_process_l1_screening_service_uses_mock_results_helper():
         == "This is a mock explanation for why the option was selected."
     )
     assert 0.5 <= result.confidence <= 1.0
+
+
+def test_process_l1_screening_service_retries_unexpected_llm_output_before_succeeding():
+    review = SystematicReviewFactory()
+    dataset = CitationDatasetFactory(systematic_review=review)
+    row = CitationDatasetRowFactory(
+        dataset=dataset,
+        order=1,
+        title="Row",
+        abstract="Row abstract",
+    )
+    question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="Is this citation relevant?",
+    )
+    include_option = L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Include",
+        option_value="Include the citation",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Exclude",
+        option_value="Exclude the citation",
+    )
+
+    result = L1ScreeningResult.objects.create(
+        citation=row,
+        question=question,
+        status=ScreeningResultStatus.PENDING,
+    )
+
+    screening_result = SimpleNamespace(
+        selected=include_option,
+        confidence=0.88,
+        explanation="Succeeded on retry.",
+    )
+
+    with patch(
+        "my_app.services.ai_screening.get_l1_screening_results",
+        side_effect=[
+            UnexpectedLLMOutputError("bad output"),
+            UnexpectedLLMOutputError("bad output"),
+            screening_result,
+        ],
+    ) as get_results_mock:
+        ProcessL1ScreeningService(result_id=result.id).perform()
+
+    result.refresh_from_db()
+
+    assert get_results_mock.call_count == 3
+    assert result.status == ScreeningResultStatus.COMPLETED
+    assert result.selected_option == include_option
+    assert result.explanation == "Succeeded on retry."
+    assert result.confidence == 0.88
+
+
+def test_process_l1_screening_service_abandons_after_retry_budget_is_exhausted():
+    review = SystematicReviewFactory()
+    dataset = CitationDatasetFactory(systematic_review=review)
+    row = CitationDatasetRowFactory(
+        dataset=dataset,
+        order=1,
+        title="Row",
+        abstract="Row abstract",
+    )
+    question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="Is this citation relevant?",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Include",
+        option_value="Include the citation",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Exclude",
+        option_value="Exclude the citation",
+    )
+
+    result = L1ScreeningResult.objects.create(
+        citation=row,
+        question=question,
+        status=ScreeningResultStatus.PENDING,
+    )
+
+    with patch(
+        "my_app.services.ai_screening.get_l1_screening_results",
+        side_effect=[
+            UnexpectedLLMOutputError("bad output")
+            for _ in range(
+                ProcessL1ScreeningService.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT
+                + 1
+            )
+        ],
+    ) as get_results_mock:
+        ProcessL1ScreeningService(result_id=result.id).perform()
+
+    result.refresh_from_db()
+
+    assert (
+        get_results_mock.call_count
+        == ProcessL1ScreeningService.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT + 1
+    )
+    assert result.status == ScreeningResultStatus.ABANDONED
+    assert result.abandoned_at is not None
+    assert result.explanation == (
+        "Screening could not be completed: UnexpectedLLMOutputError"
+    )
+
+
+def test_process_l1_screening_service_does_not_retry_client_failure_errors():
+    review = SystematicReviewFactory()
+    dataset = CitationDatasetFactory(systematic_review=review)
+    row = CitationDatasetRowFactory(
+        dataset=dataset,
+        order=1,
+        title="Row",
+        abstract="Row abstract",
+    )
+    question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="Is this citation relevant?",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Include",
+        option_value="Include the citation",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Exclude",
+        option_value="Exclude the citation",
+    )
+
+    result = L1ScreeningResult.objects.create(
+        citation=row,
+        question=question,
+        status=ScreeningResultStatus.PENDING,
+    )
+
+    with patch(
+        "my_app.services.ai_screening.get_l1_screening_results",
+        side_effect=ClientFailureError("client failure"),
+    ) as get_results_mock:
+        with pytest.raises(ClientFailureError):
+            ProcessL1ScreeningService(result_id=result.id).perform()
+
+    result.refresh_from_db()
+
+    assert get_results_mock.call_count == 1
+    assert result.status == ScreeningResultStatus.PENDING
+    assert result.abandoned_at is None
