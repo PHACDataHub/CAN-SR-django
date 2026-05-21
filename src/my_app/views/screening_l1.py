@@ -3,6 +3,9 @@ from dataclasses import dataclass
 from django.http import HttpResponse
 from django.views import View
 
+from proj.htpy import definition_list as DefList
+from proj.htpy.modal_component import ModalComponent
+
 from my_app.models import (
     CitationDatasetRow,
     L1ScreeningQuestion,
@@ -19,7 +22,7 @@ from my_app.views.view_utils import (
 )
 from shortcuts import BasePageTemplate, HtpyTemplateMixin, ListView
 from shortcuts import breadcrumbs as bc
-from shortcuts import cached_property, get_request
+from shortcuts import cached_property, get_object_or_404, get_request
 from shortcuts import htpy as h
 from shortcuts import reverse, tdt
 
@@ -44,6 +47,9 @@ def CitationRowDisplay(
     citation_row: CitationDatasetRow, review: SystematicReview
 ):
     request = get_request()
+    details_url = reverse(
+        "screen_l1_row_details", args=[review.id, citation_row.id]
+    )
 
     fetcher = L1ScreeningStatusFetcher.get_instance()
     status = fetcher.get(citation_row.id)
@@ -76,7 +82,10 @@ def CitationRowDisplay(
 
     row_id = f"l1-screening-row-{citation_row.id}"
 
-    return h.div(".list-group-item.citation-item", id=row_id)[
+    return h.div(
+        ".list-group-item.citation-item.position-relative.pb-4",
+        id=row_id,
+    )[
         h.div(".d-flex.justify-content-between.align-items-start.gap-3")[
             h.div(".flex-grow-1")[
                 h.div(".fw-semibold")[
@@ -91,7 +100,14 @@ def CitationRowDisplay(
             h.div(".d-flex.flex-column.align-items-end.gap-2")[
                 CitationRowL1StatusBadge(citation_row), button_markup
             ],
-        ]
+        ],
+        h.a(
+            ".btn.btn-outline-secondary.btn-sm.position-absolute.bottom-0.end-0.me-3.mb-2",
+            href=details_url,
+            hx_get=details_url,
+            hx_target="#modal-slot",
+            hx_swap="innerHTML",
+        )[tdt("View more")],
     ]
 
 
@@ -403,4 +419,126 @@ class ScreenL1RowView(MustAccessSystematicReviewMixin, View):
         return HttpResponse(
             str(CitationRowDisplay(self.citation_row, self.review)),
             headers=headers,
+        )
+
+
+@route(
+    "/systematic-reviews/<int:pk>/screening_l1/rows/<int:row_pk>/details/",
+    name="screen_l1_row_details",
+)
+class L1ScreeningRowDetailsView(MustAccessSystematicReviewMixin, View):
+    @cached_property
+    def citation_row(self):
+        return get_object_or_404(
+            CitationDatasetRow,
+            pk=self.kwargs["row_pk"],
+            dataset__systematic_review=self.systematic_review,
+        )
+
+    @cached_property
+    def screening_columns(self):
+        return list(self.citation_row.dataset.screening_columns.order_by("id"))
+
+    @cached_property
+    def screening_results(self):
+        return list(
+            L1ScreeningResult.objects.filter(citation=self.citation_row)
+            .select_related("question", "selected_option")
+            .order_by("question_id")
+        )
+
+    @cached_property
+    def included_field_pairs(self):
+        included_columns = self.screening_columns
+
+        return [
+            (
+                tdt("Title"),
+                self.citation_row.title or tdt("Untitled citation"),
+            ),
+            (tdt("Abstract"), self.citation_row.abstract or tdt("None")),
+            *[
+                (
+                    column.name,
+                    DefList.render_dl_value(
+                        self.citation_row.data.get(column.name)
+                    ),
+                )
+                for column in included_columns
+            ],
+        ]
+
+    @cached_property
+    def included_field_names(self):
+        return [column.name for column in self.screening_columns]
+
+    @cached_property
+    def non_included_fields(self):
+        return [
+            (key, DefList.render_dl_value(value))
+            for key, value in self.citation_row.data.items()
+            if key not in self.included_field_names
+        ]
+
+    def render_screening_result(self, result):
+        selected_option = result.selected_option
+        if selected_option is None:
+            selected_option_content = h.span(".text-muted")[
+                tdt("No option selected")
+            ]
+        else:
+            selected_option_content = h.div[
+                h.div(".fw-semibold")[selected_option.option_text],
+                h.div(".small.text-muted")[selected_option.option_value],
+            ]
+
+        notes_content = result.explanation or tdt("None")
+
+        return DefList.DL(
+            [
+                (tdt("Question"), result.question.question_text),
+                (
+                    tdt("Status"),
+                    ScreeningResultStatus(result.status).label,
+                ),
+                (tdt("Selected option"), selected_option_content),
+                (tdt("Notes"), notes_content),
+            ]
+        )
+
+    def get(self, *args, **kwargs):
+        modal_body = h.fragment[
+            h.h2(".h5.mt-4")[tdt("L1 screening results")],
+            (
+                h.div(".vstack.gap-3")[
+                    [
+                        self.render_screening_result(result)
+                        for result in self.screening_results
+                    ]
+                ]
+                if self.screening_results
+                else h.p(".mb-0.text-muted")[tdt("No screening results yet.")]
+            ),
+            h.h2(".h5")[tdt("Included fields")],
+            DefList.DL(self.included_field_pairs),
+            h.details(".mt-3")[
+                h.summary[tdt("Non-included fields")],
+                h.div(".mt-3")[DefList.DL(self.non_included_fields)],
+            ],
+        ]
+
+        title = h.span[
+            tdt("Screening details for"),
+            " ",
+            self.citation_row.title or tdt("Untitled citation"),
+        ]
+
+        return HttpResponse(
+            str(
+                ModalComponent(
+                    title=title,
+                    modal_id=f"l1-screening-details-modal-{self.citation_row.id}",
+                    size_cls="modal-xl",
+                )[modal_body]
+            )
         )

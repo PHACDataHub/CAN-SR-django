@@ -52,6 +52,14 @@ translation_entries = {
         "en": "No",
         "fr": "Non",
     },
+    "empty": {
+        "en": "Empty",
+        "fr": "Vide",
+    },
+    "null": {
+        "en": "Null",
+        "fr": "Nul",
+    },
     "close": {
         "en": "Close",
         "fr": "Fermer",
