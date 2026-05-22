@@ -7,9 +7,7 @@ from my_app.model_factories import (
     L1ScreeningResultFactory,
     SystematicReviewFactory,
 )
-from my_app.models import (
-    ScreeningResultStatus,
-)
+from my_app.models import ScreeningResultStatus
 from my_app.queries import L1ScreeningStatusFetcher
 
 

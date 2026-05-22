@@ -3,19 +3,19 @@ import factory
 from proj.models import User
 
 from my_app.models import (
-    DemoTaskRun,
     CitationDataset,
     CitationDatasetColumn,
     CitationDatasetRow,
+    DemoTaskRun,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L1ScreeningResult,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     L2ScreeningResult,
+    ParameterExtractionResult,
     ParameterQuestion,
     ParameterQuestionOption,
-    ParameterExtractionResult,
     ScreeningResultStatus,
     SystematicReview,
     SystematicReviewUserLink,
