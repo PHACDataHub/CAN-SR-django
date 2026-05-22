@@ -1,4 +1,4 @@
-# Django template project
+# Django CAN-SR
 
 ## Configuring dev environment
 
@@ -113,3 +113,12 @@ OLLAMA_MODELS='llama3.2:1b',
 OLLAMA_MODELS is a comma-separated list of models to load from ollama, but currently the settings only takes the first one.
 
 You can check LLM configuration and connection by running `python -m manage check_llm` which will attempt to make a test call to the configured LLM
+
+## Calculating code coverage 
+
+From the `src/` directory run the following
+1. `coverage run --source=. -m pytest tests/`
+2. `coverage html -i`
+3. `python -m http.server 1337`
+4. visit `http://localhost:1337/htmlcov/` and dig into modules to see which individual line coverage
+
