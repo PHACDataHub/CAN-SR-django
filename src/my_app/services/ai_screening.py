@@ -158,51 +158,50 @@ class ProcessL1ScreeningService:
             "Starting processing of L1 screening for result_id=%s",
             self.result_id,
         )
-        with transaction.atomic():
-            result = L1ScreeningResult.objects.select_related(
-                "question", "citation"
-            ).get(id=self.result_id)
-            question = result.question
-            citation = result.citation
+        result = L1ScreeningResult.objects.select_related(
+            "question", "citation"
+        ).get(id=self.result_id)
+        question = result.question
+        citation = result.citation
 
-            try:
-                screening_results = (
-                    self._get_l1_screening_results_with_retries(
-                        question,
-                        citation,
-                    )
-                )
-            except UnexpectedLLMOutputError as exc:
-                logger.exception(
-                    "error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
-                    self.result_id,
-                    question.id,
-                    citation.id,
-                )
-                self._mark_abandoned(result, exc)
+        try:
+            screening_results = self._get_l1_screening_results_with_retries(
+                question,
+                citation,
+            )
+        except UnexpectedLLMOutputError as exc:
+            logger.exception(
+                "error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                self.result_id,
+                question.id,
+                citation.id,
+            )
+            self._mark_abandoned(result, exc)
+            with transaction.atomic():
                 result.save()
-                return
-            except ClientFailureError:
-                logger.exception(
-                    "API failure processing L1 screening for result_id=%s question_id=%s citation_id=%s",
-                    self.result_id,
-                    question.id,
-                    citation.id,
-                )
-                # this is likely a transient error, so we want to retry
-                raise
-            except Exception:
-                logger.exception(
-                    "Unexpected error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
-                    self.result_id,
-                    question.id,
-                    citation.id,
-                )
-                raise
+            return
+        except ClientFailureError:
+            logger.exception(
+                "API failure processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                self.result_id,
+                question.id,
+                citation.id,
+            )
+            # this is likely a transient error, so we want to retry
+            raise
+        except Exception:
+            logger.exception(
+                "Unexpected error processing L1 screening for result_id=%s question_id=%s citation_id=%s",
+                self.result_id,
+                question.id,
+                citation.id,
+            )
+            raise
 
-            result.selected_option = screening_results.selected
-            result.confidence = screening_results.confidence
-            result.explanation = screening_results.explanation
-            result.status = ScreeningResultStatus.COMPLETED
+        result.selected_option = screening_results.selected
+        result.confidence = screening_results.confidence
+        result.explanation = screening_results.explanation
+        result.status = ScreeningResultStatus.COMPLETED
 
+        with transaction.atomic():
             result.save()
