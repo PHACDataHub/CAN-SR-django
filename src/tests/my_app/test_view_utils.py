@@ -1,5 +1,6 @@
-from django.test import RequestFactory
 from urllib.parse import parse_qsl, urlparse
+
+from django.test import RequestFactory
 
 from my_app.views.view_utils import url_with_same_params
 
@@ -16,20 +17,14 @@ def test_url_with_same_params_preserves_existing_params_and_can_override_path():
         page=3,
     )
 
-    assert (
-        urlparse(same_path_url).path
-        == "/screening-l1/"
-    )
+    assert urlparse(same_path_url).path == "/screening-l1/"
     assert parse_qsl(urlparse(same_path_url).query) == [
         ("status", "pending"),
         ("filter", "full"),
         ("page", "3"),
     ]
 
-    assert (
-        urlparse(overridden_path_url).path
-        == "/screening-l1/component/"
-    )
+    assert urlparse(overridden_path_url).path == "/screening-l1/component/"
     assert parse_qsl(urlparse(overridden_path_url).query) == [
         ("status", "pending"),
         ("filter", "full"),
