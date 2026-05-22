@@ -16,11 +16,11 @@ from data_fetcher.util import GlobalRequest, clear_request_caches
 from proj.llm_client import ClientFailureError
 
 from my_app.models import (
-    CitationDatasetRow,
+    Citation,
     L1ScreeningQuestion,
     L1ScreeningResult,
+    Review,
     ScreeningResultStatus,
-    SystematicReview,
 )
 from my_app.prompts.screening_prompt import (
     UnexpectedLLMOutputError,
@@ -41,7 +41,7 @@ class L1ScreeningService:
 
     def __init__(
         self,
-        rows: List[CitationDatasetRow],
+        rows: List[Citation],
         questions: List[L1ScreeningQuestion],
         overwrite_existing=False,
     ):
@@ -137,7 +137,7 @@ class ProcessL1ScreeningService:
     def _get_l1_screening_results_with_retries(
         self,
         question: L1ScreeningQuestion,
-        citation: CitationDatasetRow,
+        citation: Citation,
     ):
         for retry_num in range(self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT + 1):
             try:

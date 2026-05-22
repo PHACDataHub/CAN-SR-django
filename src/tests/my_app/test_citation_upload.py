@@ -7,11 +7,11 @@ import pytest
 from phac_aspc.rules import patch_rules
 
 from my_app.models import (
+    Citation,
     CitationDataset,
     CitationDatasetColumn,
-    CitationDatasetRow,
-    SystematicReview,
-    SystematicReviewUserLink,
+    Review,
+    ReviewUserLink,
 )
 from my_app.services.upload_citation_dataset_service import (
     CsvCitationDatasetImportSource,
@@ -45,7 +45,7 @@ def test_csv_source_parses_headers_and_rows():
 
 
 def test_build_citation_dataset_from_source_creates_expected_records():
-    review = SystematicReview.objects.create(
+    review = Review.objects.create(
         title="Review",
         description="Review description",
     )
@@ -61,7 +61,7 @@ def test_build_citation_dataset_from_source_creates_expected_records():
 
     assert result.row_count == 2
     assert result.column_count == 1
-    assert result.dataset.systematic_review == review
+    assert result.dataset.review == review
 
     dataset = result.dataset
     assert [column.name for column in dataset.columns.order_by("id")] == [
@@ -77,7 +77,7 @@ def test_build_citation_dataset_from_source_creates_expected_records():
 
 
 def test_build_citation_dataset_from_source_rolls_back_on_row_length_mismatch():
-    review = SystematicReview.objects.create(
+    review = Review.objects.create(
         title="Review",
         description="Review description",
     )
@@ -90,9 +90,7 @@ def test_build_citation_dataset_from_source_rolls_back_on_row_length_mismatch():
     with pytest.raises(ValueError, match="same number of values"):
         build_citation_dataset_from_source(review, source)
 
-    assert (
-        CitationDataset.objects.filter(systematic_review=review).count() == 0
-    )
+    assert CitationDataset.objects.filter(review=review).count() == 0
 
 
 example_csv = """title,year,abstract,month,day
@@ -106,7 +104,7 @@ Sixth citation,2025,Extra abstract,June,6
 
 
 def test_import_citation_dataset_parses_uploaded_file():
-    review = SystematicReview.objects.create(
+    review = Review.objects.create(
         title="Review",
         description="Review description",
     )
@@ -118,10 +116,8 @@ def test_import_citation_dataset_parses_uploaded_file():
 
     assert result.row_count == 6
     assert result.column_count == 3
-    assert result.dataset.systematic_review == review
-    assert (
-        CitationDataset.objects.filter(systematic_review=review).count() == 1
-    )
+    assert result.dataset.review == review
+    assert CitationDataset.objects.filter(review=review).count() == 1
 
     assert result.dataset.columns.count() == 3
     assert result.dataset.rows.count() == 6
@@ -141,7 +137,7 @@ def test_import_citation_dataset_parses_uploaded_file():
 
 
 def test_import_citation_dataset_uses_bulk_inserts():
-    review = SystematicReview.objects.create(
+    review = Review.objects.create(
         title="Review",
         description="Review description",
     )
@@ -164,18 +160,18 @@ def test_import_citation_dataset_uses_bulk_inserts():
 def test_citation_upload_creates_dataset_and_redirects(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReview.objects.create(
+    review = Review.objects.create(
         title="Review",
         description="Review description",
     )
-    SystematicReviewUserLink.objects.create(
+    ReviewUserLink.objects.create(
         user=vanilla_user,
-        systematic_review=review,
+        review=review,
     )
 
     url = reverse("citation_upload", args=[review.id])
 
-    with patch_rules(can_access_systematic_review=False):
+    with patch_rules(can_access_review=False):
         response = vanilla_user_client.get(url)
         assert response.status_code == 403
 
@@ -185,7 +181,7 @@ def test_citation_upload_creates_dataset_and_redirects(
         content_type="text/csv",
     )
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.post(
             url,
             {"citation_file": uploaded_file},
@@ -196,9 +192,9 @@ def test_citation_upload_creates_dataset_and_redirects(
     body = response.content.decode()
     assert "Imported citation dataset with 2 rows and 1 column." in body
 
-    dataset = CitationDataset.objects.get(systematic_review=review)
+    dataset = CitationDataset.objects.get(review=review)
     assert CitationDatasetColumn.objects.filter(dataset=dataset).count() == 1
-    assert CitationDatasetRow.objects.filter(dataset=dataset).count() == 2
+    assert Citation.objects.filter(dataset=dataset).count() == 2
 
     rows = list(dataset.rows.all())
     assert [row.order for row in rows] == [1, 2]
@@ -207,22 +203,22 @@ def test_citation_upload_creates_dataset_and_redirects(
     assert rows[0].data == {"year": "2020"}
 
 
-def test_systematic_review_detail_disables_import_button_when_dataset_exists(
+def test_review_detail_disables_import_button_when_dataset_exists(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReview.objects.create(
+    review = Review.objects.create(
         title="Review",
         description="Review description",
     )
-    SystematicReviewUserLink.objects.create(
+    ReviewUserLink.objects.create(
         user=vanilla_user,
-        systematic_review=review,
+        review=review,
     )
-    CitationDataset.objects.create(systematic_review=review)
+    CitationDataset.objects.create(review=review)
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.get(
-            reverse("systematic_review_detail", args=[review.id])
+            reverse("review_detail", args=[review.id])
         )
 
     assert response.status_code == 200

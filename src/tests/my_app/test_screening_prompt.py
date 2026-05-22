@@ -5,11 +5,11 @@ from django.test import override_settings
 
 import pytest
 
-from my_app.model_factories import SystematicReviewFactory
+from my_app.model_factories import ReviewFactory
 from my_app.models import (
+    Citation,
     CitationDataset,
     CitationDatasetColumn,
-    CitationDatasetRow,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
 )
@@ -21,8 +21,8 @@ from my_app.prompts.screening_prompt import (
 
 
 def _build_screening_prompt_context():
-    sr = SystematicReviewFactory()
-    dataset = CitationDataset.objects.create(systematic_review=sr)
+    sr = ReviewFactory()
+    dataset = CitationDataset.objects.create(review=sr)
     col1 = CitationDatasetColumn.objects.create(
         dataset=dataset, name="custom_col1"
     )
@@ -32,7 +32,7 @@ def _build_screening_prompt_context():
 
     dataset.screening_columns.set([col1])
 
-    row = CitationDatasetRow.objects.create(
+    row = Citation.objects.create(
         dataset=dataset,
         title="Test Title",
         abstract="Test Abstract",

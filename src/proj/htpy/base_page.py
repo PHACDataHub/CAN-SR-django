@@ -353,7 +353,7 @@ def get_top_right_dropdown_items(request):
         ],
         h.a(
             ".dropdown-item",
-            href=reverse("systematic_review_list"),
+            href=reverse("review_list"),
         )[tdt("Systematic reviews")],
         h.a(
             ".dropdown-item",

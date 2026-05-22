@@ -4,10 +4,7 @@ from django.urls import reverse
 
 from phac_aspc.rules import patch_rules
 
-from my_app.model_factories import (
-    SystematicReviewFactory,
-    SystematicReviewUserLinkFactory,
-)
+from my_app.model_factories import ReviewFactory, ReviewUserLinkFactory
 from my_app.models import CitationDataset
 from my_app.services.upload_citation_dataset_service import (
     import_citation_dataset,
@@ -24,13 +21,11 @@ Sixth citation,2025,Extra abstract,June,6
 
 
 def _create_review_with_dataset(vanilla_user):
-    review = SystematicReviewFactory(
+    review = ReviewFactory(
         title="Review",
         description="Review description",
     )
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
     import_citation_dataset(review, EXAMPLE_CSV)
     return review
 
@@ -41,7 +36,7 @@ def test_citation_dataset_detail_shows_summary_and_rows(
     review = _create_review_with_dataset(vanilla_user)
     url = reverse("citation_dataset_detail", args=[review.id])
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         with CaptureQueriesContext(connection) as queries:
             response = vanilla_user_client.get(url)
 
@@ -60,15 +55,13 @@ def test_citation_dataset_detail_shows_summary_and_rows(
 def test_citation_dataset_detail_returns_400_when_dataset_missing(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(
+    review = ReviewFactory(
         title="Review",
         description="Review description",
     )
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.get(
             reverse("citation_dataset_detail", args=[review.id])
         )
@@ -82,21 +75,19 @@ def test_delete_citation_dataset_removes_dataset_and_redirects(
     review = _create_review_with_dataset(vanilla_user)
     url = reverse("delete_citation_dataset", args=[review.id])
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.get(url)
 
     assert response.status_code == 200
     assert "Delete dataset" in response.content.decode()
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.post(
             url, {"confirm": True}, follow=True
         )
 
     assert response.status_code == 200
     assert response.redirect_chain[-1][0] == reverse(
-        "systematic_review_detail", args=[review.id]
+        "review_detail", args=[review.id]
     )
-    assert not CitationDataset.objects.filter(
-        systematic_review=review
-    ).exists()
+    assert not CitationDataset.objects.filter(review=review).exists()

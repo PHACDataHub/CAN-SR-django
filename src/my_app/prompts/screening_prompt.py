@@ -8,7 +8,7 @@ import pydantic
 from proj.llm_client import UnexpectedLLMOutputError, get_client
 
 from my_app.models import (
-    CitationDatasetRow,
+    Citation,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     ParameterQuestion,
@@ -53,9 +53,7 @@ Keep the response strictly as a JSON object that matches the schema above. Do no
 
 
 class L1ScreeningPromptBuilder:
-    def __init__(
-        self, question: L1ScreeningQuestion, citation: CitationDatasetRow
-    ):
+    def __init__(self, question: L1ScreeningQuestion, citation: Citation):
         self.question = question
         self.citation = citation
 
@@ -115,7 +113,7 @@ class L1ScreeningPromptResult(RawL1ScreeningPromptResult):
 
 
 def get_l1_screening_results(
-    question: L1ScreeningQuestion, citation: CitationDatasetRow
+    question: L1ScreeningQuestion, citation: Citation
 ):
     if not settings.HAS_LLM:
         logger.warning("LLM is not available, using mock results.")
@@ -163,7 +161,7 @@ def get_l1_screening_results(
 
 
 def get_mock_l1_screening_results(
-    question: L1ScreeningQuestion, citation: CitationDatasetRow
+    question: L1ScreeningQuestion, citation: Citation
 ):
 
     options = options_for_question(L1ScreeningQuestionOption, question.id)

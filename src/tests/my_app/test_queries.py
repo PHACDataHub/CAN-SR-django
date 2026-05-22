@@ -2,19 +2,19 @@ from data_fetcher.middleware import GlobalRequest
 
 from my_app.model_factories import (
     CitationDatasetFactory,
-    CitationDatasetRowFactory,
+    CitationFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningResultFactory,
-    SystematicReviewFactory,
+    ReviewFactory,
 )
 from my_app.models import ScreeningResultStatus
 from my_app.queries import L1ScreeningStatusFetcher
 
 
 def test_l1_screening_status_fetcher_returns_not_started_for_missing_results():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    row = CitationDatasetRowFactory(
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(
         dataset=dataset,
         order=1,
         title="Citation 1",
@@ -31,8 +31,8 @@ def test_l1_screening_status_fetcher_returns_not_started_for_missing_results():
 
 
 def test_l1_screening_status_fetcher_returns_statuses_in_request_order():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
     question = L1ScreeningQuestionFactory(
         review=review,
         question_text="Is this citation relevant?",
@@ -42,27 +42,27 @@ def test_l1_screening_status_fetcher_returns_statuses_in_request_order():
         question_text="Is this citation eligible?",
     )
 
-    not_started_row = CitationDatasetRowFactory(
+    not_started_row = CitationFactory(
         dataset=dataset,
         order=1,
         title="Citation 1",
     )
-    completed_row = CitationDatasetRowFactory(
+    completed_row = CitationFactory(
         dataset=dataset,
         order=2,
         title="Citation 2",
     )
-    abandoned_row = CitationDatasetRowFactory(
+    abandoned_row = CitationFactory(
         dataset=dataset,
         order=3,
         title="Citation 3",
     )
-    pending_row = CitationDatasetRowFactory(
+    pending_row = CitationFactory(
         dataset=dataset,
         order=4,
         title="Citation 4",
     )
-    mixed_row = CitationDatasetRowFactory(
+    mixed_row = CitationFactory(
         dataset=dataset,
         order=5,
         title="Citation 5",

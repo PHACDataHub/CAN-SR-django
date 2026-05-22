@@ -9,7 +9,7 @@ def is_client_logged_in(client):
     if response.url == reverse("login"):
         return False
 
-    if response.url == reverse("systematic_review_list"):
+    if response.url == reverse("review_list"):
         return True
 
     raise Exception(f"Unexpected redirect to {response.url}")
@@ -33,7 +33,7 @@ def test_login_view(client):
         url, {"username": "testuser", "password": "testpass"}
     )
     assert response.status_code == 302
-    assert response.url == reverse("systematic_review_list")
+    assert response.url == reverse("review_list")
     assert is_client_logged_in(client)
 
 

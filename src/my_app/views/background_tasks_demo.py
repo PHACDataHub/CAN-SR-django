@@ -13,7 +13,7 @@ from proj.htpy.base_page import BasePageTemplate
 from proj.htpy.util import HtpyTemplateMixin
 from proj.text import tdt
 
-from my_app.models import DemoTaskRun, SystematicReview
+from my_app.models import DemoTaskRun, Review
 from my_app.router import route
 from my_app.tasks.example_tasks import (
     record_sr_snapshot,
@@ -167,7 +167,7 @@ class BackgroundTasksDemo(TemplateView, HtpyTemplateMixin):
     def post(self, request, *args, **kwargs):
         label = timezone.now().isoformat(timespec="seconds")
         task_kind = request.POST.get("task_kind")
-        record_count = SystematicReview.objects.count()
+        record_count = Review.objects.count()
 
         if task_kind == "enqueue_async_demo_task":
             record_sr_snapshot_async.enqueue(

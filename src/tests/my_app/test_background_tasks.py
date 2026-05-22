@@ -6,7 +6,7 @@ from django.urls import reverse
 import pytest
 from django_database_task.models import DatabaseTask
 
-from my_app.model_factories import SystematicReviewFactory
+from my_app.model_factories import ReviewFactory
 from my_app.models import DemoTaskRun
 from my_app.tasks.example_tasks import (
     record_sr_snapshot,
@@ -28,7 +28,7 @@ def test_background_tasks_demo_page_renders(admin_client):
 
 
 def test_background_tasks_demo_sync_enqueue_and_worker_process(admin_client):
-    SystematicReviewFactory()
+    ReviewFactory()
 
     response = admin_client.post(
         reverse("background_tasks_demo"),
@@ -59,7 +59,7 @@ def test_background_tasks_demo_sync_enqueue_and_worker_process(admin_client):
     reason="SQLite locks async ORM writes in the worker test harness.",
 )
 def test_background_tasks_demo_async_enqueue_and_worker_process(admin_client):
-    SystematicReviewFactory()
+    ReviewFactory()
 
     response = admin_client.post(
         reverse("background_tasks_demo"),
@@ -87,7 +87,7 @@ def test_background_tasks_demo_async_enqueue_and_worker_process(admin_client):
 
 
 def test_record_record_snapshot_enqueue_uses_database_backend():
-    SystematicReviewFactory()
+    ReviewFactory()
 
     task_result = record_sr_snapshot.enqueue(label="manual-run")
 
@@ -99,7 +99,7 @@ def test_record_record_snapshot_enqueue_uses_database_backend():
 
 
 def test_record_record_snapshot_async_enqueue_uses_database_backend():
-    SystematicReviewFactory()
+    ReviewFactory()
 
     task_result = record_sr_snapshot_async.enqueue(
         label="manual-run", record_count=1

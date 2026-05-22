@@ -7,19 +7,16 @@ from proj.htpy import definition_list as DefList
 from proj.htpy.modal_component import ModalComponent
 
 from my_app.models import (
-    CitationDatasetRow,
+    Citation,
     L1ScreeningQuestion,
     L1ScreeningResult,
+    Review,
     ScreeningResultStatus,
-    SystematicReview,
 )
 from my_app.queries import L1ScreeningStatusFetcher
 from my_app.router import route
 from my_app.services.ai_screening import DeferredL1ScreeningService
-from my_app.views.view_utils import (
-    MustAccessSystematicReviewMixin,
-    url_with_same_params,
-)
+from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
 from shortcuts import BasePageTemplate, HtpyTemplateMixin, ListView
 from shortcuts import breadcrumbs as bc
 from shortcuts import cached_property, get_object_or_404, get_request
@@ -43,9 +40,7 @@ def get_page_number(request) -> int:
     return max(page_number, 1)
 
 
-def CitationRowDisplay(
-    citation_row: CitationDatasetRow, review: SystematicReview
-):
+def CitationRowDisplay(citation_row: Citation, review: Review):
     request = get_request()
     details_url = reverse(
         "screen_l1_row_details", args=[review.id, citation_row.id]
@@ -127,7 +122,7 @@ def CitationRowL1StatusBadge(citation_row):
 
 @dataclass
 class L1ScreeningComponent:
-    review: SystematicReview
+    review: Review
     page_obj: object
     request: object
 
@@ -145,9 +140,9 @@ class L1ScreeningComponent:
 
     @cached_property
     def citation_rows(self):
-        return CitationDatasetRow.objects.filter(
-            dataset__systematic_review=self.review
-        ).order_by("order")
+        return Citation.objects.filter(dataset__review=self.review).order_by(
+            "order"
+        )
 
     @cached_property
     def page_rows(self):
@@ -173,7 +168,7 @@ class L1ScreeningComponent:
     def screened_citations(self):
         return (
             L1ScreeningResult.objects.filter(
-                citation__dataset__systematic_review=self.review
+                citation__dataset__review=self.review
             )
             .values_list("citation_id", flat=True)
             .distinct()
@@ -318,7 +313,7 @@ class L1ScreeningComponent:
 
 class L1ScreeningPageTemplate(BasePageTemplate):
     def content(self):
-        review = self.context["systematic_review"]
+        review = self.context["review"]
         page_obj = self.context["page_obj"]
         component = L1ScreeningComponent(
             review=review,
@@ -327,7 +322,7 @@ class L1ScreeningPageTemplate(BasePageTemplate):
         )
 
         return [
-            bc.BreadcrumbTrailForSystematicReview(review)[
+            bc.BreadcrumbTrailForReview(review)[
                 bc.BreadcrumbItem(label=tdt("L1 Screening")),
             ],
             h.h1[tdt("L1 Screening")],
@@ -341,36 +336,34 @@ class L1ScreeningPageTemplate(BasePageTemplate):
         ]
 
 
-class L1ScreeningBaseView(MustAccessSystematicReviewMixin, ListView):
+class L1ScreeningBaseView(MustAccessReviewMixin, ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        return CitationDatasetRow.objects.filter(
-            dataset__systematic_review=self.systematic_review
-        ).order_by("order")
+        return Citation.objects.filter(dataset__review=self.review).order_by(
+            "order"
+        )
 
 
-@route("/systematic-reviews/<int:pk>/screening_l1/", name="screening_l1")
+@route("/reviews/<int:pk>/screening_l1/", name="screening_l1")
 class ScreeningL1PageView(L1ScreeningBaseView, HtpyTemplateMixin):
     template_component = L1ScreeningPageTemplate
 
 
 @route(
-    "/systematic-reviews/<int:pk>/screening_l1/component/",
+    "/reviews/<int:pk>/screening_l1/component/",
     name="screening_l1_component",
 )
 class ScreeningL1ComponentView(L1ScreeningBaseView):
     def render_to_response(self, context, **response_kwargs):
         page_obj = context["page_obj"]
         component = L1ScreeningComponent(
-            review=self.systematic_review,
+            review=self.review,
             page_obj=page_obj,
             request=self.request,
         )
 
-        new_page_url = reverse(
-            "screening_l1", args=[self.systematic_review.id]
-        )
+        new_page_url = reverse("screening_l1", args=[self.review.id])
         response_headers = {
             "HX-Push-Url": url_with_same_params(
                 self.request,
@@ -387,22 +380,22 @@ class ScreeningL1ComponentView(L1ScreeningBaseView):
 
 
 @route(
-    "/systematic-reviews/<int:pk>/screening_l1/rows/<int:row_pk>/",
+    "/reviews/<int:pk>/screening_l1/rows/<int:row_pk>/",
     name="screen_l1_row",
 )
-class ScreenL1RowView(MustAccessSystematicReviewMixin, View):
+class ScreenL1RowView(MustAccessReviewMixin, View):
     @cached_property
     def citation_row(self):
-        return CitationDatasetRow.objects.get(
+        return Citation.objects.get(
             pk=self.kwargs["row_pk"],
-            dataset__systematic_review=self.systematic_review,
+            dataset__review=self.review,
         )
 
     @cached_property
     def screening_questions(self):
         return list(
             L1ScreeningQuestion.objects.filter(
-                review=self.systematic_review
+                review=self.review
             ).prefetch_related("options")
         )
 
@@ -423,16 +416,16 @@ class ScreenL1RowView(MustAccessSystematicReviewMixin, View):
 
 
 @route(
-    "/systematic-reviews/<int:pk>/screening_l1/rows/<int:row_pk>/details/",
+    "/reviews/<int:pk>/screening_l1/rows/<int:row_pk>/details/",
     name="screen_l1_row_details",
 )
-class L1ScreeningRowDetailsView(MustAccessSystematicReviewMixin, View):
+class L1ScreeningRowDetailsView(MustAccessReviewMixin, View):
     @cached_property
     def citation_row(self):
         return get_object_or_404(
-            CitationDatasetRow,
+            Citation,
             pk=self.kwargs["row_pk"],
-            dataset__systematic_review=self.systematic_review,
+            dataset__review=self.review,
         )
 
     @cached_property

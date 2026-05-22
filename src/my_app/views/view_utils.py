@@ -1,30 +1,25 @@
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from my_app.models import SystematicReview
+from my_app.models import Review
 from shortcuts import MustPassRuleMixin, cached_property, test_rule
 
 
-class MustAccessSystematicReviewMixin(MustPassRuleMixin):
+class MustAccessReviewMixin(MustPassRuleMixin):
     def check_rule(self, user):
         return test_rule(
-            "can_access_systematic_review",
+            "can_access_review",
             user,
             self.kwargs.get("pk"),
         )
 
     @cached_property
-    def systematic_review(self):
-        return SystematicReview.objects.get(pk=self.kwargs["pk"])
-
-    @property
     def review(self):
-        return self.systematic_review
+        return Review.objects.get(pk=self.kwargs["pk"])
 
     def get_context_data(self, *args, **kwargs):
         return {
             **super().get_context_data(*args, **kwargs),
-            "review": self.systematic_review,
-            "systematic_review": self.systematic_review,
+            "review": self.review,
         }
 
 

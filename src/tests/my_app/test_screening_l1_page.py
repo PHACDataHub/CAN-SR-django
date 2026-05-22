@@ -5,11 +5,11 @@ from phac_aspc.rules import patch_rules
 from my_app.model_factories import (
     CitationDatasetColumnFactory,
     CitationDatasetFactory,
-    CitationDatasetRowFactory,
+    CitationFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningQuestionOptionFactory,
     L1ScreeningResultFactory,
-    SystematicReviewFactory,
+    ReviewFactory,
 )
 from my_app.models import L1ScreeningResult, ScreeningResultStatus
 
@@ -17,17 +17,17 @@ from my_app.models import L1ScreeningResult, ScreeningResultStatus
 def test_screening_l1_shell_renders_component_and_refresh_button(
     vanilla_client,
 ):
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
     question = L1ScreeningQuestionFactory(review=review)
-    row = CitationDatasetRowFactory(dataset=dataset, order=1)
+    row = CitationFactory(dataset=dataset, order=1)
     L1ScreeningResultFactory(
         citation=row,
         question=question,
         status=ScreeningResultStatus.COMPLETED,
     )
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_client.get(
             reverse("screening_l1", args=[review.id]), {"page": 1}
         )
@@ -43,17 +43,17 @@ def test_screening_l1_shell_renders_component_and_refresh_button(
 
 
 def test_screening_l1_component_view_renders(vanilla_client):
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
     question = L1ScreeningQuestionFactory(review=review)
-    row = CitationDatasetRowFactory(dataset=dataset, order=1)
+    row = CitationFactory(dataset=dataset, order=1)
     L1ScreeningResultFactory(
         citation=row,
         question=question,
         status=ScreeningResultStatus.PENDING,
     )
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_client.get(
             reverse("screening_l1_component", args=[review.id]),
             {"page": 1},
@@ -71,18 +71,18 @@ def test_screening_l1_component_view_renders(vanilla_client):
 def test_screening_l1_component_view_renders_pagination_buttons(
     vanilla_client,
 ):
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
     question = L1ScreeningQuestionFactory(review=review)
     for order in range(1, 12):
-        row = CitationDatasetRowFactory(dataset=dataset, order=order)
+        row = CitationFactory(dataset=dataset, order=order)
         L1ScreeningResultFactory(
             citation=row,
             question=question,
             status=ScreeningResultStatus.COMPLETED,
         )
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_client.get(
             reverse("screening_l1_component", args=[review.id]),
             {"page": 1},
@@ -99,12 +99,12 @@ def test_screening_l1_component_view_renders_pagination_buttons(
 def test_screening_l1_component_view_renders_row_details_link(
     vanilla_client,
 ):
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    row = CitationDatasetRowFactory(dataset=dataset, order=1)
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset, order=1)
     L1ScreeningQuestionFactory(review=review)
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_client.get(
             reverse("screening_l1_component", args=[review.id]),
             {"page": 1},
@@ -121,13 +121,13 @@ def test_screening_l1_component_view_renders_row_details_link(
 def test_screen_l1_row_view_starts_screening_and_returns_status(
     vanilla_client,
 ):
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
     question1 = L1ScreeningQuestionFactory(review=review)
     question2 = L1ScreeningQuestionFactory(review=review)
-    row = CitationDatasetRowFactory(dataset=dataset, order=1)
+    row = CitationFactory(dataset=dataset, order=1)
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_client.post(
             reverse("screen_l1_row", args=[review.id, row.id]),
             {"page": 1},
@@ -149,14 +149,14 @@ def test_screen_l1_row_view_starts_screening_and_returns_status(
 
 
 def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
     included_column = CitationDatasetColumnFactory(
         dataset=dataset, name="Journal"
     )
     dataset.screening_columns.add(included_column)
 
-    row = CitationDatasetRowFactory(
+    row = CitationFactory(
         dataset=dataset,
         order=1,
         title="A test citation",
@@ -183,7 +183,7 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
         explanation="Looks good.",
     )
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_client.get(
             reverse("screen_l1_row_details", args=[review.id, row.id])
         )

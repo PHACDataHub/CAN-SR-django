@@ -9,10 +9,10 @@ from proj.llm_client import ClientFailureError, UnexpectedLLMOutputError
 
 from my_app.model_factories import (
     CitationDatasetFactory,
-    CitationDatasetRowFactory,
+    CitationFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningQuestionOptionFactory,
-    SystematicReviewFactory,
+    ReviewFactory,
 )
 from my_app.models import L1ScreeningResult, ScreeningResultStatus
 from my_app.services.ai_screening import (
@@ -22,15 +22,15 @@ from my_app.services.ai_screening import (
 
 
 def test_deferred_l1_screening_service_enqueues_created_results():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    row_1 = CitationDatasetRowFactory(
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row_1 = CitationFactory(
         dataset=dataset,
         order=1,
         title="Row 1",
         abstract="Row 1 abstract",
     )
-    row_2 = CitationDatasetRowFactory(
+    row_2 = CitationFactory(
         dataset=dataset,
         order=2,
         title="Row 2",
@@ -86,15 +86,15 @@ def test_deferred_l1_screening_service_enqueues_created_results():
 
 
 def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and_questions():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    target_row = CitationDatasetRowFactory(
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    target_row = CitationFactory(
         dataset=dataset,
         order=1,
         title="Target row",
         abstract="Target row abstract",
     )
-    untouched_row = CitationDatasetRowFactory(
+    untouched_row = CitationFactory(
         dataset=dataset,
         order=2,
         title="Untouched row",
@@ -197,9 +197,9 @@ def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and
 
 @override_settings(HAS_LLM=False)
 def test_process_l1_screening_service_uses_mock_results_helper():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    row = CitationDatasetRowFactory(
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(
         dataset=dataset,
         order=1,
         title="Row",
@@ -242,9 +242,9 @@ def test_process_l1_screening_service_uses_mock_results_helper():
 
 
 def test_process_l1_screening_service_retries_unexpected_llm_output_before_succeeding():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    row = CitationDatasetRowFactory(
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(
         dataset=dataset,
         order=1,
         title="Row",
@@ -297,9 +297,9 @@ def test_process_l1_screening_service_retries_unexpected_llm_output_before_succe
 
 
 def test_process_l1_screening_service_abandons_after_retry_budget_is_exhausted():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    row = CitationDatasetRowFactory(
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(
         dataset=dataset,
         order=1,
         title="Row",
@@ -352,9 +352,9 @@ def test_process_l1_screening_service_abandons_after_retry_budget_is_exhausted()
 
 
 def test_process_l1_screening_service_does_not_retry_client_failure_errors():
-    review = SystematicReviewFactory()
-    dataset = CitationDatasetFactory(systematic_review=review)
-    row = CitationDatasetRowFactory(
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(
         dataset=dataset,
         order=1,
         title="Row",
