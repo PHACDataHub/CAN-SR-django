@@ -1,18 +1,33 @@
 from __future__ import annotations
 
-import json
-import os
-import sys
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Callable
 
 from django.conf import settings
 
 import httpx
 
+from shortcuts import logger
+
 
 class LLMConfigurationError(RuntimeError):
+    pass
+
+
+class UnexpectedLLMOutputError(RuntimeError):
+    # Typically raised by business-logic
+    # More frequent for dumber LLMS
+    # used to trigger retry logic
+    pass
+
+
+class ClientFailureError(RuntimeError):
+    # Raised when the client fails to complete the request
+    # e.g. network error, invalid response, etc.
+    # usually is not retried
+    # although a circuit breaker pattern might help with this
     pass
 
 
@@ -20,6 +35,14 @@ class LLMConfigurationError(RuntimeError):
 class LLMMessage:
     role: str
     content: str
+
+
+@dataclass(frozen=True)
+class LLMClientSpec:
+    mode: str
+    label: str
+    is_real: bool
+    factory: Callable[[], "LLMClient"]
 
 
 def _message_to_payload(message: LLMMessage) -> dict[str, str]:
@@ -31,18 +54,6 @@ class LLMHttpClient(ABC):
     def complete(self, path: str, payload: dict) -> dict:
         raise NotImplementedError
 
-    @abstractmethod
-    async def acomplete(self, path: str, payload: dict) -> dict:
-        raise NotImplementedError
-
-    @abstractmethod
-    def stream(self, path: str, payload: dict) -> Iterable[dict]:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def astream(self, path: str, payload: dict) -> AsyncIterator[dict]:
-        raise NotImplementedError
-
 
 class HttpxLLMHttpClient(LLMHttpClient):
     def __init__(
@@ -50,7 +61,6 @@ class HttpxLLMHttpClient(LLMHttpClient):
         base_url: str,
         timeout: int = 60,
         sync_client: httpx.Client | None = None,
-        async_client: httpx.AsyncClient | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -58,69 +68,37 @@ class HttpxLLMHttpClient(LLMHttpClient):
             base_url=self.base_url,
             timeout=self.timeout,
         )
-        self.async_client = async_client or httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=self.timeout,
-        )
-
-    def _url(self, path: str) -> str:
-        return f"{self.base_url}{path}"
 
     def complete(self, path: str, payload: dict) -> dict:
-        response = self.sync_client.post(
-            path,
-            json=payload,
-        )
-        response.raise_for_status()
-        return response.json()
-
-    async def acomplete(self, path: str, payload: dict) -> dict:
-        response = await self.async_client.post(
-            path,
-            json=payload,
-        )
-        response.raise_for_status()
-        return response.json()
-
-    def stream(self, path: str, payload: dict) -> Iterable[dict]:
-        with self.sync_client.stream(
-            "POST",
-            path,
-            json=payload,
-        ) as response:
+        try:
+            response = self.sync_client.post(
+                path,
+                json=payload,
+            )
             response.raise_for_status()
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                yield json.loads(line)
-
-    async def astream(self, path: str, payload: dict) -> AsyncIterator[dict]:
-
-        async with self.async_client.stream(
-            "POST",
-            path,
-            json=payload,
-        ) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
-                yield json.loads(line)
+            return response.json()
+        except httpx.HTTPError as exc:
+            logger.exception(exc)
+            raise ClientFailureError(
+                f"LLM client request failed for {path}"
+            ) from exc
+        except ValueError as exc:
+            logger.exception(exc)
+            raise ClientFailureError(
+                f"LLM client returned invalid JSON for {path}"
+            ) from exc
 
 
 class LLMClient(ABC):
+    def _prompt_messages(self, prompt: str) -> Sequence[LLMMessage]:
+        return [LLMMessage(role="user", content=prompt)]
+
+    def complete_prompt(self, prompt: str) -> str:
+        # Convenience method for simple prompt-based interactions
+        return self.complete(self._prompt_messages(prompt))
+
     @abstractmethod
     def complete(self, messages: Sequence[LLMMessage]) -> str:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def acomplete(self, messages: Sequence[LLMMessage]) -> str:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def astream(
-        self, messages: Sequence[LLMMessage]
-    ) -> AsyncIterator[str]:
         raise NotImplementedError
 
 
@@ -146,31 +124,17 @@ class OllamaLLMClient(LLMClient):
         self.http_client = http_client
         self.model = model
 
-    def _payload(self, messages: Sequence[LLMMessage], stream: bool) -> dict:
+    def _payload(self, messages: Sequence[LLMMessage]) -> dict:
         return {
             "model": self.model,
             "messages": [_message_to_payload(message) for message in messages],
-            "stream": stream,
+            "stream": False,
         }
 
     def complete(self, messages: Sequence[LLMMessage]) -> str:
-        payload = self._payload(messages, stream=False)
+        payload = self._payload(messages)
         response = self.http_client.complete("/api/chat", payload)
         return response.get("message", {}).get("content", "")
-
-    async def acomplete(self, messages: Sequence[LLMMessage]) -> str:
-        payload = self._payload(messages, stream=False)
-        response = await self.http_client.acomplete("/api/chat", payload)
-        return response.get("message", {}).get("content", "")
-
-    async def astream(
-        self, messages: Sequence[LLMMessage]
-    ) -> AsyncIterator[str]:
-        payload = self._payload(messages, stream=True)
-        async for chunk in self.http_client.astream("/api/chat", payload):
-            content = chunk.get("message", {}).get("content", "")
-            if content:
-                yield content
 
 
 class TestLLMClient(LLMClient):
@@ -187,13 +151,55 @@ class TestLLMClient(LLMClient):
     def complete(self, messages: Sequence[LLMMessage]) -> str:
         return self._render(messages)
 
-    async def acomplete(self, messages: Sequence[LLMMessage]) -> str:
-        return self._render(messages)
 
-    async def astream(
-        self, messages: Sequence[LLMMessage]
-    ) -> AsyncIterator[str]:
-        yield self._render(messages)
+def _build_test_client() -> LLMClient:
+    return TestLLMClient()
+
+
+def _build_ollama_client() -> LLMClient:
+    return get_ollama_client()
+
+
+LLM_CLIENT_SPECS: dict[str, LLMClientSpec] = {
+    "local": LLMClientSpec(
+        mode="local",
+        label="dummy local client",
+        is_real=False,
+        factory=_build_test_client,
+    ),
+    "test_client": LLMClientSpec(
+        mode="test_client",
+        label="test client",
+        is_real=False,
+        factory=_build_test_client,
+    ),
+    "ollama": LLMClientSpec(
+        mode="ollama",
+        label="ollama",
+        is_real=True,
+        factory=_build_ollama_client,
+    ),
+}
+
+
+def get_client_spec(mode: str) -> LLMClientSpec:
+    try:
+        return LLM_CLIENT_SPECS[mode]
+    except KeyError as exc:
+        available_modes = ", ".join(sorted(LLM_CLIENT_SPECS))
+        raise LLMConfigurationError(
+            f"Unsupported LLM_MODE '{mode}'. Supported modes are: {available_modes}"
+        ) from exc
+
+
+def get_real_client_modes() -> tuple[str, ...]:
+    return tuple(
+        spec.mode for spec in LLM_CLIENT_SPECS.values() if spec.is_real
+    )
+
+
+def is_real_client_mode(mode: str) -> bool:
+    return get_client_spec(mode).is_real
 
 
 def get_client() -> LLMClient:
@@ -204,18 +210,8 @@ def get_client() -> LLMClient:
             raise LLMConfigurationError(
                 "LLM_MODE=test_client is only supported during tests"
             )
-        return TestLLMClient()
-
-    if mode == "local":
-        return TestLLMClient()
-
-    if mode == "ollama":
-        return get_ollama_client()
-
-    else:
-        raise LLMConfigurationError(
-            f"Unsupported LLM_MODE '{mode}'. Only 'local', 'ollama' are supported"
-        )
+    spec = get_client_spec(mode)
+    return spec.factory()
 
 
 def get_ollama_client() -> OllamaLLMClient:

@@ -36,3 +36,32 @@ strong>span+label {
     display: inline;
     margin-left: 0.125rem;
 }
+
+
+
+dl.custom-dl {
+    display: grid;
+    grid-template-columns: 1fr 3fr;
+    gap: 0.5rem 0;
+    background: #fcfcfc;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+
+    dt,
+    dd {
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #ccc;
+    }
+
+    dt {
+        font-weight: bold;
+    }
+
+    dd {
+        padding-left: 1rem;
+        margin: 0;
+        /* Resets default browser indent */
+    }
+}

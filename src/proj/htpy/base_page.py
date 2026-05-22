@@ -1,3 +1,4 @@
+import json
 from urllib.parse import urlparse, urlunparse
 
 from django.conf import settings
@@ -261,17 +262,6 @@ class BasePageTemplate(HtpyComponent):
             ],
         ]
 
-    def csrf_script(self):
-
-        csrf_token = get_token(self.request)
-        return Markup(
-            f"""<script>
-      document.body.addEventListener('htmx:configRequest', (event) => {{
-        event.detail.headers['X-CSRFToken'] = '{csrf_token}';
-      }})
-    </script>"""
-        )
-
     def messages(self):
         return MessagesBar(self.request)
 
@@ -313,8 +303,12 @@ class BasePageTemplate(HtpyComponent):
                     rel="stylesheet",
                     href=static_no_cache("phac_aspc_helpers/modal/modal.css"),
                 ),
-                h.script(src=static_no_cache("site.js")),
-                self.csrf_script(),
+                h.script(
+                    src=static_no_cache("site.js"),
+                    data_csrf_token=get_token(self.request),
+                    data_debug=json.dumps(settings.DEBUG),
+                    data_feature_flag=json.dumps(settings.FEATURE_FLAG),
+                ),
                 self.nav_container(),
                 h.main(".pt-3.pb-5", style="min-height: 85vh")[
                     self.messages(),
@@ -361,10 +355,6 @@ def get_top_right_dropdown_items(request):
             ".dropdown-item",
             href=reverse("systematic_review_list"),
         )[tdt("Systematic reviews")],
-        h.a(
-            ".dropdown-item",
-            href=reverse("llm_demo"),
-        )[tdt("LLM demo")],
         h.a(
             ".dropdown-item",
             href=reverse("document_list"),

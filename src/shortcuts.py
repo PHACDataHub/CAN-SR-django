@@ -29,6 +29,7 @@ from django.views.generic import (
 
 import htpy
 from data_fetcher import cache_within_request
+from data_fetcher.util import clear_request_caches, get_request
 from phac_aspc.rules import test_rule
 
 from proj.form_util import StandardFormMixin
@@ -42,5 +43,6 @@ from proj.htpy.util import (
     Markup,
     as_safe_renderable,
 )
+from proj.logging import logger
 from proj.text import tdt, tm
 from proj.view_util import MustPassRuleMixin

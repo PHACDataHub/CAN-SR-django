@@ -76,11 +76,10 @@ INSTALLED_APPS = configure_apps(
     ]
 )
 
+if IS_RUNNING_PYTESTS:
+    task_backend = "django_database_task.backends.DatabaseTaskBackend"
 
-if (
-    config("USE_IMMEDIATE_TASKS", default=False, cast=bool)
-    and not IS_RUNNING_PYTESTS
-):
+elif config("USE_IMMEDIATE_TASKS", default=False, cast=bool):
     task_backend = "django.tasks.backends.immediate.ImmediateBackend"
 else:
     task_backend = "django_database_task.backends.DatabaseTaskBackend"
@@ -98,11 +97,13 @@ TASKS = {
 from decouple import Csv, config
 
 LLM_MODE = config("LLM_MODE", default="local")
+HAS_LLM = LLM_MODE != "local"
 # Only local Ollama is supported in normal runtime today.
-LLM_OLLAMA_URL = config("OLLAMA_URL", default="http://localhost:11434")
-LLM_OLLAMA_MODELS = config("OLLAMA_MODELS", cast=Csv())
-LLM_OLLAMA_MODEL = LLM_OLLAMA_MODELS[0]
-LLM_OLLAMA_TIMEOUT = config("LLM_OLLAMA_TIMEOUT", default=60, cast=int)
+if LLM_MODE == "ollama":
+    LLM_OLLAMA_URL = config("OLLAMA_URL", default="http://localhost:11434")
+    LLM_OLLAMA_MODELS = config("OLLAMA_MODELS", cast=Csv())
+    LLM_OLLAMA_MODEL = LLM_OLLAMA_MODELS[0]
+    LLM_OLLAMA_TIMEOUT = config("LLM_OLLAMA_TIMEOUT", default=60, cast=int)
 
 # END LLM settings
 

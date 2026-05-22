@@ -4,12 +4,18 @@ import pytest
 from phac_aspc.rules import patch_rules
 
 from my_app.model_factories import (
+    CitationDatasetColumnFactory,
+    CitationDatasetFactory,
+    L1ScreeningQuestionFactory,
+    L1ScreeningQuestionOptionFactory,
+    L2ScreeningQuestionFactory,
+    L2ScreeningQuestionOptionFactory,
+    ParameterQuestionFactory,
+    ParameterQuestionOptionFactory,
     SystematicReviewFactory,
     SystematicReviewUserLinkFactory,
 )
 from my_app.models import (
-    CitationDataset,
-    CitationDatasetColumn,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L2ScreeningQuestion,
@@ -197,27 +203,6 @@ def test_editor_new_invalid_data():
     assert editor.option_formset.is_valid() is False
 
 
-def _linked_review(title, user):
-    review = SystematicReviewFactory(title=title)
-    SystematicReviewUserLinkFactory(user=user, systematic_review=review)
-    return review
-
-
-def _create_dataset(review, column_names):
-    dataset = CitationDataset.objects.create(systematic_review=review)
-    columns = [
-        CitationDatasetColumn.objects.create(dataset=dataset, name=name)
-        for name in column_names
-    ]
-    return dataset, columns
-
-
-def _create_review_with_dataset(vanilla_user, column_names):
-    review = _linked_review("Dataset review", vanilla_user)
-    dataset, columns = _create_dataset(review, column_names)
-    return review, dataset, columns
-
-
 def _get_page_body(vanilla_user_client, review):
     url = reverse("screening_criteria", args=[review.id])
     with patch_rules(can_access_systematic_review=True):
@@ -238,49 +223,13 @@ def _assert_modal_smoke(response, form_id, *expected_texts):
         assert text in body
 
 
-def _make_l1_child(review, question_text="Existing L1 question"):
-    question = L1ScreeningQuestion.objects.create(
-        review=review,
-        question_text=question_text,
-    )
-    option = L1ScreeningQuestionOption.objects.create(
-        question=question,
-        option_text="Yes",
-        option_value="Proceed",
-    )
-    return question, option
-
-
-def _make_l2_child(review, question_text="Existing L2 question"):
-    question = L2ScreeningQuestion.objects.create(
-        review=review,
-        question_text=question_text,
-    )
-    option = L2ScreeningQuestionOption.objects.create(
-        question=question,
-        option_text="Maybe",
-        option_value="Needs review",
-    )
-    return question, option
-
-
-def _make_parameter_child(review, question_text="Existing parameter question"):
-    question = ParameterQuestion.objects.create(
-        review=review,
-        question_text=question_text,
-    )
-    option = ParameterQuestionOption.objects.create(
-        question=question,
-        param_name="Age",
-        param_description="Adults only",
-    )
-    return question, option
-
-
 def test_screening_criteria_page_renders_empty_sections(
     vanilla_user_client, vanilla_user
 ):
-    review = _linked_review("Empty screening review", vanilla_user)
+    review = SystematicReviewFactory(title="Empty screening review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
 
     body = _get_page_body(vanilla_user_client, review)
 
@@ -292,10 +241,37 @@ def test_screening_criteria_page_renders_empty_sections(
 def test_screening_criteria_page_renders_existing_questions(
     vanilla_user_client, vanilla_user
 ):
-    review = _linked_review("Populated screening review", vanilla_user)
-    l1_question, _ = _make_l1_child(review, "L1 question")
-    l2_question, _ = _make_l2_child(review, "L2 question")
-    parameter_question, _ = _make_parameter_child(review, "Parameter question")
+    review = SystematicReviewFactory(title="Populated screening review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
+    l1_question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="L1 question",
+    )
+    L1ScreeningQuestionOptionFactory(
+        question=l1_question,
+        option_text="Yes",
+        option_value="Proceed",
+    )
+    l2_question = L2ScreeningQuestionFactory(
+        review=review,
+        question_text="L2 question",
+    )
+    L2ScreeningQuestionOptionFactory(
+        question=l2_question,
+        option_text="Maybe",
+        option_value="Needs review",
+    )
+    parameter_question = ParameterQuestionFactory(
+        review=review,
+        question_text="Parameter question",
+    )
+    ParameterQuestionOptionFactory(
+        question=parameter_question,
+        param_name="Age",
+        param_description="Adults only",
+    )
 
     body = _get_page_body(vanilla_user_client, review)
 
@@ -325,10 +301,15 @@ def test_screening_criteria_page_renders_existing_questions(
 def test_screening_criteria_page_renders_screening_columns(
     vanilla_user_client, vanilla_user
 ):
-    review, dataset, columns = _create_review_with_dataset(
-        vanilla_user,
-        ["year", "month", "day"],
+    review = SystematicReviewFactory(title="Dataset review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
     )
+    dataset = CitationDatasetFactory(systematic_review=review)
+    columns = [
+        CitationDatasetColumnFactory(dataset=dataset, name=name)
+        for name in ["year", "month", "day"]
+    ]
     dataset.screening_columns.set([columns[0], columns[2]])
 
     body = _get_page_body(vanilla_user_client, review)
@@ -343,10 +324,15 @@ def test_screening_criteria_page_renders_screening_columns(
 def test_edit_screening_columns_modal_gets_current_values(
     vanilla_user_client, vanilla_user
 ):
-    review, dataset, columns = _create_review_with_dataset(
-        vanilla_user,
-        ["year", "month", "day"],
+    review = SystematicReviewFactory(title="Dataset review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
     )
+    dataset = CitationDatasetFactory(systematic_review=review)
+    columns = [
+        CitationDatasetColumnFactory(dataset=dataset, name=name)
+        for name in ["year", "month", "day"]
+    ]
     dataset.screening_columns.set([columns[0], columns[2]])
     url = reverse("edit_screening_columns", args=[review.id])
 
@@ -376,10 +362,15 @@ def test_edit_screening_columns_modal_gets_current_values(
 def test_edit_screening_columns_modal_saves_and_returns_page(
     vanilla_user_client, vanilla_user
 ):
-    review, dataset, columns = _create_review_with_dataset(
-        vanilla_user,
-        ["year", "month", "day"],
+    review = SystematicReviewFactory(title="Dataset review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
     )
+    dataset = CitationDatasetFactory(systematic_review=review)
+    columns = [
+        CitationDatasetColumnFactory(dataset=dataset, name=name)
+        for name in ["year", "month", "day"]
+    ]
     dataset.screening_columns.set([columns[0]])
     url = reverse("edit_screening_columns", args=[review.id])
 
@@ -414,10 +405,15 @@ def test_edit_screening_columns_modal_saves_and_returns_page(
 def test_edit_screening_columns_modal_rejects_invalid_choice(
     vanilla_user_client, vanilla_user
 ):
-    review, dataset, columns = _create_review_with_dataset(
-        vanilla_user,
-        ["year", "month", "day"],
+    review = SystematicReviewFactory(title="Dataset review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
     )
+    dataset = CitationDatasetFactory(systematic_review=review)
+    columns = [
+        CitationDatasetColumnFactory(dataset=dataset, name=name)
+        for name in ["year", "month", "day"]
+    ]
     dataset.screening_columns.set([columns[0]])
     url = reverse("edit_screening_columns", args=[review.id])
 
@@ -442,7 +438,10 @@ def test_edit_screening_columns_modal_rejects_invalid_choice(
 def test_screening_criteria_page_shows_message_without_dataset(
     vanilla_user_client, vanilla_user
 ):
-    review = _linked_review("No dataset review", vanilla_user)
+    review = SystematicReviewFactory(title="No dataset review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
 
     body = _get_page_body(vanilla_user_client, review)
 
@@ -453,7 +452,10 @@ def test_screening_criteria_page_shows_message_without_dataset(
 def test_add_l1_question_modal_saves_valid_data(
     vanilla_user_client, vanilla_user
 ):
-    review = _linked_review("Create L1 review", vanilla_user)
+    review = SystematicReviewFactory(title="Create L1 review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     url = reverse("add_l1_question", args=[review.pk])
     data = {
         "question_text": "Is this a test question?",
@@ -491,7 +493,10 @@ def test_add_l1_question_modal_saves_valid_data(
 def test_add_l1_question_modal_shows_errors_for_invalid_data(
     vanilla_user_client, vanilla_user
 ):
-    review = _linked_review("Invalid L1 review", vanilla_user)
+    review = SystematicReviewFactory(title="Invalid L1 review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
     url = reverse("add_l1_question", args=[review.pk])
     data = {
         "question_text": "Is this a test question?",
@@ -516,54 +521,31 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
     assert "This field is required." in body
 
 
-def _add_l2_question_url(review):
-    return reverse("add_l2_question", args=[review.pk])
-
-
-def _add_parameter_question_url(review):
-    return reverse("add_parameter_question", args=[review.pk])
-
-
-def _edit_l1_question_url(review):
-    question, _ = _make_l1_child(review, "Editable L1 question")
-    return reverse("edit_l1_question", args=[review.pk, question.pk])
-
-
-def _edit_l2_question_url(review):
-    question, _ = _make_l2_child(review, "Editable L2 question")
-    return reverse("edit_l2_question", args=[review.pk, question.pk])
-
-
-def _edit_parameter_question_url(review):
-    question, _ = _make_parameter_child(review, "Editable parameter question")
-    return reverse("edit_parameter_question", args=[review.pk, question.pk])
-
-
 @pytest.mark.parametrize(
-    "url_builder, form_id, expected_texts",
+    "route_name, form_id, expected_texts",
     [
         (
-            _add_l2_question_url,
+            "add_l2_question",
             "L2FormsetAdapter",
             ("Question text", "Add option", "Save"),
         ),
         (
-            _add_parameter_question_url,
+            "add_parameter_question",
             "ParameterFormsetAdapter",
             ("Parameter", "Add option", "Save"),
         ),
         (
-            _edit_l1_question_url,
+            "edit_l1_question",
             "L1FormsetAdapter",
             ("Editable L1 question", "Yes", "Proceed"),
         ),
         (
-            _edit_l2_question_url,
+            "edit_l2_question",
             "L2FormsetAdapter",
             ("Editable L2 question", "Maybe", "Needs review"),
         ),
         (
-            _edit_parameter_question_url,
+            "edit_parameter_question",
             "ParameterFormsetAdapter",
             ("Editable parameter question", "Age", "Adults only"),
         ),
@@ -572,12 +554,52 @@ def _edit_parameter_question_url(review):
 def test_other_screening_criteria_modals_render(
     vanilla_user_client,
     vanilla_user,
-    url_builder,
+    route_name,
     form_id,
     expected_texts,
 ):
-    review = _linked_review(f"{form_id} review", vanilla_user)
-    url = url_builder(review)
+    review = SystematicReviewFactory(title=f"{form_id} review")
+    SystematicReviewUserLinkFactory(
+        user=vanilla_user, systematic_review=review
+    )
+
+    if route_name == "add_l2_question":
+        url = reverse(route_name, args=[review.pk])
+    elif route_name == "add_parameter_question":
+        url = reverse(route_name, args=[review.pk])
+    elif route_name == "edit_l1_question":
+        question = L1ScreeningQuestionFactory(
+            review=review,
+            question_text="Editable L1 question",
+        )
+        L1ScreeningQuestionOptionFactory(
+            question=question,
+            option_text="Yes",
+            option_value="Proceed",
+        )
+        url = reverse(route_name, args=[review.pk, question.pk])
+    elif route_name == "edit_l2_question":
+        question = L2ScreeningQuestionFactory(
+            review=review,
+            question_text="Editable L2 question",
+        )
+        L2ScreeningQuestionOptionFactory(
+            question=question,
+            option_text="Maybe",
+            option_value="Needs review",
+        )
+        url = reverse(route_name, args=[review.pk, question.pk])
+    else:
+        question = ParameterQuestionFactory(
+            review=review,
+            question_text="Editable parameter question",
+        )
+        ParameterQuestionOptionFactory(
+            question=question,
+            param_name="Age",
+            param_description="Adults only",
+        )
+        url = reverse(route_name, args=[review.pk, question.pk])
 
     with patch_rules(can_access_systematic_review=True):
         response = vanilla_user_client.get(url)

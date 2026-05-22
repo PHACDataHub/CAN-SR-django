@@ -3,9 +3,10 @@ import json
 from django.test import override_settings
 
 import httpx
-from asgiref.sync import async_to_sync
+import pytest
 
 from proj.llm_client import (
+    ClientFailureError,
     HttpxLLMHttpClient,
     LLMConfigurationError,
     LLMMessage,
@@ -21,11 +22,7 @@ def build_httpx_clients(response_factory):
         base_url="http://ollama.example",
         transport=transport,
     )
-    async_client = httpx.AsyncClient(
-        base_url="http://ollama.example",
-        transport=transport,
-    )
-    return sync_client, async_client
+    return sync_client
 
 
 def test_requests_http_client_posts_expected_payload():
@@ -35,11 +32,9 @@ def test_requests_http_client_posts_expected_payload():
         seen["request"] = request
         return httpx.Response(200, json={"message": {"content": "hello"}})
 
-    sync_client, async_client = build_httpx_clients(handler)
+    sync_client = build_httpx_clients(handler)
     client = HttpxLLMHttpClient(
-        "http://ollama.example",
-        sync_client=sync_client,
-        async_client=async_client,
+        "http://ollama.example", sync_client=sync_client
     )
 
     payload = {
@@ -54,63 +49,13 @@ def test_requests_http_client_posts_expected_payload():
     assert json.loads(seen["request"].content) == payload
 
 
-def test_requests_http_client_streams_json_chunks():
-    body = b'{"message":{"content":"hel"}}\n{"message":{"content":"lo"}}\n'
-
-    def handler(request):
-        return httpx.Response(200, content=body)
-
-    sync_client, async_client = build_httpx_clients(handler)
-    client = HttpxLLMHttpClient(
-        "http://ollama.example",
-        sync_client=sync_client,
-        async_client=async_client,
-    )
-
-    chunks = list(client.stream("/api/chat", {"model": "demo"}))
-
-    assert chunks == [
-        {"message": {"content": "hel"}},
-        {"message": {"content": "lo"}},
-    ]
-
-
-def test_requests_http_client_async_streams_json_chunks():
-    body = b'{"message":{"content":"hel"}}\n{"message":{"content":"lo"}}\n'
-
-    def handler(request):
-        return httpx.Response(200, content=body)
-
-    sync_client, async_client = build_httpx_clients(handler)
-    client = HttpxLLMHttpClient(
-        "http://ollama.example",
-        sync_client=sync_client,
-        async_client=async_client,
-    )
-
-    async def consume():
-        items = []
-        async for item in client.astream("/api/chat", {"model": "demo"}):
-            items.append(item)
-        return items
-
-    chunks = async_to_sync(consume)()
-
-    assert chunks == [
-        {"message": {"content": "hel"}},
-        {"message": {"content": "lo"}},
-    ]
-
-
 def test_ollama_client_uses_transport_for_complete():
     def handler(request):
         return httpx.Response(200, json={"message": {"content": "reply"}})
 
-    sync_client, async_client = build_httpx_clients(handler)
+    sync_client = build_httpx_clients(handler)
     http_client = HttpxLLMHttpClient(
-        "http://ollama.example",
-        sync_client=sync_client,
-        async_client=async_client,
+        "http://ollama.example", sync_client=sync_client
     )
     client = OllamaLLMClient(http_client=http_client, model="demo")
 
@@ -119,49 +64,65 @@ def test_ollama_client_uses_transport_for_complete():
     assert result == "reply"
 
 
-def test_ollama_client_async_complete_uses_transport():
+def test_ollama_client_complete_prompt_uses_single_user_message():
+    seen = {}
+
     def handler(request):
+        seen["request"] = request
         return httpx.Response(200, json={"message": {"content": "reply"}})
 
-    sync_client, async_client = build_httpx_clients(handler)
+    sync_client = build_httpx_clients(handler)
     http_client = HttpxLLMHttpClient(
-        "http://ollama.example",
-        sync_client=sync_client,
-        async_client=async_client,
+        "http://ollama.example", sync_client=sync_client
     )
     client = OllamaLLMClient(http_client=http_client, model="demo")
 
-    async def consume():
-        return await client.acomplete(
-            [LLMMessage(role="user", content="hello")]
+    result = client.complete_prompt("hello")
+
+    assert result == "reply"
+    assert json.loads(seen["request"].content) == {
+        "model": "demo",
+        "messages": [{"role": "user", "content": "hello"}],
+        "stream": False,
+    }
+
+
+def test_requests_http_client_wraps_status_errors():
+    def handler(request):
+        return httpx.Response(500, json={"error": "boom"})
+
+    sync_client = build_httpx_clients(handler)
+    client = HttpxLLMHttpClient(
+        "http://ollama.example", sync_client=sync_client
+    )
+
+    with pytest.raises(ClientFailureError, match="request failed"):
+        client.complete(
+            "/api/chat",
+            {
+                "model": "demo",
+                "messages": [{"role": "user", "content": "hi"}],
+            },
         )
 
-    assert async_to_sync(consume)() == "reply"
 
-
-def test_ollama_client_streams_content():
-    body = b'{"message":{"content":"hel"}}\n{"message":{"content":"lo"}}\n'
-
+def test_requests_http_client_wraps_timeout_errors():
     def handler(request):
-        return httpx.Response(200, content=body)
+        raise httpx.ReadTimeout("timed out", request=request)
 
-    sync_client, async_client = build_httpx_clients(handler)
-    http_client = HttpxLLMHttpClient(
-        "http://ollama.example",
-        sync_client=sync_client,
-        async_client=async_client,
+    sync_client = build_httpx_clients(handler)
+    client = HttpxLLMHttpClient(
+        "http://ollama.example", sync_client=sync_client
     )
-    client = OllamaLLMClient(http_client=http_client, model="demo")
 
-    async def consume():
-        items = []
-        async for item in client.astream(
-            [LLMMessage(role="user", content="hello")]
-        ):
-            items.append(item)
-        return items
-
-    assert async_to_sync(consume)() == ["hel", "lo"]
+    with pytest.raises(ClientFailureError, match="request failed"):
+        client.complete(
+            "/api/chat",
+            {
+                "model": "demo",
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+        )
 
 
 def test_get_client_returns_test_client_in_test_mode():
@@ -202,5 +163,20 @@ def test_get_client_rejects_unknown_mode():
             get_client()
         except LLMConfigurationError as exc:
             assert "Unsupported LLM_MODE" in str(exc)
+        else:
+            raise AssertionError("Expected LLMConfigurationError")
+
+
+def test_get_ollama_client_requires_explicit_configuration():
+    with override_settings(
+        LLM_MODE="ollama",
+        LLM_OLLAMA_URL="",
+        LLM_OLLAMA_MODEL="",
+        LLM_OLLAMA_TIMEOUT=30,
+    ):
+        try:
+            get_client()
+        except LLMConfigurationError as exc:
+            assert "requires LLM_OLLAMA_URL and LLM_OLLAMA_MODEL" in str(exc)
         else:
             raise AssertionError("Expected LLMConfigurationError")

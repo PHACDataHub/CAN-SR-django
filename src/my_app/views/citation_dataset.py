@@ -192,7 +192,6 @@ class DeleteCitationDatasetView(
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["object"] = self.systematic_review
-        context["systematic_review"] = self.systematic_review
         return context
 
     def form_valid(self, form):

@@ -6,12 +6,8 @@ const {
     csrfToken,
 } = data;
 
-window.DEBUG = false;
-if (debug !== undefined) {
-    window.DEBUG = true;
-}
-
-window.FEATURE_FLAG = featureFlag;
+window.DEBUG = JSON.parse(debug);
+window.FEATURE_FLAG = JSON.parse(featureFlag);
 
 /* site-wide initialization scripts can go here */
 
