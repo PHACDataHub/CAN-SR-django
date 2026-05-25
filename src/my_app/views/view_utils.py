@@ -1,26 +1,28 @@
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from my_app.models import Review
-from shortcuts import MustPassRuleMixin, cached_property, test_rule
+from shortcuts import MustPassRuleMixin, View, cached_property, test_rule
 
 
-class MustAccessReviewMixin(MustPassRuleMixin):
-    def check_rule(self, user):
-        return test_rule(
-            "can_access_review",
-            user,
-            self.kwargs.get("pk"),
-        )
-
+class ReviewMixin(View):
     @cached_property
     def review(self):
-        return Review.objects.get(pk=self.kwargs["pk"])
+        return Review.objects.get(pk=self.kwargs["review_id"])
 
     def get_context_data(self, *args, **kwargs):
         return {
             **super().get_context_data(*args, **kwargs),
             "review": self.review,
         }
+
+
+class MustAccessReviewMixin(MustPassRuleMixin, ReviewMixin):
+    def check_rule(self, user):
+        return test_rule(
+            "can_access_review",
+            user,
+            self.kwargs.get("review_id"),
+        )
 
 
 def url_with_same_params(request, path=None, **new_params):

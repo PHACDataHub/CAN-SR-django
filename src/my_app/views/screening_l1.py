@@ -345,13 +345,13 @@ class L1ScreeningBaseView(MustAccessReviewMixin, ListView):
         )
 
 
-@route("/reviews/<int:pk>/screening_l1/", name="screening_l1")
+@route("/reviews/<int:review_id>/screening_l1/", name="screening_l1")
 class ScreeningL1PageView(L1ScreeningBaseView, HtpyTemplateMixin):
     template_component = L1ScreeningPageTemplate
 
 
 @route(
-    "/reviews/<int:pk>/screening_l1/component/",
+    "/reviews/<int:review_id>/screening_l1/component/",
     name="screening_l1_component",
 )
 class ScreeningL1ComponentView(L1ScreeningBaseView):
@@ -380,7 +380,7 @@ class ScreeningL1ComponentView(L1ScreeningBaseView):
 
 
 @route(
-    "/reviews/<int:pk>/screening_l1/rows/<int:row_pk>/",
+    "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/",
     name="screen_l1_row",
 )
 class ScreenL1RowView(MustAccessReviewMixin, View):
@@ -416,7 +416,7 @@ class ScreenL1RowView(MustAccessReviewMixin, View):
 
 
 @route(
-    "/reviews/<int:pk>/screening_l1/rows/<int:row_pk>/details/",
+    "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/details/",
     name="screen_l1_row_details",
 )
 class L1ScreeningRowDetailsView(MustAccessReviewMixin, View):

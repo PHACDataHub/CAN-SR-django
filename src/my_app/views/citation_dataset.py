@@ -1,6 +1,7 @@
 from functools import cached_property
 
 from django import forms
+from django.core.exceptions import SuspiciousOperation
 from django.db.models import Count
 from django.http import HttpResponseBadRequest
 
@@ -153,24 +154,24 @@ class DeleteCitationDatasetPage(BasePageTemplate):
         ]
 
 
-@route("reviews/<int:pk>/dataset/", name="citation_dataset_detail")
+@route("reviews/<int:review_id>/dataset/", name="citation_dataset_detail")
 class CitationDatasetDetailView(
     MustAccessReviewMixin, DetailView, HtpyTemplateMixin
 ):
     model = Review
+    pk_url_kwarg = "review_id"
     template_component = CitationDatasetDetailPage
 
-    def get(self, request, *args, **kwargs):
-        self.object = self.get_object()
+    def get_object(self, *args, **kwargs):
         try:
-            self.object._citation_dataset = self.object.citation_dataset
+            self.review.citation_dataset
         except CitationDataset.DoesNotExist:
-            return HttpResponseBadRequest(tdt("Dataset not found."))
-        return super().get(request, *args, **kwargs)
+            raise SuspiciousOperation(tdt("Dataset not found."))
+        return self.review
 
 
 @route(
-    "reviews/<int:pk>/dataset/delete/",
+    "reviews/<int:review_id>/dataset/delete/",
     name="delete_citation_dataset",
 )
 class DeleteCitationDatasetView(

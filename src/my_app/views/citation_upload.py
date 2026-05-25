@@ -67,7 +67,7 @@ class CitationUploadPage(BasePageTemplate):
 
 
 @route(
-    "reviews/<int:pk>/citation-upload/",
+    "reviews/<int:review_id>/citation-upload/",
     name="citation_upload",
 )
 class CitationUploadView(MustAccessReviewMixin, FormView, HtpyTemplateMixin):

@@ -306,7 +306,7 @@ class ScreeningCriteriaPage(BasePageTemplate):
 
 
 @route(
-    "reviews/<int:pk>/screening-criteria/",
+    "reviews/<int:review_id>/screening-criteria/",
     name="screening_criteria",
 )
 class ScreeningCriteriaView(
@@ -506,7 +506,7 @@ class ChildEditorEditView(ChildEditorModalFormView):
 
 
 @route(
-    "reviews/<int:pk>/add_l1_screening_question",
+    "reviews/<int:review_id>/add_l1_screening_question",
     name="add_l1_question",
 )
 class AddL1ScreeningQuestionView(ChildEditorCreateView):
@@ -514,7 +514,7 @@ class AddL1ScreeningQuestionView(ChildEditorCreateView):
 
 
 @route(
-    "reviews/<int:pk>/l1_screening_questions/<int:question_pk>/edit",
+    "reviews/<int:review_id>/l1_screening_questions/<int:question_pk>/edit",
     name="edit_l1_question",
 )
 class EditL1ScreeningQuestionView(ChildEditorEditView):
@@ -522,7 +522,7 @@ class EditL1ScreeningQuestionView(ChildEditorEditView):
 
 
 @route(
-    "reviews/<int:pk>/l2_screening_questions/add/",
+    "reviews/<int:review_id>/l2_screening_questions/add/",
     name="add_l2_question",
 )
 class AddL2ScreeningQuestionView(ChildEditorCreateView):
@@ -530,7 +530,7 @@ class AddL2ScreeningQuestionView(ChildEditorCreateView):
 
 
 @route(
-    "reviews/<int:pk>/l2_screening_questions/<int:question_pk>/edit",
+    "reviews/<int:review_id>/l2_screening_questions/<int:question_pk>/edit",
     name="edit_l2_question",
 )
 class EditL2ScreeningQuestionView(ChildEditorEditView):
@@ -538,7 +538,7 @@ class EditL2ScreeningQuestionView(ChildEditorEditView):
 
 
 @route(
-    "reviews/<int:pk>/parameters/add/",
+    "reviews/<int:review_id>/parameters/add/",
     name="add_parameter_question",
 )
 class AddParameterQuestionView(ChildEditorCreateView):
@@ -546,7 +546,7 @@ class AddParameterQuestionView(ChildEditorCreateView):
 
 
 @route(
-    "reviews/<int:pk>/parameters/<int:question_pk>/edit",
+    "reviews/<int:review_id>/parameters/<int:question_pk>/edit",
     name="edit_parameter_question",
 )
 class EditParameterQuestionView(ChildEditorEditView):
@@ -566,7 +566,7 @@ class ScreeningColumnsSelectionForm(ModelForm, StandardFormMixin):
 
 
 @route(
-    "reviews/<int:pk>/edit-screening-columns/",
+    "reviews/<int:review_id>/edit-screening-columns/",
     name="edit_screening_columns",
 )
 class EditScreeningColumnsModal(MustAccessReviewMixin):

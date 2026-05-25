@@ -62,9 +62,10 @@ class CreateReviewView(CreateView, HtpyTemplateMixin):
         return reverse("review_detail", args=[self.object.id])
 
 
-@route("reviews/<int:pk>/edit/", name="edit_review")
+@route("reviews/<int:review_id>/edit/", name="edit_review")
 class EditReviewView(UpdateView, MustAccessReviewMixin, HtpyTemplateMixin):
     model = Review
+    pk_url_kwarg = "review_id"
     form_class = ReviewForm
     template_component = ReviewEditPage
 
@@ -77,7 +78,8 @@ class EditReviewView(UpdateView, MustAccessReviewMixin, HtpyTemplateMixin):
         return reverse("review_detail", args=[self.object.id])
 
 
-@route("reviews/<int:pk>/detail/", name="review_detail")
+@route("reviews/<int:review_id>/detail/", name="review_detail")
 class ReviewDetailView(MustAccessReviewMixin, DetailView, HtpyTemplateMixin):
     model = Review
+    pk_url_kwarg = "review_id"
     template_component = ReviewDetailPage
