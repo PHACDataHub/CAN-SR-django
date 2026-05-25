@@ -6,7 +6,7 @@ from shortcuts import breadcrumbs as bc
 from shortcuts import reverse, tdt
 
 
-class SystematicReviewListPage(BasePageTemplate):
+class ReviewListPage(BasePageTemplate):
     def content(self):
         reviews = self.context["object_list"]
 
@@ -17,7 +17,7 @@ class SystematicReviewListPage(BasePageTemplate):
             h.h1[tdt("Systematic review list")],
             h.div(".mb-3")[
                 h.a(
-                    href=reverse("create_systematic_review"),
+                    href=reverse("create_review"),
                     class_="btn btn-primary",
                 )[tdt("Create systematic review")],
             ],
@@ -29,7 +29,7 @@ class SystematicReviewListPage(BasePageTemplate):
                         h.li[
                             h.a(
                                 href=reverse(
-                                    "systematic_review_detail",
+                                    "review_detail",
                                     args=[review.id],
                                 )
                             )[review.title]
@@ -41,12 +41,12 @@ class SystematicReviewListPage(BasePageTemplate):
         ]
 
 
-class SystematicReviewCreatePage(BasePageTemplate):
+class ReviewCreatePage(BasePageTemplate):
 
     def content(self):
         return [
             bc.BreadcrumbTrail()[
-                bc.ListSystematicReviewsItem(),
+                bc.ListReviewsItem(),
                 bc.BreadcrumbItem(label=tdt("Create systematic review")),
             ],
             h.h1[tdt("Create systematic review")],
@@ -56,21 +56,21 @@ class SystematicReviewCreatePage(BasePageTemplate):
         ]
 
 
-class SystematicReviewEditPage(BasePageTemplate):
+class ReviewEditPage(BasePageTemplate):
     def content(self):
-        sr = self.context.get("object")
+        review = self.context.get("object")
         return [
-            bc.BreadcrumbTrailForSystematicReview(sr)[
+            bc.BreadcrumbTrailForReview(review)[
                 bc.BreadcrumbItem(label=tdt("Edit"))
             ],
-            h.h1[tdt("Edit systematic review")],
+            h.h1[tdt("Edit review")],
             GenericFormWithContainer(
                 self.context["form"],
             ),
         ]
 
 
-class SystematicReviewDetailPage(BasePageTemplate):
+class ReviewDetailPage(BasePageTemplate):
     def build_stage_card(self, title, description, action):
         return h.div(".card.h-100.shadow-sm")[
             h.div(".card-body")[
@@ -120,7 +120,7 @@ class SystematicReviewDetailPage(BasePageTemplate):
             )
 
         return [
-            bc.BreadcrumbTrailForSystematicReview(review),
+            bc.BreadcrumbTrailForReview(review),
             h.h1[review.title],
             h.p(".text-muted.fs-5")[review.description],
             h.div(".d-grid.gap-3.mb-4")[
@@ -181,9 +181,9 @@ class SystematicReviewDetailPage(BasePageTemplate):
             ],
             h.div(".d-flex.gap-2.justify-content-end")[
                 h.a(
-                    href=reverse("edit_systematic_review", args=[review.id]),
+                    href=reverse("edit_review", args=[review.id]),
                     class_="btn btn-primary",
-                )[tdt("Edit systematic review")],
+                )[tdt("Edit review")],
             ],
         ]
 

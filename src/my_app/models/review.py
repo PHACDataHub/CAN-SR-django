@@ -9,7 +9,7 @@ from proj.text import tm
 
 @track_versions
 @add_to_admin
-class SystematicReview(models.Model):
+class Review(models.Model):
     class Meta:
         verbose_name = tm("systematic_review")
         verbose_name_plural = tm("systematic_reviews")
@@ -30,18 +30,18 @@ class SystematicReview(models.Model):
 
 
 @add_to_admin
-class SystematicReviewUserLink(models.Model):
+class ReviewUserLink(models.Model):
 
     user = fields.ForeignKey(
         User,
-        related_name="systematic_review_links",
+        related_name="review_links",
         on_delete=models.CASCADE,
     )
-    systematic_review = fields.ForeignKey(
-        SystematicReview,
+    review = fields.ForeignKey(
+        Review,
         related_name="user_links",
         on_delete=models.CASCADE,
     )
 
     def __str__(self):
-        return f"{self.user_id} -> {self.systematic_review_id}"
+        return f"{self.user_id} -> {self.review_id}"

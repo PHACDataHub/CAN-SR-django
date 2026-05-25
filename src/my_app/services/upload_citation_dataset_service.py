@@ -6,11 +6,7 @@ from typing import Iterable
 
 from django.db import transaction
 
-from my_app.models import (
-    CitationDataset,
-    CitationDatasetColumn,
-    CitationDatasetRow,
-)
+from my_app.models import Citation, CitationDataset, CitationDatasetColumn
 
 
 @dataclass(frozen=True)
@@ -72,8 +68,8 @@ class CsvCitationDatasetImportSource(CitationDatasetImportSource):
 
 
 class CitationDatasetImporter:
-    def __init__(self, systematic_review, source):
-        self.systematic_review = systematic_review
+    def __init__(self, review, source):
+        self.review = review
         self.source = source
 
     def run(self):
@@ -85,9 +81,7 @@ class CitationDatasetImporter:
         column_specs = self._get_column_specs(column_names)
 
         with transaction.atomic():
-            dataset = CitationDataset.objects.create(
-                systematic_review=self.systematic_review
-            )
+            dataset = CitationDataset.objects.create(review=self.review)
             columns = [
                 CitationDatasetColumn(
                     dataset=dataset,
@@ -105,7 +99,7 @@ class CitationDatasetImporter:
                     )
 
                 rows.append(
-                    CitationDatasetRow(
+                    Citation(
                         dataset=dataset,
                         order=order,
                         title=self._get_special_value(
@@ -121,7 +115,7 @@ class CitationDatasetImporter:
                     )
                 )
 
-            CitationDatasetRow.objects.bulk_create(rows)
+            Citation.objects.bulk_create(rows)
 
         return CitationDatasetImportResult(
             dataset=dataset,
@@ -163,10 +157,10 @@ class CitationDatasetImporter:
         return values[index]
 
 
-def build_citation_dataset_from_source(systematic_review, source):
-    return CitationDatasetImporter(systematic_review, source).run()
+def build_citation_dataset_from_source(review, source):
+    return CitationDatasetImporter(review, source).run()
 
 
-def import_citation_dataset(systematic_review, csv_input):
+def import_citation_dataset(review, csv_input):
     source = CsvCitationDatasetImportSource.from_input(csv_input)
-    return build_citation_dataset_from_source(systematic_review, source)
+    return build_citation_dataset_from_source(review, source)

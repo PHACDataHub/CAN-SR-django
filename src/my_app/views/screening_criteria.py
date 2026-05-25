@@ -19,10 +19,10 @@ from my_app.models import (
     L2ScreeningQuestionOption,
     ParameterQuestion,
     ParameterQuestionOption,
-    SystematicReview,
+    Review,
 )
 from my_app.router import route
-from my_app.views.view_utils import MustAccessSystematicReviewMixin
+from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
     BasePageTemplate,
     GenericForm,
@@ -163,7 +163,7 @@ class ParameterFormsetAdapter(FormsetAdapter):
 
 
 class ScreeningCriteriaPageContent(HtpyComponent):
-    def __init__(self, review: SystematicReview):
+    def __init__(self, review: Review):
         self.review = review
 
     @cached_property
@@ -172,7 +172,7 @@ class ScreeningCriteriaPageContent(HtpyComponent):
             return CitationDataset.objects.prefetch_related(
                 "columns",
                 "screening_columns",
-            ).get(systematic_review=self.review)
+            ).get(review=self.review)
         except CitationDataset.DoesNotExist:
             return None
 
@@ -286,7 +286,7 @@ class ScreeningCriteriaPageContent(HtpyComponent):
 
     def render(self):
         return [
-            bc.BreadcrumbTrailForSystematicReview(self.review)[
+            bc.BreadcrumbTrailForReview(self.review)[
                 bc.BreadcrumbItem(label=tdt("Screening criteria"))
             ],
             h.h1[tdt("Screening criteria")],
@@ -302,17 +302,15 @@ class ScreeningCriteriaPageContent(HtpyComponent):
 
 class ScreeningCriteriaPage(BasePageTemplate):
     def content(self):
-        return ScreeningCriteriaPageContent(
-            self.context["systematic_review"]
-        ).render()
+        return ScreeningCriteriaPageContent(self.context["review"]).render()
 
 
 @route(
-    "systematic-reviews/<int:pk>/screening-criteria/",
+    "reviews/<int:review_id>/screening-criteria/",
     name="screening_criteria",
 )
 class ScreeningCriteriaView(
-    TemplateView, MustAccessSystematicReviewMixin, HtpyTemplateMixin
+    TemplateView, MustAccessReviewMixin, HtpyTemplateMixin
 ):
     template_component = ScreeningCriteriaPage
 
@@ -444,7 +442,7 @@ class ChildEditor:
         )[body]
 
 
-class ChildEditorModalFormView(MustAccessSystematicReviewMixin):
+class ChildEditorModalFormView(MustAccessReviewMixin):
     adapter: type[FormsetAdapter]
 
     editor: ChildEditor
@@ -455,7 +453,7 @@ class ChildEditorModalFormView(MustAccessSystematicReviewMixin):
     def form_valid(self):
         # re-render the entire parent page
         # hx-swap-oob will take care of swapping updated data
-        content = ScreeningCriteriaPageContent(self.systematic_review).render()
+        content = ScreeningCriteriaPageContent(self.review).render()
         resp = HttpResponse(content)
         resp["HX-Trigger-After-Settle"] = "modal-close"
         resp["Hx-Reswap"] = "none"
@@ -479,7 +477,7 @@ class ChildEditorCreateView(ChildEditorModalFormView):
 
     @cached_property
     def editor(self):
-        child = self.adapter.model(review=self.systematic_review)
+        child = self.adapter.model(review=self.review)
         editor = ChildEditor(
             child=child,
             data=self.request.POST or None,
@@ -508,7 +506,7 @@ class ChildEditorEditView(ChildEditorModalFormView):
 
 
 @route(
-    "systematic_reviews/<int:pk>/add_l1_screening_question",
+    "reviews/<int:review_id>/add_l1_screening_question",
     name="add_l1_question",
 )
 class AddL1ScreeningQuestionView(ChildEditorCreateView):
@@ -516,7 +514,7 @@ class AddL1ScreeningQuestionView(ChildEditorCreateView):
 
 
 @route(
-    "systematic_reviews/<int:pk>/l1_screening_questions/<int:question_pk>/edit",
+    "reviews/<int:review_id>/l1_screening_questions/<int:question_pk>/edit",
     name="edit_l1_question",
 )
 class EditL1ScreeningQuestionView(ChildEditorEditView):
@@ -524,7 +522,7 @@ class EditL1ScreeningQuestionView(ChildEditorEditView):
 
 
 @route(
-    "systematic_reviews/<int:pk>/l2_screening_questions/add/",
+    "reviews/<int:review_id>/l2_screening_questions/add/",
     name="add_l2_question",
 )
 class AddL2ScreeningQuestionView(ChildEditorCreateView):
@@ -532,7 +530,7 @@ class AddL2ScreeningQuestionView(ChildEditorCreateView):
 
 
 @route(
-    "systematic_reviews/<int:pk>/l2_screening_questions/<int:question_pk>/edit",
+    "reviews/<int:review_id>/l2_screening_questions/<int:question_pk>/edit",
     name="edit_l2_question",
 )
 class EditL2ScreeningQuestionView(ChildEditorEditView):
@@ -540,7 +538,7 @@ class EditL2ScreeningQuestionView(ChildEditorEditView):
 
 
 @route(
-    "systematic_reviews/<int:pk>/parameters/add/",
+    "reviews/<int:review_id>/parameters/add/",
     name="add_parameter_question",
 )
 class AddParameterQuestionView(ChildEditorCreateView):
@@ -548,7 +546,7 @@ class AddParameterQuestionView(ChildEditorCreateView):
 
 
 @route(
-    "systematic_reviews/<int:pk>/parameters/<int:question_pk>/edit",
+    "reviews/<int:review_id>/parameters/<int:question_pk>/edit",
     name="edit_parameter_question",
 )
 class EditParameterQuestionView(ChildEditorEditView):
@@ -568,14 +566,14 @@ class ScreeningColumnsSelectionForm(ModelForm, StandardFormMixin):
 
 
 @route(
-    "systematic_reviews/<int:pk>/edit-screening-columns/",
+    "reviews/<int:review_id>/edit-screening-columns/",
     name="edit_screening_columns",
 )
-class EditScreeningColumnsModal(MustAccessSystematicReviewMixin):
+class EditScreeningColumnsModal(MustAccessReviewMixin):
     @cached_property
     def dataset(self):
         try:
-            return self.systematic_review.citation_dataset
+            return self.review.citation_dataset
         except CitationDataset.DoesNotExist:
             return None
 
@@ -587,7 +585,7 @@ class EditScreeningColumnsModal(MustAccessSystematicReviewMixin):
         )
 
     def _render_page(self):
-        return ScreeningCriteriaPageContent(self.systematic_review).render()
+        return ScreeningCriteriaPageContent(self.review).render()
 
     def _render_modal(self):
         footer = h.fragment[
@@ -618,7 +616,7 @@ class EditScreeningColumnsModal(MustAccessSystematicReviewMixin):
             ],
             h.form(
                 hx_post=reverse(
-                    "edit_screening_columns", args=[self.systematic_review.pk]
+                    "edit_screening_columns", args=[self.review.pk]
                 ),
                 hx_target="this",
                 hx_swap="outerHTML",

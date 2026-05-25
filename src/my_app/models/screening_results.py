@@ -5,12 +5,12 @@ from phac_aspc.django import fields
 from proj.model_util import add_to_admin
 from proj.text import tdt
 
+from .review import Review
 from .screening_criteria import (
     L1ScreeningQuestion,
     L2ScreeningQuestion,
     ParameterQuestion,
 )
-from .systematic_review import SystematicReview
 
 
 class ScreeningResultStatus(models.TextChoices):
@@ -27,9 +27,7 @@ class CitationQueryResult(models.Model):
     class Meta:
         abstract = True
 
-    citation = models.ForeignKey(
-        "CitationDatasetRow", on_delete=models.CASCADE
-    )
+    citation = models.ForeignKey("Citation", on_delete=models.CASCADE)
 
     # question =  models.ForeignKey(... override)
     # selected_option = models.ForeignKey(... override)

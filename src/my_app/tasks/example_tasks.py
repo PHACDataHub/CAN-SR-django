@@ -1,6 +1,6 @@
 from django.tasks import task
 
-from my_app.models import SystematicReview
+from my_app.models import Review
 
 
 def _create_demo_task_run(
@@ -50,7 +50,7 @@ async def _create_demo_task_run_async(
 @task(backend="default", queue_name="default", takes_context=True)
 def record_sr_snapshot(context, label: str):
 
-    record_count = SystematicReview.objects.count()
+    record_count = Review.objects.count()
 
     return _create_demo_task_run(
         task_result_id=context.task_result.id,

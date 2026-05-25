@@ -6,7 +6,7 @@ from django.db import transaction
 from proj.models import User
 
 from my_app.constants import ADMIN_USER_GROUP
-from my_app.model_factories import SystematicReviewFactory, UserFactory
+from my_app.model_factories import ReviewFactory, UserFactory
 
 
 @transaction.atomic
@@ -19,7 +19,7 @@ def run():
     )
     admin.groups.add(admin_group)
 
-    reviews = SystematicReviewFactory.create_batch(10)
+    reviews = ReviewFactory.create_batch(10)
     for review in reviews:
         for x in range(random.randint(1, 3)):
             user = UserFactory()

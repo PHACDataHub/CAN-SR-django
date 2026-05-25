@@ -12,8 +12,8 @@ from my_app.model_factories import (
     L2ScreeningQuestionOptionFactory,
     ParameterQuestionFactory,
     ParameterQuestionOptionFactory,
-    SystematicReviewFactory,
-    SystematicReviewUserLinkFactory,
+    ReviewFactory,
+    ReviewUserLinkFactory,
 )
 from my_app.models import (
     L1ScreeningQuestion,
@@ -33,7 +33,7 @@ from tests.utils_for_testing import add_formset_prefix, add_prefix
 
 
 def test_editor_helper_class_new_question():
-    review = SystematicReviewFactory()
+    review = ReviewFactory()
     unsaved_obj = L1ScreeningQuestion(review=review)
     fs_prefix = "options"
 
@@ -78,7 +78,7 @@ def test_editor_helper_class_new_question():
 
 
 def test_editor_helper_class_modify_question():
-    review = SystematicReviewFactory()
+    review = ReviewFactory()
     question_obj = L1ScreeningQuestion.objects.create(review=review)
     question_option1 = L1ScreeningQuestionOption.objects.create(
         question=question_obj, option_text="Option 1", option_value="1"
@@ -132,7 +132,7 @@ def test_editor_helper_class_modify_question():
 
 
 def test_editor_helper_new_parameter():
-    review = SystematicReviewFactory()
+    review = ReviewFactory()
     unsaved_obj = ParameterQuestion(review=review)
     fs_prefix = "options"
 
@@ -172,7 +172,7 @@ def test_editor_helper_new_parameter():
 
 
 def test_editor_new_invalid_data():
-    review = SystematicReviewFactory()
+    review = ReviewFactory()
     unsaved_obj = L1ScreeningQuestion(review=review)
     fs_prefix = "options"
 
@@ -205,7 +205,7 @@ def test_editor_new_invalid_data():
 
 def _get_page_body(vanilla_user_client, review):
     url = reverse("screening_criteria", args=[review.id])
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.get(url)
 
     assert response.status_code == 200
@@ -226,10 +226,8 @@ def _assert_modal_smoke(response, form_id, *expected_texts):
 def test_screening_criteria_page_renders_empty_sections(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(title="Empty screening review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
+    review = ReviewFactory(title="Empty screening review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
 
     body = _get_page_body(vanilla_user_client, review)
 
@@ -241,10 +239,8 @@ def test_screening_criteria_page_renders_empty_sections(
 def test_screening_criteria_page_renders_existing_questions(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(title="Populated screening review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
+    review = ReviewFactory(title="Populated screening review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
     l1_question = L1ScreeningQuestionFactory(
         review=review,
         question_text="L1 question",
@@ -301,11 +297,9 @@ def test_screening_criteria_page_renders_existing_questions(
 def test_screening_criteria_page_renders_screening_columns(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(title="Dataset review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory(title="Dataset review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
+    dataset = CitationDatasetFactory(review=review)
     columns = [
         CitationDatasetColumnFactory(dataset=dataset, name=name)
         for name in ["year", "month", "day"]
@@ -324,11 +318,9 @@ def test_screening_criteria_page_renders_screening_columns(
 def test_edit_screening_columns_modal_gets_current_values(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(title="Dataset review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory(title="Dataset review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
+    dataset = CitationDatasetFactory(review=review)
     columns = [
         CitationDatasetColumnFactory(dataset=dataset, name=name)
         for name in ["year", "month", "day"]
@@ -336,7 +328,7 @@ def test_edit_screening_columns_modal_gets_current_values(
     dataset.screening_columns.set([columns[0], columns[2]])
     url = reverse("edit_screening_columns", args=[review.id])
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.get(url)
 
     _assert_modal_smoke(
@@ -362,11 +354,9 @@ def test_edit_screening_columns_modal_gets_current_values(
 def test_edit_screening_columns_modal_saves_and_returns_page(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(title="Dataset review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory(title="Dataset review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
+    dataset = CitationDatasetFactory(review=review)
     columns = [
         CitationDatasetColumnFactory(dataset=dataset, name=name)
         for name in ["year", "month", "day"]
@@ -374,7 +364,7 @@ def test_edit_screening_columns_modal_saves_and_returns_page(
     dataset.screening_columns.set([columns[0]])
     url = reverse("edit_screening_columns", args=[review.id])
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.post(
             url,
             {
@@ -405,11 +395,9 @@ def test_edit_screening_columns_modal_saves_and_returns_page(
 def test_edit_screening_columns_modal_rejects_invalid_choice(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(title="Dataset review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
-    dataset = CitationDatasetFactory(systematic_review=review)
+    review = ReviewFactory(title="Dataset review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
+    dataset = CitationDatasetFactory(review=review)
     columns = [
         CitationDatasetColumnFactory(dataset=dataset, name=name)
         for name in ["year", "month", "day"]
@@ -417,7 +405,7 @@ def test_edit_screening_columns_modal_rejects_invalid_choice(
     dataset.screening_columns.set([columns[0]])
     url = reverse("edit_screening_columns", args=[review.id])
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.post(
             url,
             {"screening_columns": ["999999"]},
@@ -438,10 +426,8 @@ def test_edit_screening_columns_modal_rejects_invalid_choice(
 def test_screening_criteria_page_shows_message_without_dataset(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(title="No dataset review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
+    review = ReviewFactory(title="No dataset review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
 
     body = _get_page_body(vanilla_user_client, review)
 
@@ -452,10 +438,8 @@ def test_screening_criteria_page_shows_message_without_dataset(
 def test_add_l1_question_modal_saves_valid_data(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(title="Create L1 review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
+    review = ReviewFactory(title="Create L1 review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
     url = reverse("add_l1_question", args=[review.pk])
     data = {
         "question_text": "Is this a test question?",
@@ -472,7 +456,7 @@ def test_add_l1_question_modal_saves_valid_data(
         ),
     }
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.post(url, data)
 
     assert response.status_code == 200
@@ -493,10 +477,8 @@ def test_add_l1_question_modal_saves_valid_data(
 def test_add_l1_question_modal_shows_errors_for_invalid_data(
     vanilla_user_client, vanilla_user
 ):
-    review = SystematicReviewFactory(title="Invalid L1 review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
+    review = ReviewFactory(title="Invalid L1 review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
     url = reverse("add_l1_question", args=[review.pk])
     data = {
         "question_text": "Is this a test question?",
@@ -508,7 +490,7 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
         ),
     }
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.post(url, data)
 
     assert response.status_code == 200
@@ -558,10 +540,8 @@ def test_other_screening_criteria_modals_render(
     form_id,
     expected_texts,
 ):
-    review = SystematicReviewFactory(title=f"{form_id} review")
-    SystematicReviewUserLinkFactory(
-        user=vanilla_user, systematic_review=review
-    )
+    review = ReviewFactory(title=f"{form_id} review")
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
 
     if route_name == "add_l2_question":
         url = reverse(route_name, args=[review.pk])
@@ -601,7 +581,7 @@ def test_other_screening_criteria_modals_render(
         )
         url = reverse(route_name, args=[review.pk, question.pk])
 
-    with patch_rules(can_access_systematic_review=True):
+    with patch_rules(can_access_review=True):
         response = vanilla_user_client.get(url)
 
     _assert_modal_smoke(response, form_id, *expected_texts)

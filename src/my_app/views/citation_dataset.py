@@ -1,14 +1,15 @@
 from functools import cached_property
 
 from django import forms
+from django.core.exceptions import SuspiciousOperation
 from django.db.models import Count
 from django.http import HttpResponseBadRequest
 
 import htpy as h
 
-from my_app.models import CitationDataset, SystematicReview
+from my_app.models import CitationDataset, Review
 from my_app.router import route
-from my_app.views.view_utils import MustAccessSystematicReviewMixin
+from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
     BasePageTemplate,
     DetailView,
@@ -45,7 +46,7 @@ class CitationDatasetDetailPage(BasePageTemplate):
         delete_url = reverse("delete_citation_dataset", args=[review.id])
 
         return [
-            bc.BreadcrumbTrailForSystematicReview(review)[
+            bc.BreadcrumbTrailForReview(review)[
                 bc.BreadcrumbItem(label=tdt("Dataset"))
             ],
             h.h1[tdt("Dataset")],
@@ -86,10 +87,10 @@ class CitationDatasetDetailPage(BasePageTemplate):
             return cached_dataset
 
         return (
-            CitationDataset.objects.select_related("systematic_review")
+            CitationDataset.objects.select_related("review")
             .prefetch_related("columns")
             .annotate(row_count=Count("rows"))
-            .get(systematic_review=review)
+            .get(review=review)
         )
 
     def _get_rows(self, dataset):
@@ -126,7 +127,7 @@ class DeleteCitationDatasetPage(BasePageTemplate):
         delete_url = reverse("delete_citation_dataset", args=[review.id])
 
         return [
-            bc.BreadcrumbTrailForSystematicReview(review)[
+            bc.BreadcrumbTrailForReview(review)[
                 bc.BreadcrumbItem(label=tdt("Dataset"), href=detail_url),
                 bc.BreadcrumbItem(label=tdt("Delete")),
             ],
@@ -153,28 +154,28 @@ class DeleteCitationDatasetPage(BasePageTemplate):
         ]
 
 
-@route("systematic-reviews/<int:pk>/dataset/", name="citation_dataset_detail")
+@route("reviews/<int:review_id>/dataset/", name="citation_dataset_detail")
 class CitationDatasetDetailView(
-    MustAccessSystematicReviewMixin, DetailView, HtpyTemplateMixin
+    MustAccessReviewMixin, DetailView, HtpyTemplateMixin
 ):
-    model = SystematicReview
+    model = Review
+    pk_url_kwarg = "review_id"
     template_component = CitationDatasetDetailPage
 
-    def get(self, request, *args, **kwargs):
-        self.object = self.get_object()
+    def get_object(self, *args, **kwargs):
         try:
-            self.object._citation_dataset = self.object.citation_dataset
+            self.review.citation_dataset
         except CitationDataset.DoesNotExist:
-            return HttpResponseBadRequest(tdt("Dataset not found."))
-        return super().get(request, *args, **kwargs)
+            raise SuspiciousOperation(tdt("Dataset not found."))
+        return self.review
 
 
 @route(
-    "systematic-reviews/<int:pk>/dataset/delete/",
+    "reviews/<int:review_id>/dataset/delete/",
     name="delete_citation_dataset",
 )
 class DeleteCitationDatasetView(
-    MustAccessSystematicReviewMixin, FormView, HtpyTemplateMixin
+    MustAccessReviewMixin, FormView, HtpyTemplateMixin
 ):
     form_class = DeleteCitationDatasetForm
     template_component = DeleteCitationDatasetPage
@@ -191,7 +192,7 @@ class DeleteCitationDatasetView(
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["object"] = self.systematic_review
+        context["object"] = self.review
         return context
 
     def form_valid(self, form):
@@ -200,14 +201,12 @@ class DeleteCitationDatasetView(
         return HttpResponseRedirect(self.get_success_url())
 
     def get_success_url(self):
-        return reverse(
-            "systematic_review_detail", args=[self.systematic_review.id]
-        )
+        return reverse("review_detail", args=[self.review.id])
 
     @cached_property
     def _dataset(self):
         try:
-            return self.systematic_review.citation_dataset
+            return self.review.citation_dataset
         except CitationDataset.DoesNotExist:
             return None
 

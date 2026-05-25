@@ -5,7 +5,7 @@ from phac_aspc.django import fields
 from proj.model_util import add_to_admin
 from proj.text import tdt
 
-from .systematic_review import SystematicReview
+from .review import Review
 
 
 class AbstractScreeningQuestion(models.Model):
@@ -25,7 +25,7 @@ class AbstractScreeningQuestion(models.Model):
 @add_to_admin
 class L1ScreeningQuestion(AbstractScreeningQuestion):
     review = fields.ForeignKey(
-        SystematicReview,
+        Review,
         related_name="l1_screening_questions",
         on_delete=models.CASCADE,
         verbose_name=tdt("Systematic review"),
@@ -35,7 +35,7 @@ class L1ScreeningQuestion(AbstractScreeningQuestion):
 @add_to_admin
 class L2ScreeningQuestion(AbstractScreeningQuestion):
     review = fields.ForeignKey(
-        SystematicReview,
+        Review,
         related_name="l2_screening_questions",
         on_delete=models.CASCADE,
         verbose_name=tdt("Systematic review"),
@@ -84,7 +84,7 @@ class L2ScreeningQuestionOption(AbstractScreeningQuestionOption):
 @add_to_admin
 class ParameterQuestion(models.Model):
     review = fields.ForeignKey(
-        SystematicReview,
+        Review,
         related_name="parameter_questions",
         on_delete=models.CASCADE,
         verbose_name=tdt("Systematic review"),

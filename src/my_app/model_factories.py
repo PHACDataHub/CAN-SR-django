@@ -3,9 +3,9 @@ import factory
 from proj.models import User
 
 from my_app.models import (
+    Citation,
     CitationDataset,
     CitationDatasetColumn,
-    CitationDatasetRow,
     DemoTaskRun,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
@@ -16,9 +16,9 @@ from my_app.models import (
     ParameterExtractionResult,
     ParameterQuestion,
     ParameterQuestionOption,
+    Review,
+    ReviewUserLink,
     ScreeningResultStatus,
-    SystematicReview,
-    SystematicReviewUserLink,
 )
 
 
@@ -40,27 +40,27 @@ class UserFactory(factory.django.DjangoModelFactory):
     username = factory.Sequence(lambda n: f"user{n}")
 
 
-class SystematicReviewFactory(factory.django.DjangoModelFactory):
+class ReviewFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = SystematicReview
+        model = Review
 
     title = factory.Faker("sentence", nb_words=4)
     description = factory.Faker("text")
 
 
-class SystematicReviewUserLinkFactory(factory.django.DjangoModelFactory):
+class ReviewUserLinkFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = SystematicReviewUserLink
+        model = ReviewUserLink
 
     user = factory.SubFactory(UserFactory)
-    systematic_review = factory.SubFactory(SystematicReviewFactory)
+    review = factory.SubFactory(ReviewFactory)
 
 
 class CitationDatasetFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = CitationDataset
 
-    systematic_review = factory.SubFactory(SystematicReviewFactory)
+    review = factory.SubFactory(ReviewFactory)
 
 
 class CitationDatasetColumnFactory(factory.django.DjangoModelFactory):
@@ -71,9 +71,9 @@ class CitationDatasetColumnFactory(factory.django.DjangoModelFactory):
     name = factory.Sequence(lambda n: f"Column {n + 1}")
 
 
-class CitationDatasetRowFactory(factory.django.DjangoModelFactory):
+class CitationFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = CitationDatasetRow
+        model = Citation
 
     dataset = factory.SubFactory(CitationDatasetFactory)
     order = factory.Sequence(lambda n: n + 1)
@@ -85,7 +85,7 @@ class L1ScreeningQuestionFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = L1ScreeningQuestion
 
-    review = factory.SubFactory(SystematicReviewFactory)
+    review = factory.SubFactory(ReviewFactory)
     question_text = factory.Sequence(
         lambda n: f"Is this citation relevant? {n + 1}"
     )
@@ -104,7 +104,7 @@ class L2ScreeningQuestionFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = L2ScreeningQuestion
 
-    review = factory.SubFactory(SystematicReviewFactory)
+    review = factory.SubFactory(ReviewFactory)
     question_text = factory.Sequence(
         lambda n: f"Is this citation eligible? {n + 1}"
     )
@@ -123,7 +123,7 @@ class ParameterQuestionFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = ParameterQuestion
 
-    review = factory.SubFactory(SystematicReviewFactory)
+    review = factory.SubFactory(ReviewFactory)
     question_text = factory.Sequence(lambda n: f"Parameter question {n + 1}")
 
 
@@ -140,10 +140,10 @@ class L1ScreeningResultFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = L1ScreeningResult
 
-    citation = factory.SubFactory(CitationDatasetRowFactory)
+    citation = factory.SubFactory(CitationFactory)
     question = factory.SubFactory(
         L1ScreeningQuestionFactory,
-        review=factory.SelfAttribute("..citation.dataset.systematic_review"),
+        review=factory.SelfAttribute("..citation.dataset.review"),
     )
     selected_option = None
     status = ScreeningResultStatus.PENDING
@@ -153,10 +153,10 @@ class L2ScreeningResultFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = L2ScreeningResult
 
-    citation = factory.SubFactory(CitationDatasetRowFactory)
+    citation = factory.SubFactory(CitationFactory)
     question = factory.SubFactory(
         L2ScreeningQuestionFactory,
-        review=factory.SelfAttribute("..citation.dataset.systematic_review"),
+        review=factory.SelfAttribute("..citation.dataset.review"),
     )
     selected_option = None
     status = ScreeningResultStatus.PENDING
@@ -166,10 +166,10 @@ class ParameterExtractionResultFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = ParameterExtractionResult
 
-    citation = factory.SubFactory(CitationDatasetRowFactory)
+    citation = factory.SubFactory(CitationFactory)
     question = factory.SubFactory(
         ParameterQuestionFactory,
-        review=factory.SelfAttribute("..citation.dataset.systematic_review"),
+        review=factory.SelfAttribute("..citation.dataset.review"),
     )
     selected_option = None
     status = ScreeningResultStatus.PENDING

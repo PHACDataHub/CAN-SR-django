@@ -6,13 +6,13 @@ from proj.model_util import add_to_admin
 
 from shortcuts import List, tdt
 
-from .systematic_review import SystematicReview
+from .review import Review
 
 
 @add_to_admin
 class CitationDataset(models.Model):
-    systematic_review = fields.OneToOneField(
-        SystematicReview,
+    review = fields.OneToOneField(
+        Review,
         related_name="citation_dataset",
         on_delete=models.CASCADE,
         verbose_name=tdt("Systematic review"),
@@ -26,7 +26,7 @@ class CitationDataset(models.Model):
     )
 
     def __str__(self):
-        return f"{self.systematic_review_id} citation dataset"
+        return f"{self.review_id} citation dataset"
 
 
 @add_to_admin
@@ -44,7 +44,7 @@ class CitationDatasetColumn(models.Model):
 
 
 @add_to_admin
-class CitationDatasetRow(models.Model):
+class Citation(models.Model):
     class Meta:
         ordering = ["order", "id"]
 

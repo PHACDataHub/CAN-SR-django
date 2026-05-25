@@ -6,7 +6,7 @@ from . import (
     citation_dataset,
     citation_upload,
     documents,
+    review,
     screening_criteria,
     screening_l1,
-    systematic_review,
 )

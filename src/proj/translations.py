@@ -144,6 +144,26 @@ translation_entries = {
         "en": "No documents yet.",
         "fr": "Aucun document pour le moment.",
     },
+    "review": {
+        "en": "Systematic Review",
+        "fr": "Revue systématique",
+    },
+    "reviews": {
+        "en": "Systematic Reviews",
+        "fr": "Revues systématiques",
+    },
+    "review_title": {
+        "en": "Title",
+        "fr": "Titre",
+    },
+    "review_description": {
+        "en": "Description",
+        "fr": "Description",
+    },
+    "review_created_at": {
+        "en": "Created at",
+        "fr": "Créée le",
+    },
     "systematic_review": {
         "en": "Systematic review",
         "fr": "Revue systématique",

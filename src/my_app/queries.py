@@ -5,25 +5,25 @@ from data_fetcher.extras import cache_within_request as cached_within_request
 from phac_aspc.vanilla import group_by
 
 from my_app.models import (
-    CitationDatasetRow,
+    Citation,
     L1ScreeningQuestion,
     L1ScreeningResult,
+    Review,
+    ReviewUserLink,
     ScreeningResultStatus,
-    SystematicReview,
-    SystematicReviewUserLink,
 )
 
 
 @cached_within_request
-def get_accessible_systematic_reviews(user_id):
+def get_accessible_reviews(user_id):
     if not user_id:
         return []
 
-    accessible_ids = SystematicReviewUserLink.objects.filter(
+    accessible_ids = ReviewUserLink.objects.filter(
         user_id=user_id
-    ).values_list("systematic_review_id", flat=True)
+    ).values_list("review_id", flat=True)
     return list(
-        SystematicReview.objects.filter(id__in=accessible_ids).order_by(
+        Review.objects.filter(id__in=accessible_ids).order_by(
             "-created_at", "-id"
         )
     )
@@ -43,10 +43,10 @@ class ScreeningStatusFetcher(DataFetcher):
             return {}
 
         review = (
-            CitationDatasetRow.objects.filter(id=keys[0])
-            .select_related("dataset__systematic_review")
+            Citation.objects.filter(id=keys[0])
+            .select_related("dataset__review")
             .first()
-            .dataset.systematic_review
+            .dataset.review
         )
         all_questions = cls.QuestionModel.objects.filter(review=review)
 

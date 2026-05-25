@@ -21,23 +21,23 @@ def BreadcrumbItem(label, href: Optional[str] = None):
     return h.li(".breadcrumb-item.active", aria_current="page")[label]
 
 
-def ListSystematicReviewsItem():
+def ListReviewsItem():
     return BreadcrumbItem(
-        label=tdt("Systematic Reviews"), href=reverse("systematic_review_list")
+        label=tdt("Systematic Reviews"), href=reverse("review_list")
     )
 
 
-def SystematicReviewRootItem(sr):
+def ReviewRootItem(review):
     return BreadcrumbItem(
-        label=sr.title,
-        href=reverse("systematic_review_detail", args=[sr.id]),
+        label=review.title,
+        href=reverse("review_detail", args=[review.id]),
     )
 
 
 @h.with_children
-def BreadcrumbTrailForSystematicReview(children, sr):
+def BreadcrumbTrailForReview(children, review):
     return BreadcrumbTrail()[
-        ListSystematicReviewsItem(),
-        SystematicReviewRootItem(sr),
+        ListReviewsItem(),
+        ReviewRootItem(review),
         h.fragment[children],
     ]

@@ -18,7 +18,7 @@ class LogoutView(BaseLogoutView):
 
 
 def get_redirect_for_user(user):
-    return reverse("systematic_review_list")
+    return reverse("review_list")
 
 
 class LoginView(BaseLoginView):

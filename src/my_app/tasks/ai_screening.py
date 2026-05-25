@@ -8,11 +8,11 @@ from django.tasks import task
 from data_fetcher.util import GlobalRequest, clear_request_caches
 
 from my_app.models import (
-    CitationDatasetRow,
+    Citation,
     L1ScreeningQuestion,
     L1ScreeningResult,
+    Review,
     ScreeningResultStatus,
-    SystematicReview,
 )
 from my_app.services.ai_screening import ProcessL1ScreeningService
 
