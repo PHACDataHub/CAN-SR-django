@@ -38,12 +38,6 @@ def test_pdf_upload_creates_document_and_shows_list_and_detail(
     document = Document.objects.get()
     DocumentMetadata.objects.create(
         document=document,
-        metadata={
-            "classification": "public",
-            "tags": ["pdf", "example"],
-            "reviewed": True,
-            "details": {"pages": 1},
-        },
     )
     assert document.document_type == "pdf"
     assert document.uploaded_by.username == "admin"
@@ -54,9 +48,6 @@ def test_pdf_upload_creates_document_and_shows_list_and_detail(
     list_response = admin_client.get(reverse("document_list"))
     assert list_response.status_code == 200
     list_content = list_response.content.decode()
-    assert "Metadata" in list_content
-    assert "public" in list_content
-    assert "pdf" in list_content
 
     detail_response = admin_client.get(
         reverse("document_detail", args=[document.id])
@@ -68,5 +59,3 @@ def test_pdf_upload_creates_document_and_shows_list_and_detail(
     assert "documents/example.pdf" in detail_content
     assert "Open file" in detail_content
     assert "Document metadata" in detail_content
-    assert "classification" in detail_content
-    assert "reviewed" in detail_content

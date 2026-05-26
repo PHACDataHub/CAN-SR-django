@@ -43,7 +43,9 @@ class DocumentMetadata(models.Model):
         on_delete=models.CASCADE,
         verbose_name=tdt("Document"),
     )
-    metadata = models.JSONField(default=dict, blank=True)
+    pages = models.JSONField(default=dict, blank=True)
+    coordinates = models.JSONField(default=dict, blank=True)
+    raw_xml = models.TextField(blank=True, verbose_name=tdt("Raw XML"))
 
     def __str__(self):
         return f"{self.document_id} metadata"

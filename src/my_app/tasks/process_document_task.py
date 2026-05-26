@@ -1,26 +1,24 @@
 from django.tasks import task
 
 from my_app.models import Document, DocumentMetadata
-from my_app.pdf_processor import get_pdf_processor
+from my_app.pdf_processor import StructureProcessor, get_pdf_processor
 
 
 @task(takes_context=True)
 def process_document_metadata(context, document_id: int):
 
     document = Document.objects.get(pk=document_id)
-    metadata = get_pdf_processor().process_pdf(document.file)
-
-    if not isinstance(metadata, dict):
-        metadata = {"text": metadata}
+    raw_xml = get_pdf_processor().process_pdf(document.file)
+    structure_processor = StructureProcessor(raw_xml)
+    pages = structure_processor.get_pages()
+    coordinates = structure_processor.get_coordinates()
 
     document = Document.objects.get(pk=document_id)
     document_metadata, _ = DocumentMetadata.objects.update_or_create(
         document=document,
-        defaults={"metadata": metadata},
+        defaults={
+            "raw_xml": raw_xml,
+            "pages": pages,
+            "coordinates": coordinates,
+        },
     )
-
-    # not sure if worth it to return anything at all...
-    # return {
-    #     "task_result_id": context.task_result.id,
-    #     "attempt": context.attempt,
-    # }

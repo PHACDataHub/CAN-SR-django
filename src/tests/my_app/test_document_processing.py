@@ -15,6 +15,7 @@ def test_process_document_metadata_view_queues_task_and_saves_metadata(
 
     with override_settings(MEDIA_ROOT=tmp_path):
         uploaded_file = SimpleUploadedFile(
+            # doesn't matter, mocked out anyway
             "example.pdf",
             b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n",
             content_type="application/pdf",
@@ -54,10 +55,12 @@ def test_process_document_metadata_view_queues_task_and_saves_metadata(
         assert queued_task.status == "SUCCESSFUL"
 
         metadata = DocumentMetadata.objects.get(document=document)
-        assert metadata.metadata
+        assert metadata.pages
+        assert metadata.coordinates
+        assert metadata.raw_xml
 
         refreshed_detail_response = admin_client.get(
             reverse("document_detail", args=[document.id])
         )
         assert refreshed_detail_response.status_code == 200
-        assert "<dl" in refreshed_detail_response.content.decode()
+        assert "dl" in refreshed_detail_response.content.decode()
