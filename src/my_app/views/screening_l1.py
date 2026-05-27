@@ -15,7 +15,7 @@ from my_app.models import (
 )
 from my_app.queries import L1ScreeningStatusFetcher
 from my_app.router import route
-from my_app.services.ai_screening import DeferredL1ScreeningService
+from my_app.services.l1_screening import DeferredL1ScreeningService
 from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
 from shortcuts import BasePageTemplate, HtpyTemplateMixin, ListView
 from shortcuts import breadcrumbs as bc

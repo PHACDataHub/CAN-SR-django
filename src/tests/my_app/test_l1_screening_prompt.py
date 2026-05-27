@@ -13,7 +13,7 @@ from my_app.models import (
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
 )
-from my_app.prompts.screening_prompt import (
+from my_app.prompts.l1_screening_prompt import (
     L1ScreeningPromptBuilder,
     UnexpectedLLMOutputError,
     get_l1_screening_results,
@@ -57,9 +57,11 @@ def _build_screening_prompt_context():
 
 
 def test_screening_prompt_builder():
-    _, _, row, question, _, _ = _build_screening_prompt_context()
+    _, _, row, question, *options = _build_screening_prompt_context()
 
-    prompt_builder = L1ScreeningPromptBuilder(question=question, citation=row)
+    prompt_builder = L1ScreeningPromptBuilder(
+        question=question, options=options, citation=row
+    )
     prompt_args = prompt_builder.get_screening_prompt_args()
 
     assert prompt_args.question == "Is this relevant?"
@@ -82,7 +84,9 @@ def test_screening_prompt_builder():
 
 @override_settings(HAS_LLM=True)
 def test_get_l1_screening_results_returns_exact_matching_option():
-    _, _, row, question, include_option, _ = _build_screening_prompt_context()
+    _, _, row, question, include_option, exclude_option = (
+        _build_screening_prompt_context()
+    )
 
     client = MagicMock()
     client.complete_prompt.return_value = json.dumps(
@@ -94,9 +98,11 @@ def test_get_l1_screening_results_returns_exact_matching_option():
     )
 
     with patch(
-        "my_app.prompts.screening_prompt.get_client", return_value=client
+        "my_app.prompts.l1_screening_prompt.get_client", return_value=client
     ):
-        result = get_l1_screening_results(question, row)
+        result = get_l1_screening_results(
+            question, [include_option, exclude_option], row
+        )
 
     assert result.selected == include_option
     assert result.explanation == "The citation matches the inclusion criteria."
@@ -106,21 +112,21 @@ def test_get_l1_screening_results_returns_exact_matching_option():
 
 @override_settings(HAS_LLM=True)
 def test_get_l1_screening_results_raises_when_json_is_invalid():
-    _, _, row, question, _, _ = _build_screening_prompt_context()
+    _, _, row, question, *options = _build_screening_prompt_context()
 
     client = MagicMock()
     client.complete_prompt.return_value = "{not valid json}"
 
     with patch(
-        "my_app.prompts.screening_prompt.get_client", return_value=client
+        "my_app.prompts.l1_screening_prompt.get_client", return_value=client
     ):
         with pytest.raises(UnexpectedLLMOutputError, match="invalid JSON"):
-            get_l1_screening_results(question, row)
+            get_l1_screening_results(question, options, row)
 
 
 @override_settings(HAS_LLM=True)
 def test_get_l1_screening_results_raises_when_selected_option_does_not_match():
-    _, _, row, question, _, _ = _build_screening_prompt_context()
+    _, _, row, question, *options = _build_screening_prompt_context()
 
     client = MagicMock()
     client.complete_prompt.return_value = json.dumps(
@@ -132,18 +138,18 @@ def test_get_l1_screening_results_raises_when_selected_option_does_not_match():
     )
 
     with patch(
-        "my_app.prompts.screening_prompt.get_client", return_value=client
+        "my_app.prompts.l1_screening_prompt.get_client", return_value=client
     ):
         with pytest.raises(
             UnexpectedLLMOutputError,
             match="doesn't match available options",
         ):
-            get_l1_screening_results(question, row)
+            get_l1_screening_results(question, options, row)
 
 
 @override_settings(HAS_LLM=True)
 def test_get_l1_screening_results_raises_on_pydantic_validation_error():
-    _, _, row, question, _, _ = _build_screening_prompt_context()
+    _, _, row, question, *options = _build_screening_prompt_context()
 
     client = MagicMock()
     client.complete_prompt.return_value = json.dumps(
@@ -155,7 +161,7 @@ def test_get_l1_screening_results_raises_on_pydantic_validation_error():
     )
 
     with patch(
-        "my_app.prompts.screening_prompt.get_client", return_value=client
+        "my_app.prompts.l1_screening_prompt.get_client", return_value=client
     ):
         with pytest.raises(UnexpectedLLMOutputError):
-            get_l1_screening_results(question, row)
+            get_l1_screening_results(question, options, row)

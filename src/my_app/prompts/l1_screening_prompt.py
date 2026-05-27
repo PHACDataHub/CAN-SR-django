@@ -11,15 +11,10 @@ from my_app.models import (
     Citation,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
-    ParameterQuestion,
 )
-from my_app.queries import options_for_question
 from shortcuts import List, dataclass, logger
 
-# the sub-prompt gets used for
-KEY_INFO_SUB_PROMPT_TEMPLATE = """
-For articles that satisfy the below criteria in XML tags <{key}></{key}> we answer with "{key}":\n\n<{key}>\n{info}\n</{key}>
-"""
+from .prompt_util import build_option_definition_string, build_option_string
 
 PROMPT_JSON_TEMPLATE = """
 You are a highly critical, helpful scientific evaluator completing an academic review. Your job is to screen a citation and decide whether to 
@@ -53,8 +48,14 @@ Keep the response strictly as a JSON object that matches the schema above. Do no
 
 
 class L1ScreeningPromptBuilder:
-    def __init__(self, question: L1ScreeningQuestion, citation: Citation):
+    def __init__(
+        self,
+        question: L1ScreeningQuestion,
+        options: List[L1ScreeningQuestionOption],
+        citation: Citation,
+    ):
         self.question = question
+        self.options = options
         self.citation = citation
 
     @dataclass
@@ -67,28 +68,17 @@ class L1ScreeningPromptBuilder:
     def get_screening_prompt_args(
         self,
     ) -> ScreeningPromptArgs:
-        options = L1ScreeningQuestionOption.objects.filter(
-            question=self.question
-        )
         columns_to_include = self.citation.dataset.screening_columns.all()
         citation_text = self.citation.serialize_for_prompt(columns_to_include)
 
-        option_info_subprompt = "\n".join(
-            [
-                KEY_INFO_SUB_PROMPT_TEMPLATE.format(
-                    key=opt.option_text, info=opt.option_value
-                )
-                for opt in options
-            ]
-        )
+        option_info_string = build_option_definition_string(self.options)
+        option_string = build_option_string(self.options)
 
         return self.ScreeningPromptArgs(
             question=self.question.question_text,
             citation=citation_text,
-            options="\n".join(
-                [f"{j}. {opt.option_text}" for j, opt in enumerate(options)]
-            ),
-            definitions=option_info_subprompt,
+            options=option_string,
+            definitions=option_info_string,
         )
 
     def build_str(self):
@@ -113,15 +103,18 @@ class L1ScreeningPromptResult(RawL1ScreeningPromptResult):
 
 
 def get_l1_screening_results(
-    question: L1ScreeningQuestion, citation: Citation
+    question: L1ScreeningQuestion,
+    options: List[L1ScreeningQuestionOption],
+    citation: Citation,
 ):
     if not settings.HAS_LLM:
-        logger.warning("LLM is not available, using mock results.")
-        return get_mock_l1_screening_results(question, citation)
+        logger.warning(
+            "LLM is not available, using mock results for L1 screening"
+        )
+        return get_mock_l1_screening_results(question, options, citation)
 
-    options = options_for_question(L1ScreeningQuestionOption, question.id)
-    logger.warning("LLM is available, using real LLM results for screening")
-    prompt_builder = L1ScreeningPromptBuilder(question, citation)
+    logger.info("LLM is available, using real LLM results for L1 screening")
+    prompt_builder = L1ScreeningPromptBuilder(question, options, citation)
     prompt = prompt_builder.build_str()
 
     llm_client = get_client()
@@ -161,10 +154,11 @@ def get_l1_screening_results(
 
 
 def get_mock_l1_screening_results(
-    question: L1ScreeningQuestion, citation: Citation
+    question: L1ScreeningQuestion,
+    options: List[L1ScreeningQuestionOption],
+    citation: Citation,
 ):
 
-    options = options_for_question(L1ScreeningQuestionOption, question.id)
     selected_option = random.choice(options)
     confidence = random.uniform(0.5, 1.0)
     explanation = "This is a mock explanation for why the option was selected."

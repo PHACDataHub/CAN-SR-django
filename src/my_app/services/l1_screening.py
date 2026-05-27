@@ -1,31 +1,22 @@
-"""
-Covers L1 and L2 screening, not full-text
-
-"""
-
-import json
 from typing import List
 
 from django.db import transaction
-from django.tasks import task
 from django.utils import timezone
-
-import pydantic
-from data_fetcher.util import GlobalRequest, clear_request_caches
 
 from proj.llm_client import ClientFailureError
 
 from my_app.models import (
     Citation,
     L1ScreeningQuestion,
+    L1ScreeningQuestionOption,
     L1ScreeningResult,
-    Review,
     ScreeningResultStatus,
 )
-from my_app.prompts.screening_prompt import (
+from my_app.prompts.l1_screening_prompt import (
     UnexpectedLLMOutputError,
     get_l1_screening_results,
 )
+from my_app.queries import options_for_question
 from shortcuts import logger
 
 
@@ -111,7 +102,7 @@ class DeferredL1ScreeningService(L1ScreeningService):
             "Enqueuing background L1 screening processing for result_id=%s",
             result_id,
         )
-        from my_app.tasks.ai_screening import process_l1_screening_task
+        from my_app.tasks.l1_screening import process_l1_screening_task
 
         process_l1_screening_task.enqueue(result_id=result_id)
 
@@ -139,9 +130,12 @@ class ProcessL1ScreeningService:
         question: L1ScreeningQuestion,
         citation: Citation,
     ):
+
+        options = options_for_question(L1ScreeningQuestionOption, question.id)
+
         for retry_num in range(self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT + 1):
             try:
-                return get_l1_screening_results(question, citation)
+                return get_l1_screening_results(question, options, citation)
             except UnexpectedLLMOutputError:
                 if retry_num == self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT:
                     raise
