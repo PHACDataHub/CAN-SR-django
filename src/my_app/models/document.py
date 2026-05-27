@@ -49,3 +49,19 @@ class DocumentMetadata(models.Model):
 
     def __str__(self):
         return f"{self.document_id} metadata"
+
+    def get_sentences(self):
+        coordinates = self.coordinates
+        annotations = [
+            a for a in coordinates if a.get("type") == "s" and a.get("text")
+        ]
+        full_text_arr = self._ordered_set([a["text"] for a in annotations])
+        full_text_str = "\n\n".join(
+            [f"[{i}] {x}" for i, x in enumerate(full_text_arr)]
+        )
+        return full_text_str
+
+    @staticmethod
+    def _ordered_set(lst):
+        # unique and preserve order
+        return list(dict.fromkeys(lst))
