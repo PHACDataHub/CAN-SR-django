@@ -61,6 +61,15 @@ class Citation(models.Model):
     data = models.JSONField(default=dict, blank=True, verbose_name=tdt("Data"))
     order = fields.IntegerField(verbose_name=tdt("Insertion order"))
 
+    document = fields.ForeignKey(
+        "my_app.Document",
+        related_name="citations",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=tdt("Linked document"),
+    )
+
     def __str__(self):
         return f"{self.dataset_id} row {self.order}"
 
