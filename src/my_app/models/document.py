@@ -3,7 +3,6 @@ from django.db import models
 from phac_aspc.django import fields
 
 from proj.model_util import add_to_admin, track_versions
-from proj.models import User
 from proj.text import tdt
 
 
@@ -12,36 +11,39 @@ class Document(models.Model):
     class Meta:
         ordering = ["-uploaded_at", "-id"]
 
-    document_type = fields.CharField(
-        max_length=100, verbose_name=tdt("Document type")
-    )
     file = fields.FileField(
         upload_to="documents/", verbose_name=tdt("Document file")
-    )
-    source_url = fields.URLField(
-        blank=True, null=True, verbose_name=tdt("Source URL")
-    )
-    uploaded_by = fields.ForeignKey(
-        User,
-        related_name="documents",
-        on_delete=models.CASCADE,
-        verbose_name=tdt("Associated user"),
     )
     uploaded_at = models.DateTimeField(
         auto_now_add=True, verbose_name=tdt("Upload date")
     )
 
     def __str__(self):
-        return f"{self.document_type}: {self.file.name}"
+        return self.file.name
+
+
+class DocumentProcessingStatus(models.TextChoices):
+    NOT_STARTED = ("not_started", tdt("Not Started"))
+    PENDING = ("pending", tdt("Pending"))
+    COMPLETED = ("completed", tdt("Completed"))
+    FAILED = ("failed", tdt("Failed"))
 
 
 @add_to_admin
 class DocumentMetadata(models.Model):
+    DocumentProcessingStatus = DocumentProcessingStatus
+
     document = fields.OneToOneField(
         Document,
         related_name="document_metadata",
         on_delete=models.CASCADE,
         verbose_name=tdt("Document"),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=DocumentProcessingStatus.choices,
+        default=DocumentProcessingStatus.PENDING,
+        null=False,
     )
     pages = models.JSONField(default=dict, blank=True)
     coordinates = models.JSONField(default=dict, blank=True)

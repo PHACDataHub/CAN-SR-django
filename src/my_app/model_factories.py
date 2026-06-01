@@ -7,6 +7,8 @@ from my_app.models import (
     CitationDataset,
     CitationDatasetColumn,
     DemoTaskRun,
+    Document,
+    DocumentMetadata,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L1ScreeningResult,
@@ -46,6 +48,23 @@ class ReviewFactory(factory.django.DjangoModelFactory):
 
     title = factory.Faker("sentence", nb_words=4)
     description = factory.Faker("text")
+
+
+class DocumentFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = Document
+
+    file = factory.django.FileField(
+        filename="example.pdf",
+        data=b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n",
+    )
+
+
+class DocumentMetadataFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = DocumentMetadata
+
+    document = factory.SubFactory(DocumentFactory)
 
 
 class ReviewUserLinkFactory(factory.django.DjangoModelFactory):

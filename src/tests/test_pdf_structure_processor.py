@@ -77,9 +77,7 @@ def test_get_coordinates_returns_one_entry_per_box_with_metadata():
 def test_get_sentences_returns_unique_sentence_text_in_order():
     document = Document(
         id=1,
-        document_type="pdf",
         file="documents/example.pdf",
-        uploaded_by_id=1,
     )
     metadata = DocumentMetadata(
         document=document,

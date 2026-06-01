@@ -5,7 +5,7 @@ from django.test import override_settings
 
 import pytest
 
-from my_app.model_factories import ReviewFactory, UserFactory
+from my_app.model_factories import ReviewFactory
 from my_app.models import (
     Citation,
     CitationDataset,
@@ -34,9 +34,7 @@ def _build_screening_prompt_context():
     )
 
     document = Document.objects.create(
-        document_type="pdf",
         file="documents/example.pdf",
-        uploaded_by=UserFactory(),
     )
     metadata_record = DocumentMetadata.objects.create(
         document=document,

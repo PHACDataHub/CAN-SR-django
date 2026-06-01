@@ -5,7 +5,6 @@ from . import (
     background_tasks_demo,
     citation_dataset,
     citation_upload,
-    documents,
     review,
     screening_criteria,
     screening_l1,

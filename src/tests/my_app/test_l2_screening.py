@@ -11,7 +11,6 @@ from my_app.model_factories import (
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
     ReviewFactory,
-    UserFactory,
 )
 from my_app.models import (
     Document,
@@ -37,9 +36,7 @@ def _build_l2_screening_context(*, with_document=True, with_metadata=True):
 
     if with_document:
         document = Document.objects.create(
-            document_type="pdf",
             file="documents/example.pdf",
-            uploaded_by=UserFactory(),
         )
         citation.document = document
         citation.save(update_fields=["document"])
