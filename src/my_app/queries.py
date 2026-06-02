@@ -8,6 +8,8 @@ from my_app.models import (
     Citation,
     L1ScreeningQuestion,
     L1ScreeningResult,
+    L2ScreeningQuestion,
+    L2ScreeningResult,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
@@ -93,6 +95,11 @@ class ScreeningStatusFetcher(DataFetcher):
 class L1ScreeningStatusFetcher(ScreeningStatusFetcher):
     QuestionModel = L1ScreeningQuestion
     ResultModel = L1ScreeningResult
+
+
+class L2ScreeningStatusFetcher(ScreeningStatusFetcher):
+    QuestionModel = L2ScreeningQuestion
+    ResultModel = L2ScreeningResult
 
 
 @cached_within_request

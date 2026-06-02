@@ -1,13 +1,16 @@
 import typing
 
 from django import http
+from django.conf import settings
 from django.http import HttpRequest
 from django.template.context import ContextDict
+from django.templatetags.static import static
 from django.views import View as DjangoView
 from django.views.generic import TemplateView as DjangoTemplateView
 from django.views.generic.base import TemplateResponseMixin
 
 import htpy
+import htpy as h
 from markupsafe import Markup
 
 from proj.text import tm
@@ -109,3 +112,9 @@ class HtpyTemplateMixin(TemplateResponseMixin):
         cls = self.template_component
         module_str = [f"{cls.__module__}.{cls.__name__}"]
         return module_str
+
+
+def static_no_cache(path):
+    if settings.DEBUG:
+        return static(path)
+    return static(path) + f"?v={settings.STATIC_BUST_TOKEN}"
