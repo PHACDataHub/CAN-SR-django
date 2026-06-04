@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
+import pytest
 from phac_aspc.rules import patch_rules
 
 from my_app.model_factories import (
@@ -186,7 +187,7 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert "L2 PDF screening" in body
     assert reverse("screening_l2", args=[review.id]) in body
     assert "A full-text citation" in body
-    assert "With an abstract" in body
+    assert "With an abstract" not in body
     assert "Uploaded" in body
     assert "Completed" in body
     assert "L2 screening results" in body
@@ -195,8 +196,390 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert "Looks eligible." in body
     assert "1, 3" in body
     assert "2" in body
+    assert 'id="l2-citation-data"' in body
+    assert (
+        f'data-pdf-url="{reverse("screen_l2_row_pdf", args=[review.id, row.id])}"'
+        in body
+    )
+    assert (
+        f'data-metadata-url="{reverse("screen_l2_row_pdf_metadata", args=[review.id, row.id])}"'
+        in body
+    )
+    assert 'id="l2-pdf-scroll"' in body
+    assert 'id="l2-pdf-pages"' in body
+    assert "screen_l2_citation.js" in body
+    assert "screen_l2_citation.css" in body
+    assert 'class="btn btn-sm btn-outline-primary l2-evidence-chip"' in body
+    assert 'data-sentence-index="1">Sentence 1</button>' in body
+    assert 'data-sentence-index="3">Sentence 3</button>' in body
     assert reverse("screen_l2_row_upload", args=[review.id, row.id]) in body
-    assert "Upload" in body or "Re-upload" in body
+    assert "More" in body
+    assert "Re-upload" in body
+    assert "Re-screen" in body
+
+
+def test_screen_l2_row_details_view_renders_screening_process_button(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    document = DocumentFactory()
+    row = CitationFactory(dataset=dataset, order=1, document=document)
+    DocumentMetadataFactory(
+        document=document,
+        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("screen_l2_row_details", args=[review.id, row.id])
+        )
+
+    body = response.content.decode()
+    process_url = reverse("screen_l2_row_process", args=[review.id, row.id])
+
+    assert response.status_code == 200
+    assert f'id="l2-pdf-screening-control-{row.id}"' in body
+    assert f'hx-post="{process_url}"' in body
+    assert 'hx-target="closest .l2-pdf-screening-control"' in body
+    assert 'hx-swap="outerHTML"' in body
+    assert "Screen this document" in body
+
+
+def test_screen_l2_row_process_view_enqueues_screening_and_returns_control(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    document = DocumentFactory()
+    row = CitationFactory(dataset=dataset, order=1, document=document)
+    DocumentMetadataFactory(
+        document=document,
+        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+    )
+    question1 = L2ScreeningQuestionFactory(review=review)
+    question2 = L2ScreeningQuestionFactory(review=review)
+
+    with patch_rules(can_access_review=True):
+        with patch(
+            "my_app.tasks.l2_screening.process_l2_screening_task"
+        ) as task_mock:
+            response = vanilla_client.post(
+                reverse("screen_l2_row_process", args=[review.id, row.id])
+            )
+
+    body = response.content.decode()
+    results = L2ScreeningResult.objects.filter(citation=row)
+
+    assert response.status_code == 200
+    assert f'id="l2-pdf-screening-control-{row.id}"' in body
+    assert "Pending" in body
+    assert "L2 screening" in body
+    assert "Screen this document" not in body
+    assert (
+        results.filter(
+            question__in=[question1, question2],
+            status=ScreeningResultStatus.PENDING,
+        ).count()
+        == 2
+    )
+    assert task_mock.enqueue.call_count == 2
+    assert {
+        call.kwargs["result_id"] for call in task_mock.enqueue.call_args_list
+    } == {result.id for result in results}
+
+
+def test_screen_l2_row_process_view_replaces_existing_screening_results(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    document = DocumentFactory()
+    row = CitationFactory(dataset=dataset, order=1, document=document)
+    DocumentMetadataFactory(
+        document=document,
+        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+    )
+    question = L2ScreeningQuestionFactory(review=review)
+    old_result = L2ScreeningResultFactory(
+        citation=row,
+        question=question,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+
+    with patch_rules(can_access_review=True):
+        with patch(
+            "my_app.tasks.l2_screening.process_l2_screening_task"
+        ) as task_mock:
+            response = vanilla_client.post(
+                reverse("screen_l2_row_process", args=[review.id, row.id])
+            )
+
+    result = L2ScreeningResult.objects.get(citation=row, question=question)
+
+    assert response.status_code == 200
+    assert result.id != old_result.id
+    assert result.status == ScreeningResultStatus.PENDING
+    task_mock.enqueue.assert_called_once_with(result_id=result.id)
+
+
+def test_screen_l2_row_process_view_rejects_unprocessed_document(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    document = DocumentFactory()
+    row = CitationFactory(dataset=dataset, order=1, document=document)
+    DocumentMetadataFactory(
+        document=document,
+        status=DocumentMetadata.DocumentProcessingStatus.PENDING,
+    )
+    L2ScreeningQuestionFactory(review=review)
+
+    with patch_rules(can_access_review=True):
+        with patch(
+            "my_app.tasks.l2_screening.process_l2_screening_task"
+        ) as task_mock:
+            response = vanilla_client.post(
+                reverse("screen_l2_row_process", args=[review.id, row.id])
+            )
+
+    body = response.content.decode()
+
+    assert response.status_code == 409
+    assert "Not Started" in body
+    assert "Screen this document" not in body
+    assert L2ScreeningResult.objects.filter(citation=row).count() == 0
+    assert task_mock.enqueue.call_count == 0
+
+
+def test_screen_l2_row_details_view_renders_empty_pdf_viewer_without_document(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset, order=1)
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("screen_l2_row_details", args=[review.id, row.id])
+        )
+
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Upload a PDF to view the document." in body
+    assert 'id="l2-pdf-scroll"' in body
+    assert 'id="l2-pdf-pages"' in body
+    assert "data-pdf-url" not in body
+    assert "data-metadata-url" not in body
+
+
+def test_screen_l2_row_pdf_view_streams_linked_document(vanilla_client):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    document = DocumentFactory()
+    row = CitationFactory(dataset=dataset, order=1, document=document)
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("screen_l2_row_pdf", args=[review.id, row.id])
+        )
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert response["Content-Disposition"].startswith("inline;")
+    assert b"".join(response.streaming_content).startswith(b"%PDF-1.4")
+
+
+def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    document = DocumentFactory()
+    row = CitationFactory(dataset=dataset, order=1, document=document)
+    pages = [{"width": 612.0, "height": 792.0}]
+    coordinates = [
+        {
+            "type": "p",
+            "text": "Paragraph",
+            "page": "1",
+            "x": "1",
+            "y": "2",
+            "width": "3",
+            "height": "4",
+        },
+        {
+            "type": "s",
+            "text": "First sentence.",
+            "page": "1",
+            "x": "10",
+            "y": "20",
+            "width": "30",
+            "height": "40",
+        },
+        {
+            "type": "s",
+            "text": "Second sentence.",
+            "page": "1",
+            "x": "50",
+            "y": "60",
+            "width": "70",
+            "height": "80",
+        },
+        {
+            "type": "s",
+            "text": "First sentence.",
+            "page": "1",
+            "x": "90",
+            "y": "100",
+            "width": "110",
+            "height": "120",
+        },
+    ]
+    DocumentMetadataFactory(
+        document=document,
+        pages=pages,
+        coordinates=coordinates,
+    )
+    first_question = L2ScreeningQuestionFactory(review=review)
+    second_question = L2ScreeningQuestionFactory(review=review)
+    L2ScreeningResultFactory(
+        citation=row,
+        question=first_question,
+        evidence_sentences=[1, 99, -1, "0"],
+    )
+    L2ScreeningResultFactory(
+        citation=row,
+        question=second_question,
+        evidence_sentences=[1, 0],
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("screen_l2_row_pdf_metadata", args=[review.id, row.id])
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "pages": pages,
+        "highlights": [
+            {
+                **coordinates[2],
+                "sentence_index": 1,
+            },
+            {
+                **coordinates[1],
+                "sentence_index": 0,
+            },
+            {
+                **coordinates[3],
+                "sentence_index": 0,
+            },
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    "url_name",
+    [
+        "screen_l2_row_pdf",
+        "screen_l2_row_pdf_metadata",
+    ],
+)
+def test_screen_l2_row_pdf_views_return_404_without_document(
+    vanilla_client,
+    url_name,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset, order=1)
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse(url_name, args=[review.id, row.id])
+        )
+
+    assert response.status_code == 404
+
+
+def test_screen_l2_row_pdf_metadata_view_returns_404_without_metadata(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(
+        dataset=dataset,
+        order=1,
+        document=DocumentFactory(),
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("screen_l2_row_pdf_metadata", args=[review.id, row.id])
+        )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "url_name",
+    [
+        "screen_l2_row_details",
+        "screen_l2_row_process",
+        "screen_l2_row_pdf",
+        "screen_l2_row_pdf_metadata",
+    ],
+)
+def test_screen_l2_row_pdf_views_require_review_access(
+    vanilla_client,
+    url_name,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    document = DocumentFactory()
+    row = CitationFactory(dataset=dataset, order=1, document=document)
+    DocumentMetadataFactory(document=document)
+
+    with patch_rules(can_access_review=False):
+        url = reverse(url_name, args=[review.id, row.id])
+        if url_name == "screen_l2_row_process":
+            response = vanilla_client.post(url)
+        else:
+            response = vanilla_client.get(url)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "url_name",
+    [
+        "screen_l2_row_details",
+        "screen_l2_row_process",
+        "screen_l2_row_pdf",
+        "screen_l2_row_pdf_metadata",
+    ],
+)
+def test_screen_l2_row_pdf_views_return_404_for_row_from_another_review(
+    vanilla_client,
+    url_name,
+):
+    requested_review = ReviewFactory()
+    row_review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=row_review)
+    document = DocumentFactory()
+    row = CitationFactory(dataset=dataset, order=1, document=document)
+    DocumentMetadataFactory(document=document)
+
+    with patch_rules(can_access_review=True):
+        url = reverse(url_name, args=[requested_review.id, row.id])
+        if url_name == "screen_l2_row_process":
+            response = vanilla_client.post(url)
+        else:
+            response = vanilla_client.get(url)
+
+    assert response.status_code == 404
 
 
 def test_screening_l2_component_view_renders_upload_and_screening_statuses(
@@ -277,7 +660,7 @@ def test_screen_l2_row_upload_view_renders_replace_form_for_existing_document(
 
     assert response.status_code == 200
     assert "Replace document" in body
-    assert "Danger zone" in body
+    assert "Danger zone" not in body
     assert "I understand this will delete the existing document" in body
 
 

@@ -52,12 +52,16 @@ class DocumentMetadata(models.Model):
     def __str__(self):
         return f"{self.document_id} metadata"
 
-    def get_sentences(self):
+    def get_sentence_list(self):
         coordinates = self.coordinates
         annotations = [
             a for a in coordinates if a.get("type") == "s" and a.get("text")
         ]
         full_text_arr = self._ordered_set([a["text"] for a in annotations])
+        return full_text_arr
+
+    def get_sentences(self):
+        full_text_arr = self.get_sentence_list()
         full_text_str = "\n\n".join(
             [f"[{i}] {x}" for i, x in enumerate(full_text_arr)]
         )

@@ -1,14 +1,24 @@
 import importlib
 
 from django.conf import settings
+from django.contrib import admin
 from django.db import models
 from django.utils import timezone
 
 from versionator import VersionModel
 
 
+def get_admin_class(live_model):
+    class VersionAdmin(admin.ModelAdmin):
+        pass
+
+    return VersionAdmin
+
+
 def add_to_admin(cls):
-    cls.__add_to_admin = True
+
+    admin.site.register(cls, get_admin_class(cls))
+
     return cls
 
 

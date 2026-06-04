@@ -1,5 +1,7 @@
 import json
+import math
 import random
+import re
 
 from django.conf import settings
 
@@ -200,18 +202,19 @@ def get_mock_l2_screening_results(
     explanation = "This is a mock explanation for why the option was selected."
 
     # find sentences using regex for [0], [1], etc. and extract the indices
-    import re
 
     sentence_indices = []
-    for match in re.finditer(r"\[(\d+)\]", fulltext):
+    for match in re.finditer(r"\n\n\[(\d+)\]", fulltext):
         sentence_indices.append(int(match.group(1)))
 
     if sentence_indices:
-        chosen_sentences = random.sample(
-            sentence_indices, min(1, len(sentence_indices) // 3)
-        )
+        max_chosen = math.ceil(len(sentence_indices) / 10)
+        sentence_count = random.randint(1, max_chosen)
+        chosen_sentences = random.choices(sentence_indices, k=sentence_count)
     else:
         chosen_sentences = []
+
+    chosen_sentences = sorted(set(chosen_sentences))
 
     return L2ScreeningPromptResult(
         selected=selected_option,

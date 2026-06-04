@@ -125,6 +125,10 @@ def _document_processing_badge(citation_row: Citation):
     else:
         status = metadata.status
 
+    return _document_processing_badge_for_status(status)
+
+
+def _document_processing_badge_for_status(status):
     return _badge(
         DocumentMetadata.DocumentProcessingStatus(status).label,
         DOCUMENT_PROCESSING_BADGE_CLASSES[status],
@@ -591,18 +595,7 @@ class L2ScreeningDocumentUploadViewMixin(MustAccessReviewMixin):
             ],
         ]
 
-        if self.existing_document is None:
-            return form_content
-
-        return h.details(".border.border-danger.rounded.p-3")[
-            h.summary(".fw-semibold.text-danger")[tdt("Danger zone"),],
-            h.p(".text-danger.small.mb-3")[
-                tdt(
-                    "Replacing this document will delete the existing document, metadata, and screening results before the new file is uploaded."
-                )
-            ],
-            form_content,
-        ]
+        return form_content
 
     def delete_existing_content(self):
         L1ScreeningResult.objects.filter(citation=self.citation_row).delete()
