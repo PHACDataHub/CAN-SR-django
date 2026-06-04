@@ -18,7 +18,7 @@ from phac_aspc.rules import test_rule
 
 from proj.text import tdt, tm
 
-from .util import HtpyComponent
+from .util import HtpyComponent, static_no_cache
 
 
 def get_lang_code():
@@ -83,12 +83,6 @@ def url_to_other_lang():
     request = get_request()
     full_uri = request.get_full_path()
     return convert_url_other_lang(full_uri)
-
-
-def static_no_cache(path):
-    if settings.DEBUG:
-        return static(path)
-    return static(path) + f"?v={settings.STATIC_BUST_TOKEN}"
 
 
 def MessagesBar(request: HttpRequest):
@@ -355,10 +349,6 @@ def get_top_right_dropdown_items(request):
             ".dropdown-item",
             href=reverse("review_list"),
         )[tdt("Systematic reviews")],
-        h.a(
-            ".dropdown-item",
-            href=reverse("document_list"),
-        )[tm("documents")],
         h.a(
             ".dropdown-item",
             href=reverse("background_tasks_demo"),

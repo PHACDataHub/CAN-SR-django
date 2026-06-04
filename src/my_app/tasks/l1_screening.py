@@ -1,20 +1,8 @@
-"""
-Covers L1 and L2 screening, not full-text
-
-"""
-
 from django.tasks import task
 
 from data_fetcher.util import GlobalRequest, clear_request_caches
 
-from my_app.models import (
-    Citation,
-    L1ScreeningQuestion,
-    L1ScreeningResult,
-    Review,
-    ScreeningResultStatus,
-)
-from my_app.services.ai_screening import ProcessL1ScreeningService
+from my_app.services.l1_screening import ProcessL1ScreeningService
 
 
 @task

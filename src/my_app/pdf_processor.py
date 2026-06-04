@@ -37,11 +37,11 @@ class PdfProcessor(ABC):
 
     def process_pdf(self, file):
         xml = self.pdf_to_xml(file)
-        return self.xml_to_json(xml)
+        return xml
 
     def process_text(self, text):
         xml = self.text_to_xml(text)
-        return self.xml_to_json(xml)
+        return xml
 
     @abstractmethod
     def pdf_to_xml(self, file_descriptor) -> str:
@@ -50,12 +50,6 @@ class PdfProcessor(ABC):
     @abstractmethod
     def text_to_xml(self, text) -> str:
         raise NotImplementedError
-
-    def xml_to_json(self, xml_str: str) -> JSONValue:
-        # placeholder for actual XML parsing logic
-        soup = BeautifulSoup(xml_str, "xml")
-        # extract relevant metadata from the XML and return as dict
-        return {"xml_content": soup.prettify()}
 
 
 def get_grobid_client():
@@ -104,12 +98,24 @@ class GrobidPdfProcessor(PdfProcessor):
         raise Exception("TODO")
 
 
+TEST_XML_STR = """
+<TEI>
+  <text>
+    <p coords="1,10,20,30,40;2,15,25,35,45;">Paragraph</p>
+    <head coords="2,50,60,70,80">Heading</head>
+  </text>
+  <surface ulx="0" uly="0" lrx="612" lry="792" />
+  <surface ulx="10" uly="20" lrx="210" lry="320" />
+</TEI>
+"""
+
+
 class TestPdfProcessor(PdfProcessor):
     def pdf_to_xml(self, file_descriptor) -> str:
-        return "<test>pdf content</test>"
+        return TEST_XML_STR
 
     def text_to_xml(self, text) -> str:
-        return f"<test>{text}</test>"
+        return TEST_XML_STR
 
 
 class MinimalDevPdfProcessor(TestPdfProcessor):
@@ -137,3 +143,90 @@ def get_pdf_processor():
         return MinimalDevPdfProcessor()
 
     return GrobidPdfProcessor()
+
+
+class StructureProcessor:
+
+    COLORS = {
+        "persName": "rgba(0, 0, 255, 1)",  # Blue
+        "s": "rgba(139, 0, 0, 1)",  # Green
+        "p": "rgba(139, 0, 0, 1)",  # Dark red
+        "ref": "rgba(255, 255, 0, 1)",  # ??
+        "biblStruct": "rgba(139, 0, 0, 1)",  # Dark Red
+        "head": "rgba(139, 139, 0, 1)",  # Dark Yellow
+        "formula": "rgba(255, 165, 0, 1)",  # Orange
+        "figure": "rgba(165, 42, 42, 1)",  # Brown
+        "title": "rgba(255, 0, 0, 1)",  # Red
+        "affiliation": "rgba(255, 165, 0, 1)",  # red-orengi
+    }
+
+    @classmethod
+    def _get_color(cls, name, param):
+        color = cls.COLORS.get(name, "rgba(128, 128, 128, 1.0)")
+        if param:
+            color = color.replace("1)", "0.4)")
+
+        return color
+
+    def __init__(self, xml_text):
+        self.soup = BeautifulSoup(xml_text, "xml")
+
+    def get_pages(
+        self,
+    ):
+        pages_infos = self.soup.find_all("surface")
+
+        pages = [
+            {
+                "width": float(page["lrx"]) - float(page["ulx"]),
+                "height": float(page["lry"]) - float(page["uly"]),
+            }
+            for page in pages_infos
+        ]
+
+        return pages
+
+    def get_coordinates(self):
+        # exclude certain tag names
+        all_blocks_with_coordinates = self.soup.find("text").find_all(
+            coords=True
+        )
+
+        def filt(c):
+            return len(c) > 0 and c[0] != ""
+
+        coordinates = []
+        count = 0
+        for block_id, block in enumerate(all_blocks_with_coordinates):
+            for box in filter(filt, block["coords"].split(";")):
+                coordinates.append(
+                    self._box_to_dict(
+                        box.split(","),
+                        self._get_color(block.name, count % 2 == 0),
+                        type=block.name,
+                        text=block.text,
+                    ),
+                )
+            count += 1
+        return coordinates
+
+    @staticmethod
+    def _box_to_dict(box, color=None, type=None, text=None):
+
+        item = {
+            "page": box[0],
+            "x": box[1],
+            "y": box[2],
+            "width": box[3],
+            "height": box[4],
+        }
+        if color is not None:
+            item["color"] = color
+
+        if type:
+            item["type"] = type
+
+        if text:
+            item["text"] = text
+
+        return item

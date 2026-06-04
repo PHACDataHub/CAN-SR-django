@@ -97,6 +97,9 @@ docker run --rm --init --ulimit core=0 -p 8070:8070 grobid/grobid:0.9.0-crf
 
 If you don't want to use grobid, just keep `GROBID_URL=dev`, this will use a dummy client that returns canned responses.
 
+You can check LLM configuration and connection by running `python -m manage check_grobid <path_to_pdf>`, if successful it will print extracted json (raw xml, coordinates, pages) to the console, so you may want to pipe it to a file instead, e.g. `python -m manage check_grobid <path_to_pdf> > output.json`
+
+
 ## LLM configuration
 
 Two modes are supported as of now:

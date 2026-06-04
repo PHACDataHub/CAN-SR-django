@@ -64,85 +64,9 @@ translation_entries = {
         "en": "Close",
         "fr": "Fermer",
     },
-    "upload_pdf": {
-        "en": "Upload PDF",
-        "fr": "Téléverser un PDF",
-    },
-    "upload_pdf_title": {
-        "en": "Upload a PDF",
-        "fr": "Téléverser un PDF",
-    },
-    "upload_pdf_instructions": {
-        "en": "Choose a PDF file and store it in media/ for now.",
-        "fr": "Choisissez un fichier PDF et enregistrez-le dans media/ pour le moment.",
-    },
     "form_not_saved": {
         "en": "Form not saved, please correct the errors below.",
         "fr": "Formulaire non sauvegardé, veuillez corriger les erreurs ci-dessous.",
-    },
-    "pdf_file": {
-        "en": "PDF file",
-        "fr": "Fichier PDF",
-    },
-    "upload_pdf_submit": {
-        "en": "Upload",
-        "fr": "Téléverser",
-    },
-    "pdf_uploaded": {
-        "en": "PDF uploaded",
-        "fr": "PDF téléversé",
-    },
-    "back_to_list": {
-        "en": "Back to list",
-        "fr": "Retour à la liste",
-    },
-    "documents": {
-        "en": "Documents",
-        "fr": "Documents",
-    },
-    "document_list_title": {
-        "en": "Document list",
-        "fr": "Liste des documents",
-    },
-    "document_detail_title": {
-        "en": "Document detail",
-        "fr": "Détail du document",
-    },
-    "upload_new_pdf": {
-        "en": "Upload new PDF",
-        "fr": "Téléverser un nouveau PDF",
-    },
-    "document_type_label": {
-        "en": "Document type",
-        "fr": "Type de document",
-    },
-    "document_file_label": {
-        "en": "Document file",
-        "fr": "Fichier du document",
-    },
-    "source_url_label": {
-        "en": "Source URL",
-        "fr": "URL source",
-    },
-    "associated_user_label": {
-        "en": "Associated user",
-        "fr": "Utilisateur associé",
-    },
-    "upload_date_label": {
-        "en": "Upload date",
-        "fr": "Date de téléversement",
-    },
-    "open_file": {
-        "en": "Open file",
-        "fr": "Ouvrir le fichier",
-    },
-    "back_to_documents": {
-        "en": "Back to documents",
-        "fr": "Retour aux documents",
-    },
-    "no_documents_yet": {
-        "en": "No documents yet.",
-        "fr": "Aucun document pour le moment.",
     },
     "review": {
         "en": "Systematic Review",

@@ -15,7 +15,7 @@ from my_app.model_factories import (
     ReviewFactory,
 )
 from my_app.models import L1ScreeningResult, ScreeningResultStatus
-from my_app.services.ai_screening import (
+from my_app.services.l1_screening import (
     DeferredL1ScreeningService,
     ProcessL1ScreeningService,
 )
@@ -61,7 +61,7 @@ def test_deferred_l1_screening_service_enqueues_created_results():
     task_mock.enqueue = MagicMock()
 
     with patch(
-        "my_app.tasks.ai_screening.process_l1_screening_task",
+        "my_app.tasks.l1_screening.process_l1_screening_task",
         task_mock,
     ):
         service = DeferredL1ScreeningService(
@@ -149,7 +149,7 @@ def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and
     task_mock.enqueue = MagicMock()
 
     with patch(
-        "my_app.tasks.ai_screening.process_l1_screening_task",
+        "my_app.tasks.l1_screening.process_l1_screening_task",
         task_mock,
     ):
         service = DeferredL1ScreeningService(
@@ -278,7 +278,7 @@ def test_process_l1_screening_service_retries_unexpected_llm_output_before_succe
     )
 
     with patch(
-        "my_app.services.ai_screening.get_l1_screening_results",
+        "my_app.services.l1_screening.get_l1_screening_results",
         side_effect=[
             UnexpectedLLMOutputError("bad output"),
             UnexpectedLLMOutputError("bad output"),
@@ -327,7 +327,7 @@ def test_process_l1_screening_service_abandons_after_retry_budget_is_exhausted()
     )
 
     with patch(
-        "my_app.services.ai_screening.get_l1_screening_results",
+        "my_app.services.l1_screening.get_l1_screening_results",
         side_effect=[
             UnexpectedLLMOutputError("bad output")
             for _ in range(
@@ -382,7 +382,7 @@ def test_process_l1_screening_service_does_not_retry_client_failure_errors():
     )
 
     with patch(
-        "my_app.services.ai_screening.get_l1_screening_results",
+        "my_app.services.l1_screening.get_l1_screening_results",
         side_effect=ClientFailureError("client failure"),
     ) as get_results_mock:
         with pytest.raises(ClientFailureError):

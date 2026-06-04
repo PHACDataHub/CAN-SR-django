@@ -1,0 +1,81 @@
+.l2-screening-layout {
+    min-height: 70vh;
+}
+
+.l2-screening-sidebar {
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+}
+
+.l2-pdf-panel {
+    background: #e9ecef;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+.l2-pdf-toolbar {
+    align-items: center;
+    background: #fff;
+    border-bottom: 1px solid #ced4da;
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+}
+
+.l2-pdf-scroll {
+    height: calc(100vh - 14rem);
+    min-height: 36rem;
+    overflow: auto;
+}
+
+.l2-pdf-pages {
+    display: grid;
+    gap: 1rem;
+    justify-items: center;
+    min-height: 100%;
+    padding: 1rem;
+}
+
+.l2-pdf-page {
+    background: #fff;
+    box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 18%);
+    position: relative;
+}
+
+.l2-pdf-page canvas,
+.l2-pdf-overlay {
+    inset: 0;
+    position: absolute;
+}
+
+.l2-pdf-highlight {
+    background: rgb(255 193 7 / 52%);
+    border: 2px solid rgb(166 116 0 / 78%);
+    border-radius: 2px;
+    box-sizing: border-box;
+    cursor: help;
+    mix-blend-mode: multiply;
+    pointer-events: auto;
+    position: absolute;
+}
+
+.l2-pdf-highlight:focus,
+.l2-pdf-highlight:hover,
+.l2-pdf-highlight-active {
+    background: rgb(255 143 0 / 68%);
+    outline: 3px solid #005ea5;
+    outline-offset: 2px;
+}
+
+@media (max-width: 991.98px) {
+    .l2-screening-sidebar {
+        max-height: none;
+        overflow-y: visible;
+    }
+
+    .l2-pdf-scroll {
+        height: 65vh;
+        min-height: 28rem;
+    }
+}
