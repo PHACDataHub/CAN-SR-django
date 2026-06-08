@@ -1,9 +1,11 @@
 import os
 import tempfile
 from abc import ABC, abstractmethod
+from typing import List
 
 from django.conf import settings
 
+import pydantic
 from bs4 import BeautifulSoup
 from grobid_client.grobid_client import GrobidClient
 
@@ -145,6 +147,30 @@ def get_pdf_processor():
     return GrobidPdfProcessor()
 
 
+class PdfPage(pydantic.BaseModel):
+    width: float
+    height: float
+
+    def as_json_dict(self) -> dict[str, JSONValue]:
+        return self.model_dump()
+
+
+class PdfCoordinate(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(populate_by_name=True)
+
+    page: str
+    x: str
+    y: str
+    width: str
+    height: str
+    color: str | None = None
+    annotation_type: str | None = pydantic.Field(default=None, alias="type")
+    text: str | None = None
+
+    def as_json_dict(self) -> dict[str, JSONValue]:
+        return self.model_dump(by_alias=True, exclude_none=True)
+
+
 class StructureProcessor:
 
     COLORS = {
@@ -171,22 +197,23 @@ class StructureProcessor:
     def __init__(self, xml_text):
         self.soup = BeautifulSoup(xml_text, "xml")
 
-    def get_pages(
-        self,
-    ):
+    def get_page_models(self) -> List[PdfPage]:
         pages_infos = self.soup.find_all("surface")
 
-        pages = [
-            {
-                "width": float(page["lrx"]) - float(page["ulx"]),
-                "height": float(page["lry"]) - float(page["uly"]),
-            }
+        return [
+            PdfPage(
+                width=float(page["lrx"]) - float(page["ulx"]),
+                height=float(page["lry"]) - float(page["uly"]),
+            )
             for page in pages_infos
         ]
 
-        return pages
+    def get_pages(
+        self,
+    ) -> List[dict[str, JSONValue]]:
+        return [page.as_json_dict() for page in self.get_page_models()]
 
-    def get_coordinates(self):
+    def get_coordinate_models(self) -> List[PdfCoordinate]:
         # exclude certain tag names
         all_blocks_with_coordinates = self.soup.find("text").find_all(
             coords=True
@@ -200,33 +227,52 @@ class StructureProcessor:
         for block_id, block in enumerate(all_blocks_with_coordinates):
             for box in filter(filt, block["coords"].split(";")):
                 coordinates.append(
-                    self._box_to_dict(
+                    self._box_to_coordinate(
                         box.split(","),
                         self._get_color(block.name, count % 2 == 0),
-                        type=block.name,
+                        annotation_type=block.name,
                         text=block.text,
                     ),
                 )
             count += 1
         return coordinates
 
+    def get_coordinates(self) -> List[dict[str, JSONValue]]:
+        return [
+            coordinate.as_json_dict()
+            for coordinate in self.get_coordinate_models()
+        ]
+
+    @staticmethod
+    def _box_to_coordinate(
+        box,
+        color=None,
+        annotation_type=None,
+        text=None,
+    ) -> PdfCoordinate:
+        if len(box) != 5:
+            raise ValueError(
+                "Expected a Grobid coordinate box with 5 values, got %s"
+                % len(box)
+            )
+
+        return PdfCoordinate(
+            page=box[0],
+            x=box[1],
+            y=box[2],
+            width=box[3],
+            height=box[4],
+            color=color,
+            annotation_type=annotation_type,
+            text=text,
+        )
+
     @staticmethod
     def _box_to_dict(box, color=None, type=None, text=None):
-
-        item = {
-            "page": box[0],
-            "x": box[1],
-            "y": box[2],
-            "width": box[3],
-            "height": box[4],
-        }
-        if color is not None:
-            item["color"] = color
-
-        if type:
-            item["type"] = type
-
-        if text:
-            item["text"] = text
-
-        return item
+        coordinate = StructureProcessor._box_to_coordinate(
+            box,
+            color=color,
+            annotation_type=type,
+            text=text,
+        )
+        return coordinate.as_json_dict()

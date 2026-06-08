@@ -1,5 +1,7 @@
+import pytest
+
 from my_app.models import Document, DocumentMetadata
-from my_app.pdf_processor import StructureProcessor
+from my_app.pdf_processor import PdfCoordinate, PdfPage, StructureProcessor
 
 XML = """
 <TEI>
@@ -34,6 +36,17 @@ def test_get_pages_returns_width_and_height_for_each_surface():
     assert processor.get_pages() == [
         {"width": 612.0, "height": 792.0},
         {"width": 200.0, "height": 300.0},
+    ]
+
+
+def test_get_page_models_returns_typed_page_dimensions():
+    processor = StructureProcessor(XML)
+
+    pages = processor.get_page_models()
+
+    assert pages == [
+        PdfPage(width=612.0, height=792.0),
+        PdfPage(width=200.0, height=300.0),
     ]
 
 
@@ -72,6 +85,31 @@ def test_get_coordinates_returns_one_entry_per_box_with_metadata():
             "text": "Heading",
         },
     ]
+
+
+def test_get_coordinate_models_returns_typed_coordinates():
+    processor = StructureProcessor(XML)
+
+    coordinates = processor.get_coordinate_models()
+
+    assert coordinates[0] == PdfCoordinate(
+        page="1",
+        x="10",
+        y="20",
+        width="30",
+        height="40",
+        color="rgba(139, 0, 0, 0.4)",
+        annotation_type="p",
+        text="Paragraph",
+    )
+
+
+def test_box_to_coordinate_rejects_malformed_coordinate_box():
+    with pytest.raises(
+        ValueError,
+        match="Expected a Grobid coordinate box with 5 values",
+    ):
+        StructureProcessor._box_to_coordinate(["1", "10", "20"])
 
 
 def test_get_sentences_returns_unique_sentence_text_in_order():
