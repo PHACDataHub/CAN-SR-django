@@ -107,6 +107,36 @@ if LLM_MODE == "ollama":
 
 # END LLM settings
 
+
+# figure extraction/docint settings
+
+FIGURE_EXTRACTION_MODE = config("FIGURE_EXTRACTION_MODE", default="")
+AZURE_DOC_INT_MODE = config(
+    # 'key' or 'entra'
+    "AZURE_DOC_INT_MODE",
+    default="",
+)
+AZURE_DOC_INT_ENDPOINT = config("AZURE_DOC_INT_ENDPOINT", default="")
+AZURE_DOC_INT_API_KEY = config("AZURE_DOC_INT_API_KEY", default="")
+if FIGURE_EXTRACTION_MODE == "azure":
+    assert (
+        AZURE_DOC_INT_ENDPOINT
+    ), "AZURE_DOC_INT_ENDPOINT must be set when FIGURE_EXTRACTION_MODE is 'azure'"
+    if AZURE_DOC_INT_MODE == "key":
+        assert (
+            AZURE_DOC_INT_API_KEY
+        ), "AZURE_DOC_INT_API_KEY must be set for key-based auth"
+    elif AZURE_DOC_INT_MODE == "entra":
+        pass
+    else:
+        raise ValueError(
+            f"Invalid AZURE_DOC_INT_MODE: {AZURE_DOC_INT_MODE}. Must be 'key' or 'entra'"
+        )
+
+
+# END figure extraction settings
+
+
 STATIC_URL = "/static/"
 STATICFILES_DIRS = (os.path.join("static"),)
 MEDIA_URL = "/media/"
