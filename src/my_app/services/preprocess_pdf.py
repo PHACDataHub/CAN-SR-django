@@ -1,5 +1,6 @@
 from my_app.models import Document, DocumentMetadata
-from my_app.pdf_processor import StructureProcessor, get_pdf_processor
+from my_app.pdf.text_extraction.processors import get_pdf_processor
+from my_app.pdf.text_extraction.tei import GrobidTeiParser
 from shortcuts import logger
 
 
@@ -63,7 +64,7 @@ class PreprocessPDFService:
 
         try:
             raw_xml = get_pdf_processor().process_pdf(document.file)
-            structure_processor = StructureProcessor(raw_xml)
+            structure_processor = GrobidTeiParser(raw_xml)
             pages = structure_processor.get_pages()
             coordinates = structure_processor.get_coordinates()
         except Exception:

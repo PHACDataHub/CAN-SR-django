@@ -8,20 +8,12 @@ from abc import ABC, abstractmethod
 from django.conf import settings
 
 from azure.ai.documentintelligence import DocumentIntelligenceClient
-from azure.ai.documentintelligence.models import (
-    AnalyzeDocumentRequest,
-    AnalyzeResult,
-    BoundingRegion,
-    DocumentFigure,
-    DocumentPage,
-    DocumentTable,
-)
 from azure.core.credentials import AzureKeyCredential
 from azure.identity import DefaultAzureCredential
 
 from shortcuts import logger
 
-from .figure_extraction_util import DocIntResult, process_pdf_with_docint
+from .azure import FigureExtractionResultData, process_pdf_with_docint
 
 
 class DocIntConfigurationError(Exception):
@@ -30,7 +22,7 @@ class DocIntConfigurationError(Exception):
 
 class FigureExtractionClient(ABC):
     @abstractmethod
-    def extract_figures(self, file) -> DocIntResult:
+    def extract_figures(self, file) -> FigureExtractionResultData:
         pass
 
 
@@ -38,7 +30,7 @@ class AzureDocIntExtractionClient(FigureExtractionClient):
     def __init__(self, docint_client: DocumentIntelligenceClient):
         self.docint_client = docint_client
 
-    def extract_figures(self, file) -> DocIntResult:
+    def extract_figures(self, file) -> FigureExtractionResultData:
         result = process_pdf_with_docint(file=file, client=self.docint_client)
 
         return result
@@ -90,11 +82,11 @@ def get_azure_client():
 
 
 class FakeFigureExtractionClient(FigureExtractionClient):
-    def extract_figures(self, file) -> DocIntResult:
+    def extract_figures(self, file) -> FigureExtractionResultData:
         logger.info(
             "FakeFigureExtractionClient called - returning empty result"
         )
-        return DocIntResult(
+        return FigureExtractionResultData(
             # TODO get better fake structure here
             figures=[],
             tables=[],

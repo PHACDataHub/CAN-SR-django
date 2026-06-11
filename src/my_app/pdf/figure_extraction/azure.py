@@ -1,38 +1,11 @@
 """
-Standalone Azure Document Intelligence example for CAN-SR.
-
-This file intentionally does NOT import any first-party CAN-SR modules. It is a
-compact, synchronous, heavily commented version of the Azure Document
-Intelligence path currently spread across:
-
-- api/services/azure_docint_client.py
-- api/core/docint_coords.py
-- api/extract/router.py
-
-The point is to show the shape transformation:
-
-    raw PDF
-      -> Azure Document Intelligence prebuilt-layout result
-      -> intermediate figure/table artifacts
-      -> final port-friendly result:
-           figures with coordinates and PNG file/blob data
-           tables with coordinates and inline markdown
-
-Important limitation:
-
-The production app currently uploads both figure PNGs and table markdown to
-object storage, then stores blob addresses in Postgres. For portability, this
-example keeps table markdown inline as string data. Figure PNGs still behave
-like files because images are large binary assets and the LLM path expects to
-load image bytes from storage.
+this behavior (with lots of refactoring applied) is ported from CAN-SR
 """
 
 from __future__ import annotations
 
-import os
 import re
-from io import BytesIO
-from typing import IO, Any, Literal, Optional
+from typing import Any, Literal, Optional
 
 from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.ai.documentintelligence.models import (
@@ -42,27 +15,14 @@ from azure.ai.documentintelligence.models import (
     DocumentPage,
     DocumentTable,
 )
-from azure.core.credentials import AzureKeyCredential
-from azure.identity import DefaultAzureCredential
 from bs4 import BeautifulSoup
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from my_app.artifact_types import ViewerBox
+from my_app.pdf.types import PdfCoordinate
 
 # ---------------------------------------------------------------------------
 # Pydantic models for normalized Azure-shaped data we care about
 # ---------------------------------------------------------------------------
-#
-# Azure's SDK gives rich model objects: `AnalyzeResult`, `DocumentPage`,
-# `DocumentTable`, `DocumentFigure`, and `BoundingRegion`.
-#
-# This example keeps those Azure SDK objects through the processing path. The
-# Pydantic models below are small normalized snapshots of the Azure SDK objects
-# that make the later app-format conversion explicit and type-checkable.
-#
-# CAN-SR's production code calls `AnalyzeResult.as_dict()` because it stores raw
-# JSON for debugging and because older helper code was dict-oriented. That is
-# convenient inside this app, but it is not required for a clean port.
 
 
 class AzurePageMeta(BaseModel):
@@ -131,7 +91,7 @@ class FigureImage(BaseModel):
     png_bytes: bytes = Field(repr=False)
 
 
-class DocIntFigure(BaseModel):
+class ExtractedFigure(BaseModel):
     """Final figure shape for a cleaner port.
 
     Coordinates live directly on the figure. The PNG file/blob data also lives
@@ -139,14 +99,20 @@ class DocIntFigure(BaseModel):
     separate upload-payload list.
     """
 
+    model_config = ConfigDict(populate_by_name=True)
+
     index: int
-    azure_id: str
+    provider_id: str | None = Field(default=None, alias="azure_id")
     caption: Optional[str] = None
-    coordinates: list[ViewerBox] = Field(default_factory=list)
+    coordinates: list[PdfCoordinate] = Field(default_factory=list)
     image: Optional[FigureImage] = None
 
+    @property
+    def azure_id(self) -> str | None:
+        return self.provider_id
 
-class DocIntTable(BaseModel):
+
+class ExtractedTable(BaseModel):
     """Final table shape for a cleaner port.
 
     Tables are text, so markdown is inline string data. Coordinates live
@@ -156,14 +122,14 @@ class DocIntTable(BaseModel):
     index: int
     caption: Optional[str] = None
     markdown: str
-    coordinates: list[ViewerBox] = Field(default_factory=list)
+    coordinates: list[PdfCoordinate] = Field(default_factory=list)
 
 
-class DocIntResult(BaseModel):
+class FigureExtractionResultData(BaseModel):
     """Nicely typed end result of the DocInt-only portion of the pipeline."""
 
-    figures: list[DocIntFigure]
-    tables: list[DocIntTable]
+    figures: list[ExtractedFigure]
+    tables: list[ExtractedTable]
 
 
 # ---------------------------------------------------------------------------
@@ -259,11 +225,11 @@ def polygon_to_bbox(polygon: list[float]) -> tuple[float, float, float, float]:
 def normalize_bounding_regions_to_boxes(
     bounding_regions: list[AzureBoundingRegion],
     pages: list[AzurePageMeta],
-) -> list[ViewerBox]:
+) -> list[PdfCoordinate]:
     """Convert Azure bounding regions into CAN-SR viewer boxes."""
 
     page_by_number = {page.page_number: page for page in pages}
-    boxes: list[ViewerBox] = []
+    boxes: list[PdfCoordinate] = []
 
     for region in bounding_regions:
         page_meta = page_by_number.get(region.page_number)
@@ -276,7 +242,7 @@ def normalize_bounding_regions_to_boxes(
         max_y *= scale
 
         boxes.append(
-            ViewerBox(
+            PdfCoordinate(
                 page=region.page_number,
                 x=min_x,
                 y=min_y,
@@ -421,7 +387,6 @@ def extract_tables(result: AnalyzeResult) -> list[RawDocIntTable]:
     # `output_content_format="markdown"`.
     markdown_content = result.content or ""
 
-    # Current app behavior:
     # 1. Extract HTML table blocks from Azure markdown.
     # 2. Convert those HTML tables to GitHub-flavored markdown.
     html_tables = extract_html_tables_from_markdown(markdown_content)
@@ -498,8 +463,8 @@ def convert_to_app_result(
     pages: list[AzurePageMeta],
     figures: list[RawDocIntFigure],
     tables: list[RawDocIntTable],
-) -> DocIntResult:
-    """Convert DocInt artifacts into final port-friendly output.
+) -> FigureExtractionResultData:
+    """Convert DocInt artifacts into final app output.
 
     Pages are accepted here only because Azure table/figure polygons need page
     units for normalization. They are not returned. In your target app, keep
@@ -507,8 +472,8 @@ def convert_to_app_result(
     truth.
     """
 
-    final_figures: list[DocIntFigure] = []
-    final_tables: list[DocIntTable] = []
+    final_figures: list[ExtractedFigure] = []
+    final_tables: list[ExtractedTable] = []
 
     # -------------------------
     # Figures -> app artifacts
@@ -528,9 +493,9 @@ def convert_to_app_result(
             )
 
         final_figures.append(
-            DocIntFigure(
+            ExtractedFigure(
                 index=figure.index,
-                azure_id=figure.azure_id,
+                provider_id=figure.azure_id,
                 caption=figure.caption,
                 coordinates=boxes,
                 image=image,
@@ -546,7 +511,7 @@ def convert_to_app_result(
         )
 
         final_tables.append(
-            DocIntTable(
+            ExtractedTable(
                 index=table.index,
                 caption=table.caption,
                 markdown=table.table_markdown,
@@ -554,7 +519,7 @@ def convert_to_app_result(
             )
         )
 
-    return DocIntResult(
+    return FigureExtractionResultData(
         figures=final_figures,
         tables=final_tables,
     )
@@ -564,11 +529,11 @@ def process_pdf_with_docint(
     *,
     file: Any,
     client: DocumentIntelligenceClient,
-) -> DocIntResult:
+) -> FigureExtractionResultData:
     """One-call happy-path example: PDF -> DocInt -> final typed result.
 
     Returns:
-        DocIntResult:
+        FigureExtractionResultData:
             Nicely typed end result containing just figures and tables.
     """
 

@@ -1,7 +1,8 @@
 import pytest
 
 from my_app.models import Document, DocumentMetadata
-from my_app.pdf_processor import PdfCoordinate, PdfPage, StructureProcessor
+from my_app.pdf.text_extraction.tei import GrobidTeiParser
+from my_app.pdf.types import PdfCoordinate, PdfPage
 
 XML = """
 <TEI>
@@ -31,7 +32,7 @@ SENTENCE_XML = """
 
 
 def test_get_pages_returns_width_and_height_for_each_surface():
-    processor = StructureProcessor(XML)
+    processor = GrobidTeiParser(XML)
 
     assert processor.get_pages() == [
         {"width": 612.0, "height": 792.0},
@@ -40,7 +41,7 @@ def test_get_pages_returns_width_and_height_for_each_surface():
 
 
 def test_get_page_models_returns_typed_page_dimensions():
-    processor = StructureProcessor(XML)
+    processor = GrobidTeiParser(XML)
 
     pages = processor.get_page_models()
 
@@ -51,35 +52,35 @@ def test_get_page_models_returns_typed_page_dimensions():
 
 
 def test_get_coordinates_returns_one_entry_per_box_with_metadata():
-    processor = StructureProcessor(XML)
+    processor = GrobidTeiParser(XML)
 
     assert processor.get_coordinates() == [
         {
-            "page": "1",
-            "x": "10",
-            "y": "20",
-            "width": "30",
-            "height": "40",
+            "page": 1,
+            "x": 10.0,
+            "y": 20.0,
+            "width": 30.0,
+            "height": 40.0,
             "color": "rgba(139, 0, 0, 0.4)",
             "type": "p",
             "text": "Paragraph",
         },
         {
-            "page": "2",
-            "x": "15",
-            "y": "25",
-            "width": "35",
-            "height": "45",
+            "page": 2,
+            "x": 15.0,
+            "y": 25.0,
+            "width": 35.0,
+            "height": 45.0,
             "color": "rgba(139, 0, 0, 0.4)",
             "type": "p",
             "text": "Paragraph",
         },
         {
-            "page": "2",
-            "x": "50",
-            "y": "60",
-            "width": "70",
-            "height": "80",
+            "page": 2,
+            "x": 50.0,
+            "y": 60.0,
+            "width": 70.0,
+            "height": 80.0,
             "color": "rgba(139, 139, 0, 1)",
             "type": "head",
             "text": "Heading",
@@ -88,16 +89,16 @@ def test_get_coordinates_returns_one_entry_per_box_with_metadata():
 
 
 def test_get_coordinate_models_returns_typed_coordinates():
-    processor = StructureProcessor(XML)
+    processor = GrobidTeiParser(XML)
 
     coordinates = processor.get_coordinate_models()
 
     assert coordinates[0] == PdfCoordinate(
-        page="1",
-        x="10",
-        y="20",
-        width="30",
-        height="40",
+        page=1,
+        x=10.0,
+        y=20.0,
+        width=30.0,
+        height=40.0,
         color="rgba(139, 0, 0, 0.4)",
         annotation_type="p",
         text="Paragraph",
@@ -109,7 +110,7 @@ def test_box_to_coordinate_rejects_malformed_coordinate_box():
         ValueError,
         match="Expected a Grobid coordinate box with 5 values",
     ):
-        StructureProcessor._box_to_coordinate(["1", "10", "20"])
+        GrobidTeiParser._box_to_coordinate(["1", "10", "20"])
 
 
 def test_get_sentences_returns_unique_sentence_text_in_order():
@@ -119,7 +120,7 @@ def test_get_sentences_returns_unique_sentence_text_in_order():
     )
     metadata = DocumentMetadata(
         document=document,
-        coordinates=StructureProcessor(SENTENCE_XML).get_coordinates(),
+        coordinates=GrobidTeiParser(SENTENCE_XML).get_coordinates(),
     )
 
     assert metadata.get_sentences() == (

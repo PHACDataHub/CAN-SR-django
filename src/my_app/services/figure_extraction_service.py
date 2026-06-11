@@ -9,10 +9,9 @@ from my_app.models import (
     DocumentTable,
     FigureExtractionResult,
 )
+from my_app.pdf.figure_extraction.azure import FigureExtractionResultData
+from my_app.pdf.figure_extraction.client import get_figure_extraction_client
 from shortcuts import cached_property, logger
-
-from .figure_extraction_client import get_figure_extraction_client
-from .figure_extraction_util import DocIntResult
 
 
 class QueueFigureExtractionService:
@@ -64,7 +63,7 @@ class FigureExtractionService:
         return result_record
 
     @cached_property
-    def extraction_result(self) -> DocIntResult:
+    def extraction_result(self) -> FigureExtractionResultData:
         client = get_figure_extraction_client()
         result = client.extract_figures(self.document.file)
         return result
@@ -77,7 +76,7 @@ class FigureExtractionService:
                 index=figure.index,
                 caption=figure.caption,
                 bounding_box=[
-                    coordinate.model_dump()
+                    coordinate.as_json_dict()
                     for coordinate in figure.coordinates
                 ],
             )
@@ -106,7 +105,8 @@ class FigureExtractionService:
                 caption=table.caption or "",
                 table_markdown=table.markdown,
                 bounding_box=[
-                    coordinate.model_dump() for coordinate in table.coordinates
+                    coordinate.as_json_dict()
+                    for coordinate in table.coordinates
                 ],
             )
             for table in result.tables

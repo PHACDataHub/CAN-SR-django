@@ -7,16 +7,14 @@ from django.test import override_settings
 from my_app.management.commands.check_azure_docint import (
     build_docint_smoke_test_pdf,
 )
-from my_app.services.figure_extraction.figure_extraction_client import (
-    AzureDocIntExtractionClient,
-)
-from my_app.services.figure_extraction.figure_extraction_util import (
-    DocIntFigure,
-    DocIntResult,
-    DocIntTable,
+from my_app.pdf.figure_extraction.azure import (
+    ExtractedFigure,
+    ExtractedTable,
+    FigureExtractionResultData,
     FigureImage,
-    ViewerBox,
 )
+from my_app.pdf.figure_extraction.client import AzureDocIntExtractionClient
+from my_app.pdf.types import PdfCoordinate
 
 
 class FakeAzureDocIntExtractionClient(AzureDocIntExtractionClient):
@@ -29,19 +27,19 @@ class FakeAzureDocIntExtractionClient(AzureDocIntExtractionClient):
 
 
 def build_result():
-    coordinates = [ViewerBox(page=1, x=72, y=102, width=120, height=90)]
-    return DocIntResult(
+    coordinates = [PdfCoordinate(page=1, x=72, y=102, width=120, height=90)]
+    return FigureExtractionResultData(
         figures=[
-            DocIntFigure(
+            ExtractedFigure(
                 index=1,
-                azure_id="1.1",
+                provider_id="1.1",
                 caption="Dummy image",
                 coordinates=coordinates,
                 image=FigureImage(png_bytes=b"png bytes"),
             )
         ],
         tables=[
-            DocIntTable(
+            ExtractedTable(
                 index=1,
                 markdown="| Outcome | Group A |\n| --- | --- |\n| Cases | 12 |",
                 coordinates=coordinates,
@@ -87,7 +85,7 @@ def test_check_azure_docint_runs_generated_pdf_smoke_test():
     AZURE_DOC_INT_API_KEY="secret",
 )
 def test_check_azure_docint_rejects_empty_tables():
-    result = DocIntResult(figures=[], tables=[])
+    result = FigureExtractionResultData(figures=[], tables=[])
 
     with patch(
         "my_app.management.commands.check_azure_docint.get_figure_extraction_client",

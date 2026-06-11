@@ -8,7 +8,6 @@ from django.test import override_settings
 
 from django_database_task.models import DatabaseTask
 
-from my_app.artifact_types import ViewerBox
 from my_app.model_factories import DocumentFactory
 from my_app.models import (
     Document,
@@ -16,18 +15,17 @@ from my_app.models import (
     DocumentTable,
     FigureExtractionResult,
 )
-from my_app.services.figure_extraction.figure_extraction_client import (
-    AzureDocIntExtractionClient,
+from my_app.pdf.figure_extraction.azure import (
+    ExtractedFigure,
+    ExtractedTable,
+    FigureExtractionResultData,
+    FigureImage,
 )
-from my_app.services.figure_extraction.figure_extraction_service import (
+from my_app.pdf.figure_extraction.client import AzureDocIntExtractionClient
+from my_app.pdf.types import PdfCoordinate
+from my_app.services.figure_extraction_service import (
     FigureExtractionService,
     QueueFigureExtractionService,
-)
-from my_app.services.figure_extraction.figure_extraction_util import (
-    DocIntFigure,
-    DocIntResult,
-    DocIntTable,
-    FigureImage,
 )
 
 
@@ -40,19 +38,19 @@ def _build_pdf_file(name="example.pdf"):
 
 
 def _build_result():
-    box = ViewerBox(page=1, x=72, y=144, width=120, height=90)
-    return DocIntResult(
+    box = PdfCoordinate(page=1, x=72, y=144, width=120, height=90)
+    return FigureExtractionResultData(
         figures=[
-            DocIntFigure(
+            ExtractedFigure(
                 index=1,
-                azure_id="1.1",
+                provider_id="1.1",
                 caption="Figure caption",
                 coordinates=[box],
                 image=FigureImage(png_bytes=b"png bytes"),
             )
         ],
         tables=[
-            DocIntTable(
+            ExtractedTable(
                 index=1,
                 caption="Table caption",
                 markdown="| Outcome | Count |\n| --- | --- |\n| Cases | 12 |",
@@ -125,7 +123,7 @@ def test_azure_docint_client_extracts_tables_and_figures():
     assert result.tables[0].markdown == (
         "| Outcome | Count |\n| --- | --- |\n| Cases | 12 |"
     )
-    assert result.tables[0].coordinates[0].model_dump() == {
+    assert result.tables[0].coordinates[0].as_json_dict() == {
         "page": 1,
         "x": 72.0,
         "y": 144.0,
@@ -150,8 +148,7 @@ def test_figure_extraction_service_saves_result_to_database(tmp_path):
         client.extract_figures.return_value = result
 
         with patch(
-            "my_app.services.figure_extraction.figure_extraction_service."
-            "get_figure_extraction_client",
+            "my_app.services.figure_extraction_service.get_figure_extraction_client",
             return_value=client,
         ):
             FigureExtractionService(document=document).perform()
@@ -191,10 +188,10 @@ def test_figure_extraction_service_replaces_existing_artifacts(tmp_path):
         )
 
         client = MagicMock()
-        client.extract_figures.return_value = DocIntResult(
+        client.extract_figures.return_value = FigureExtractionResultData(
             figures=[],
             tables=[
-                DocIntTable(
+                ExtractedTable(
                     index=2,
                     caption=None,
                     markdown="new",
@@ -204,8 +201,7 @@ def test_figure_extraction_service_replaces_existing_artifacts(tmp_path):
         )
 
         with patch(
-            "my_app.services.figure_extraction.figure_extraction_service."
-            "get_figure_extraction_client",
+            "my_app.services.figure_extraction_service.get_figure_extraction_client",
             return_value=client,
         ):
             FigureExtractionService(document=document).perform()
@@ -246,8 +242,7 @@ def test_process_figure_extraction_task_saves_database_result(tmp_path):
         client.extract_figures.return_value = result
 
         with patch(
-            "my_app.services.figure_extraction.figure_extraction_service."
-            "get_figure_extraction_client",
+            "my_app.services.figure_extraction_service.get_figure_extraction_client",
             return_value=client,
         ):
             QueueFigureExtractionService(document=document).perform()

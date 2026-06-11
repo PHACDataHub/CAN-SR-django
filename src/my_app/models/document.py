@@ -6,7 +6,11 @@ from phac_aspc.django import fields
 from proj.model_util import add_to_admin
 from proj.text import tdt
 
-from my_app.artifact_types import normalize_viewer_boxes
+from my_app.pdf.text_extraction.sentences import (
+    get_sentence_list,
+    get_sentences,
+)
+from my_app.pdf.types import normalize_pdf_coordinates
 
 
 @add_to_admin
@@ -34,11 +38,11 @@ class DocumentProcessingStatus(models.TextChoices):
 
 class BoundingBoxJSONField(models.JSONField):
     def get_prep_value(self, value):
-        return super().get_prep_value(normalize_viewer_boxes(value))
+        return super().get_prep_value(normalize_pdf_coordinates(value))
 
     def validate(self, value, model_instance):
         super().validate(value, model_instance)
-        normalize_viewer_boxes(value)
+        normalize_pdf_coordinates(value)
 
 
 class FigureExtractionStatus(models.TextChoices):
@@ -72,19 +76,10 @@ class DocumentMetadata(models.Model):
         return f"{self.document_id} metadata"
 
     def get_sentence_list(self):
-        coordinates = self.coordinates
-        annotations = [
-            a for a in coordinates if a.get("type") == "s" and a.get("text")
-        ]
-        full_text_arr = self._ordered_set([a["text"] for a in annotations])
-        return full_text_arr
+        return get_sentence_list(self.coordinates)
 
     def get_sentences(self):
-        full_text_arr = self.get_sentence_list()
-        full_text_str = "\n\n".join(
-            [f"[{i}] {x}" for i, x in enumerate(full_text_arr)]
-        )
-        return full_text_str
+        return get_sentences(self.coordinates)
 
     @staticmethod
     def _ordered_set(lst):

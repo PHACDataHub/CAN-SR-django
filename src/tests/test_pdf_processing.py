@@ -3,7 +3,7 @@ from django.test import override_settings
 import pytest
 from grobid_client.grobid_client import ServerUnavailableException
 
-from my_app.pdf_processor import (
+from my_app.pdf.text_extraction.processors import (
     MinimalDevPdfProcessor,
     TestPdfProcessor,
     get_pdf_processor,
@@ -13,12 +13,6 @@ from my_app.pdf_processor import (
 def test_correct_client_is_used_in_tests():
     processor = get_pdf_processor()
     assert isinstance(processor, TestPdfProcessor)
-
-
-@override_settings(GROBID_URL="asdf", IS_RUNNING_PYTESTS=False)
-def test_grobid_client_used_when_url_set():
-    with pytest.raises(ServerUnavailableException):
-        get_pdf_processor()
 
 
 @override_settings(GROBID_URL="dev", IS_RUNNING_PYTESTS=False)

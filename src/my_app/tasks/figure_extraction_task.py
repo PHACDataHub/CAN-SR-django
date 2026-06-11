@@ -3,9 +3,7 @@ from django.tasks import task
 from data_fetcher.util import GlobalRequest, clear_request_caches
 
 from my_app.models import Document
-from my_app.services.figure_extraction.figure_extraction_service import (
-    FigureExtractionService,
-)
+from my_app.services.figure_extraction_service import FigureExtractionService
 
 
 @task(takes_context=True)

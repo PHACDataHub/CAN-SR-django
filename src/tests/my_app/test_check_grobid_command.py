@@ -48,11 +48,11 @@ def test_check_grobid_command_outputs_json(tmp_path):
     assert payload["pages"] == [{"width": 612.0, "height": 792.0}]
     assert payload["coordinates"] == [
         {
-            "page": "1",
-            "x": "10",
-            "y": "20",
-            "width": "30",
-            "height": "40",
+            "page": 1,
+            "x": 10.0,
+            "y": 20.0,
+            "width": 30.0,
+            "height": 40.0,
             "color": "rgba(139, 0, 0, 0.4)",
             "type": "p",
             "text": "Paragraph",

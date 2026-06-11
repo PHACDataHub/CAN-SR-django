@@ -6,13 +6,11 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from my_app.services.figure_extraction.figure_extraction_client import (
+from my_app.pdf.figure_extraction.azure import FigureExtractionResultData
+from my_app.pdf.figure_extraction.client import (
     AzureDocIntExtractionClient,
     DocIntConfigurationError,
     get_figure_extraction_client,
-)
-from my_app.services.figure_extraction.figure_extraction_util import (
-    DocIntResult,
 )
 
 
@@ -97,7 +95,7 @@ def build_docint_smoke_test_pdf() -> bytes:
     return _build_pdf(objects)
 
 
-def validate_docint_result(result: DocIntResult) -> None:
+def validate_docint_result(result: FigureExtractionResultData) -> None:
     if not result.tables:
         raise ValueError(
             "Azure Document Intelligence did not return any tables"
@@ -114,7 +112,7 @@ def validate_docint_result(result: DocIntResult) -> None:
             )
 
     for figure in result.figures:
-        if not figure.azure_id:
+        if not figure.provider_id:
             raise ValueError(
                 "Azure Document Intelligence returned a figure without an Azure ID"
             )
@@ -149,7 +147,7 @@ def get_azure_docint_client() -> AzureDocIntExtractionClient:
     return client
 
 
-def run_smoke_test(pdf_path: Path | None = None) -> DocIntResult:
+def run_smoke_test(pdf_path: Path | None = None) -> FigureExtractionResultData:
     client = get_azure_docint_client()
 
     if pdf_path is not None:
