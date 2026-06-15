@@ -7,11 +7,11 @@ from proj.llm_client import ClientFailureError
 
 from my_app.models import (
     Citation,
-    DocumentMetadata,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     L2ScreeningResult,
     ScreeningResultStatus,
+    TextExtractionResult,
 )
 from my_app.prompts.l2_screening_prompt import (
     UnexpectedLLMOutputError,
@@ -21,7 +21,9 @@ from my_app.queries import options_for_question
 from shortcuts import logger
 
 
-def get_document_metadata_for_citation(citation: Citation) -> DocumentMetadata:
+def get_text_extraction_result_for_citation(
+    citation: Citation,
+) -> TextExtractionResult:
     document = citation.document
     if document is None:
         raise ValueError(
@@ -29,10 +31,10 @@ def get_document_metadata_for_citation(citation: Citation) -> DocumentMetadata:
         )
 
     try:
-        return document.document_metadata
-    except DocumentMetadata.DoesNotExist as exc:
+        return document.text_extraction_result
+    except TextExtractionResult.DoesNotExist as exc:
         raise ValueError(
-            "L2 screening requires document metadata to be available for the attached document."
+            "L2 screening requires text extraction to be completed for the attached document."
         ) from exc
 
 
@@ -83,7 +85,7 @@ class L2ScreeningService:
 
             for citation_id in citations_to_process:
                 citation = citations_by_id[citation_id]
-                get_document_metadata_for_citation(citation)
+                get_text_extraction_result_for_citation(citation)
                 result = L2ScreeningResult.objects.create(
                     citation_id=citation_id,
                     question_id=question.id,
@@ -139,7 +141,7 @@ class ProcessL2ScreeningService:
         self,
         question: L2ScreeningQuestion,
         citation: Citation,
-        metadata_record: DocumentMetadata,
+        text_extraction_result: TextExtractionResult,
     ):
         options = options_for_question(L2ScreeningQuestionOption, question.id)
 
@@ -149,7 +151,7 @@ class ProcessL2ScreeningService:
                     question,
                     options,
                     citation,
-                    metadata_record,
+                    text_extraction_result,
                 )
             except UnexpectedLLMOutputError:
                 if retry_num == self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT:
@@ -171,17 +173,19 @@ class ProcessL2ScreeningService:
             "question",
             "citation",
             "citation__document",
-            "citation__document__document_metadata",
+            "citation__document__text_extraction_result",
         ).get(id=self.result_id)
         question = result.question
         citation = result.citation
-        metadata_record = get_document_metadata_for_citation(citation)
+        text_extraction_result = get_text_extraction_result_for_citation(
+            citation
+        )
 
         try:
             screening_results = self._get_l2_screening_results_with_retries(
                 question,
                 citation,
-                metadata_record,
+                text_extraction_result,
             )
         except UnexpectedLLMOutputError as exc:
             logger.exception(

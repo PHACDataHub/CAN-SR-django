@@ -13,17 +13,17 @@ from proj.htpy.modal_component import ModalComponent
 from my_app.models import (
     Citation,
     Document,
-    DocumentMetadata,
     L1ScreeningResult,
     L2ScreeningQuestion,
     L2ScreeningResult,
     ParameterExtractionResult,
     Review,
     ScreeningResultStatus,
+    TextExtractionResult,
 )
 from my_app.queries import L2ScreeningStatusFetcher
 from my_app.router import route
-from my_app.services.preprocess_pdf import QueuePreprocessPDFService
+from my_app.services.text_extraction import QueueTextExtractionService
 from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
 from shortcuts import (
     BasePageTemplate,
@@ -53,11 +53,11 @@ DOCUMENT_UPLOAD_BADGE_CLASSES = {
     "missing": "bg-secondary",
 }
 
-DOCUMENT_PROCESSING_BADGE_CLASSES = {
-    DocumentMetadata.DocumentProcessingStatus.NOT_STARTED: "bg-secondary",
-    DocumentMetadata.DocumentProcessingStatus.PENDING: "bg-warning text-dark",
-    DocumentMetadata.DocumentProcessingStatus.COMPLETED: "bg-success",
-    DocumentMetadata.DocumentProcessingStatus.FAILED: "bg-danger",
+TEXT_EXTRACTION_BADGE_CLASSES = {
+    TextExtractionResult.TextExtractionStatus.NOT_STARTED: "bg-secondary",
+    TextExtractionResult.TextExtractionStatus.PENDING: "bg-warning text-dark",
+    TextExtractionResult.TextExtractionStatus.COMPLETED: "bg-success",
+    TextExtractionResult.TextExtractionStatus.FAILED: "bg-danger",
 }
 
 
@@ -78,7 +78,7 @@ class L2CitationUploadForm(StandardFormMixin):
     )
     confirm_replace = forms.BooleanField(
         label=tdt(
-            "I understand this will delete the existing document, metadata, and screening results before uploading the replacement."
+            "I understand this will delete the existing document, text extraction result, and screening results before uploading the replacement."
         ),
         required=True,
     )
@@ -114,24 +114,24 @@ def _document_upload_badge(citation_row: Citation):
     )
 
 
-def _document_processing_badge(citation_row: Citation):
+def _text_extraction_badge(citation_row: Citation):
     document = citation_row.document
     if document is None:
         return None
 
-    metadata = getattr(document, "document_metadata", None)
-    if metadata is None:
-        status = DocumentMetadata.DocumentProcessingStatus.NOT_STARTED
+    text_extraction_result = getattr(document, "text_extraction_result", None)
+    if text_extraction_result is None:
+        status = TextExtractionResult.TextExtractionStatus.NOT_STARTED
     else:
-        status = metadata.status
+        status = text_extraction_result.status
 
-    return _document_processing_badge_for_status(status)
+    return _text_extraction_badge_for_status(status)
 
 
-def _document_processing_badge_for_status(status):
+def _text_extraction_badge_for_status(status):
     return _badge(
-        DocumentMetadata.DocumentProcessingStatus(status).label,
-        DOCUMENT_PROCESSING_BADGE_CLASSES[status],
+        TextExtractionResult.TextExtractionStatus(status).label,
+        TEXT_EXTRACTION_BADGE_CLASSES[status],
     )
 
 
@@ -175,7 +175,7 @@ def render_l2_pdf_detail_link(citation_row: Citation, review: Review):
 def CitationRowDisplay(citation_row: Citation, review: Review, status_fetcher):
     row_id = f"l2-screening-row-{citation_row.id}"
 
-    document_processing_badge = _document_processing_badge(citation_row)
+    text_extraction_badge = _text_extraction_badge(citation_row)
 
     return h.div(
         ".list-group-item.citation-item.position-relative.pb-4",
@@ -198,10 +198,10 @@ def CitationRowDisplay(citation_row: Citation, review: Review, status_fetcher):
                     ],
                     (
                         h.div[
-                            h.span(".text-muted.me-1")[tdt("Processed")],
-                            document_processing_badge,
+                            h.span(".text-muted.me-1")[tdt("Text extraction")],
+                            text_extraction_badge,
                         ]
-                        if document_processing_badge is not None
+                        if text_extraction_badge is not None
                         else None
                     ),
                     h.div[
@@ -240,7 +240,7 @@ class L2ScreeningComponent:
     def citation_rows(self):
         return (
             Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__document_metadata")
+            .select_related("document", "document__text_extraction_result")
             .order_by("order")
         )
 
@@ -277,7 +277,7 @@ class L2ScreeningComponent:
         return (
             Citation.objects.filter(
                 dataset__review=self.review,
-                document__document_metadata__status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+                document__text_extraction_result__status=TextExtractionResult.TextExtractionStatus.COMPLETED,
             )
             .values_list("id", flat=True)
             .distinct()
@@ -338,7 +338,7 @@ class L2ScreeningComponent:
                 h.span(".fw-semibold")[str(self.uploaded_citations)],
             ],
             h.div(".d-flex.justify-content-between.align-items-center.mb-2")[
-                h.span[tdt("Processed documents")],
+                h.span[tdt("Text extracted documents")],
                 h.span(".fw-semibold")[str(self.processed_citations)],
             ],
             h.div(".d-flex.justify-content-between.align-items-center.mb-2")[
@@ -471,7 +471,7 @@ class L2ScreeningBaseView(MustAccessReviewMixin, ListView):
     def get_queryset(self):
         return (
             Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__document_metadata")
+            .select_related("document", "document__text_extraction_result")
             .order_by("order")
         )
 
@@ -614,7 +614,7 @@ class L2ScreeningDocumentUploadViewMixin(MustAccessReviewMixin):
         )
         self.citation_row.document = document
         self.citation_row.save(update_fields=["document"])
-        QueuePreprocessPDFService(document=document).perform()
+        QueueTextExtractionService(document=document).perform()
 
     def form_valid(self):
         with transaction.atomic():

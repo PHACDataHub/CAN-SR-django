@@ -1,6 +1,6 @@
 import pytest
 
-from my_app.models import Document, DocumentMetadata
+from my_app.models import Document, TextExtractionResult
 from my_app.pdf.text_extraction.tei import GrobidTeiParser
 from my_app.pdf.types import PdfCoordinate, PdfPage
 
@@ -51,7 +51,7 @@ def test_get_page_models_returns_typed_page_dimensions():
     ]
 
 
-def test_get_coordinates_returns_one_entry_per_box_with_metadata():
+def test_get_coordinates_returns_one_entry_per_box_with_text_extraction_result():
     processor = GrobidTeiParser(XML)
 
     assert processor.get_coordinates() == [
@@ -118,11 +118,11 @@ def test_get_sentences_returns_unique_sentence_text_in_order():
         id=1,
         file="documents/example.pdf",
     )
-    metadata = DocumentMetadata(
+    text_extraction_result = TextExtractionResult(
         document=document,
         coordinates=GrobidTeiParser(SENTENCE_XML).get_coordinates(),
     )
 
-    assert metadata.get_sentences() == (
+    assert text_extraction_result.get_sentences() == (
         "[0] First sentence.\n\n[1] Second sentence."
     )

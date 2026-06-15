@@ -8,7 +8,6 @@ from my_app.models import (
     CitationDatasetColumn,
     DemoTaskRun,
     Document,
-    DocumentMetadata,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L1ScreeningResult,
@@ -21,6 +20,7 @@ from my_app.models import (
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
+    TextExtractionResult,
 )
 
 
@@ -60,9 +60,9 @@ class DocumentFactory(factory.django.DjangoModelFactory):
     )
 
 
-class DocumentMetadataFactory(factory.django.DjangoModelFactory):
+class TextExtractionResultFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = DocumentMetadata
+        model = TextExtractionResult
 
     document = factory.SubFactory(DocumentFactory)
 

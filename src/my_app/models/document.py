@@ -29,7 +29,7 @@ class Document(models.Model):
         return self.file.name
 
 
-class DocumentProcessingStatus(models.TextChoices):
+class TextExtractionStatus(models.TextChoices):
     NOT_STARTED = ("not_started", tdt("Not Started"))
     PENDING = ("pending", tdt("Pending"))
     COMPLETED = ("completed", tdt("Completed"))
@@ -53,19 +53,19 @@ class FigureExtractionStatus(models.TextChoices):
 
 
 @add_to_admin
-class DocumentMetadata(models.Model):
-    DocumentProcessingStatus = DocumentProcessingStatus
+class TextExtractionResult(models.Model):
+    TextExtractionStatus = TextExtractionStatus
 
     document = fields.OneToOneField(
         Document,
-        related_name="document_metadata",
+        related_name="text_extraction_result",
         on_delete=models.CASCADE,
         verbose_name=tdt("Document"),
     )
     status = models.CharField(
         max_length=20,
-        choices=DocumentProcessingStatus.choices,
-        default=DocumentProcessingStatus.PENDING,
+        choices=TextExtractionStatus.choices,
+        default=TextExtractionStatus.PENDING,
         null=False,
     )
     pages = models.JSONField(default=dict, blank=True)
@@ -73,7 +73,7 @@ class DocumentMetadata(models.Model):
     raw_xml = models.TextField(blank=True, verbose_name=tdt("Raw XML"))
 
     def __str__(self):
-        return f"{self.document_id} metadata"
+        return f"{self.document_id} text extraction result"
 
     def get_sentence_list(self):
         return get_sentence_list(self.coordinates)

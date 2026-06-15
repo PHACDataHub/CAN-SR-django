@@ -10,9 +10,9 @@ from my_app.models import (
     Citation,
     CitationDataset,
     Document,
-    DocumentMetadata,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
+    TextExtractionResult,
 )
 from my_app.prompts.l2_screening_prompt import (
     L2ScreeningPromptBuilder,
@@ -36,7 +36,7 @@ def _build_screening_prompt_context():
     document = Document.objects.create(
         file="documents/example.pdf",
     )
-    metadata_record = DocumentMetadata.objects.create(
+    text_extraction_result = TextExtractionResult.objects.create(
         document=document,
         coordinates=[
             {
@@ -68,7 +68,7 @@ def _build_screening_prompt_context():
         sr,
         dataset,
         row,
-        metadata_record,
+        text_extraction_result,
         question,
         include_option,
         exclude_option,
@@ -76,7 +76,7 @@ def _build_screening_prompt_context():
 
 
 def test_screening_prompt_builder():
-    _, _, row, metadata_record, question, *options = (
+    _, _, row, text_extraction_result, question, *options = (
         _build_screening_prompt_context()
     )
 
@@ -84,7 +84,7 @@ def test_screening_prompt_builder():
         question=question,
         options=options,
         citation=row,
-        metadata_record=metadata_record,
+        text_extraction_result=text_extraction_result,
     )
     prompt_args = prompt_builder.get_screening_prompt_args()
 
@@ -109,9 +109,15 @@ def test_screening_prompt_builder():
 
 @override_settings(HAS_LLM=True)
 def test_get_l2_screening_results_returns_exact_matching_option():
-    _, _, row, metadata_record, question, include_option, exclude_option = (
-        _build_screening_prompt_context()
-    )
+    (
+        _,
+        _,
+        row,
+        text_extraction_result,
+        question,
+        include_option,
+        exclude_option,
+    ) = _build_screening_prompt_context()
 
     client = MagicMock()
     client.complete_prompt.return_value = json.dumps(
@@ -132,7 +138,7 @@ def test_get_l2_screening_results_returns_exact_matching_option():
             question,
             [include_option, exclude_option],
             row,
-            metadata_record,
+            text_extraction_result,
         )
 
     assert result.selected == include_option
@@ -146,7 +152,7 @@ def test_get_l2_screening_results_returns_exact_matching_option():
 
 @override_settings(HAS_LLM=True)
 def test_get_l2_screening_results_raises_when_json_is_invalid():
-    _, _, row, metadata_record, question, *options = (
+    _, _, row, text_extraction_result, question, *options = (
         _build_screening_prompt_context()
     )
 
@@ -157,12 +163,14 @@ def test_get_l2_screening_results_raises_when_json_is_invalid():
         "my_app.prompts.l2_screening_prompt.get_client", return_value=client
     ):
         with pytest.raises(UnexpectedLLMOutputError, match="invalid JSON"):
-            get_l2_screening_results(question, options, row, metadata_record)
+            get_l2_screening_results(
+                question, options, row, text_extraction_result
+            )
 
 
 @override_settings(HAS_LLM=True)
 def test_get_l2_screening_results_raises_when_selected_option_does_not_match():
-    _, _, row, metadata_record, question, *options = (
+    _, _, row, text_extraction_result, question, *options = (
         _build_screening_prompt_context()
     )
 
@@ -185,12 +193,14 @@ def test_get_l2_screening_results_raises_when_selected_option_does_not_match():
             UnexpectedLLMOutputError,
             match="doesn't match available options",
         ):
-            get_l2_screening_results(question, options, row, metadata_record)
+            get_l2_screening_results(
+                question, options, row, text_extraction_result
+            )
 
 
 @override_settings(HAS_LLM=True)
 def test_get_l2_screening_results_raises_on_pydantic_validation_error():
-    _, _, row, metadata_record, question, *options = (
+    _, _, row, text_extraction_result, question, *options = (
         _build_screening_prompt_context()
     )
 
@@ -210,4 +220,6 @@ def test_get_l2_screening_results_raises_on_pydantic_validation_error():
         "my_app.prompts.l2_screening_prompt.get_client", return_value=client
     ):
         with pytest.raises(UnexpectedLLMOutputError):
-            get_l2_screening_results(question, options, row, metadata_record)
+            get_l2_screening_results(
+                question, options, row, text_extraction_result
+            )

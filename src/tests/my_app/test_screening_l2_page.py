@@ -10,7 +10,6 @@ from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
     DocumentFactory,
-    DocumentMetadataFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningResultFactory,
     L2ScreeningQuestionFactory,
@@ -19,14 +18,15 @@ from my_app.model_factories import (
     ParameterExtractionResultFactory,
     ParameterQuestionFactory,
     ReviewFactory,
+    TextExtractionResultFactory,
 )
 from my_app.models import (
     Document,
-    DocumentMetadata,
     L1ScreeningResult,
     L2ScreeningResult,
     ParameterExtractionResult,
     ScreeningResultStatus,
+    TextExtractionResult,
 )
 
 
@@ -159,9 +159,9 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     document = DocumentFactory()
     row.document = document
     row.save(update_fields=["document"])
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
 
     question = L2ScreeningQuestionFactory(review=review)
@@ -225,9 +225,9 @@ def test_screen_l2_row_details_view_renders_screening_process_button(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
 
     with patch_rules(can_access_review=True):
@@ -253,9 +253,9 @@ def test_screen_l2_row_process_view_enqueues_screening_and_returns_control(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
     question1 = L2ScreeningQuestionFactory(review=review)
     question2 = L2ScreeningQuestionFactory(review=review)
@@ -296,9 +296,9 @@ def test_screen_l2_row_process_view_replaces_existing_screening_results(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
     question = L2ScreeningQuestionFactory(review=review)
     old_result = L2ScreeningResultFactory(
@@ -330,9 +330,9 @@ def test_screen_l2_row_process_view_rejects_unprocessed_document(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.PENDING,
+        status=TextExtractionResult.TextExtractionStatus.PENDING,
     )
     L2ScreeningQuestionFactory(review=review)
 
@@ -438,7 +438,7 @@ def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
             "height": "120",
         },
     ]
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
         pages=pages,
         coordinates=coordinates,
@@ -504,7 +504,7 @@ def test_screen_l2_row_pdf_views_return_404_without_document(
     assert response.status_code == 404
 
 
-def test_screen_l2_row_pdf_metadata_view_returns_404_without_metadata(
+def test_screen_l2_row_pdf_metadata_view_returns_404_without_result(
     vanilla_client,
 ):
     review = ReviewFactory()
@@ -540,7 +540,7 @@ def test_screen_l2_row_pdf_views_require_review_access(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(document=document)
+    TextExtractionResultFactory(document=document)
 
     with patch_rules(can_access_review=False):
         url = reverse(url_name, args=[review.id, row.id])
@@ -570,7 +570,7 @@ def test_screen_l2_row_pdf_views_return_404_for_row_from_another_review(
     dataset = CitationDatasetFactory(review=row_review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(document=document)
+    TextExtractionResultFactory(document=document)
 
     with patch_rules(can_access_review=True):
         url = reverse(url_name, args=[requested_review.id, row.id])
@@ -594,9 +594,9 @@ def test_screening_l2_component_view_renders_upload_and_screening_statuses(
     document = DocumentFactory()
     uploaded_row.document = document
     uploaded_row.save(update_fields=["document"])
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
     L2ScreeningResultFactory(
         citation=uploaded_row,
@@ -673,7 +673,7 @@ def test_screen_l2_row_upload_view_uploads_document_and_triggers_refresh(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.screening_l2.QueuePreprocessPDFService.perform"
+            "my_app.views.screening_l2.QueueTextExtractionService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
                 reverse("screen_l2_row_upload", args=[review.id, row.id]),
@@ -703,7 +703,7 @@ def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
     old_document = DocumentFactory()
     row.document = old_document
     row.save(update_fields=["document"])
-    DocumentMetadataFactory(document=old_document)
+    TextExtractionResultFactory(document=old_document)
 
     L1ScreeningResultFactory(
         citation=row,
@@ -726,7 +726,7 @@ def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.screening_l2.QueuePreprocessPDFService.perform"
+            "my_app.views.screening_l2.QueueTextExtractionService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
                 reverse("screen_l2_row_upload", args=[review.id, row.id]),

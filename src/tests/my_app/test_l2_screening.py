@@ -14,9 +14,9 @@ from my_app.model_factories import (
 )
 from my_app.models import (
     Document,
-    DocumentMetadata,
     L2ScreeningResult,
     ScreeningResultStatus,
+    TextExtractionResult,
 )
 from my_app.services.l2_screening import (
     DeferredL2ScreeningService,
@@ -24,7 +24,9 @@ from my_app.services.l2_screening import (
 )
 
 
-def _build_l2_screening_context(*, with_document=True, with_metadata=True):
+def _build_l2_screening_context(
+    *, with_document=True, with_text_extraction_result=True
+):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     citation = CitationFactory(
@@ -41,8 +43,8 @@ def _build_l2_screening_context(*, with_document=True, with_metadata=True):
         citation.document = document
         citation.save(update_fields=["document"])
 
-        if with_metadata:
-            metadata_record = DocumentMetadata.objects.create(
+        if with_text_extraction_result:
+            text_extraction_result = TextExtractionResult.objects.create(
                 document=document,
                 coordinates=[
                     {
@@ -56,9 +58,9 @@ def _build_l2_screening_context(*, with_document=True, with_metadata=True):
                 ],
             )
         else:
-            metadata_record = None
+            text_extraction_result = None
     else:
-        metadata_record = None
+        text_extraction_result = None
 
     question = L2ScreeningQuestionFactory(
         review=review,
@@ -75,7 +77,7 @@ def _build_l2_screening_context(*, with_document=True, with_metadata=True):
         option_value="Exclude the citation",
     )
 
-    return review, dataset, citation, metadata_record, question
+    return review, dataset, citation, text_extraction_result, question
 
 
 def test_deferred_l2_screening_service_enqueues_created_results():
@@ -202,7 +204,7 @@ def test_deferred_l2_screening_service_overwrite_targets_only_requested_rows_and
 
 
 @override_settings(HAS_LLM=False)
-def test_process_l2_screening_service_uses_mock_results_helper_with_metadata():
+def test_process_l2_screening_service_uses_mock_results_helper_with_text_extraction_result():
     _, _, row, _, question = _build_l2_screening_context()
     result = L2ScreeningResult.objects.create(
         citation=row,
@@ -268,8 +270,10 @@ def test_process_l2_screening_service_raises_when_document_missing():
     assert result.status == ScreeningResultStatus.PENDING
 
 
-def test_deferred_l2_screening_service_raises_when_document_metadata_missing():
-    _, _, row, _, question = _build_l2_screening_context(with_metadata=False)
+def test_deferred_l2_screening_service_raises_when_text_extraction_result_missing():
+    _, _, row, _, question = _build_l2_screening_context(
+        with_text_extraction_result=False
+    )
 
     task_mock = MagicMock()
     task_mock.enqueue = MagicMock()
@@ -280,7 +284,7 @@ def test_deferred_l2_screening_service_raises_when_document_metadata_missing():
     ):
         with pytest.raises(
             ValueError,
-            match="requires document metadata to be available",
+            match="requires text extraction to be completed",
         ):
             DeferredL2ScreeningService(
                 rows=[row],
@@ -292,8 +296,10 @@ def test_deferred_l2_screening_service_raises_when_document_metadata_missing():
     assert task_mock.enqueue.call_count == 0
 
 
-def test_process_l2_screening_service_raises_when_document_metadata_missing():
-    _, _, row, _, question = _build_l2_screening_context(with_metadata=False)
+def test_process_l2_screening_service_raises_when_text_extraction_result_missing():
+    _, _, row, _, question = _build_l2_screening_context(
+        with_text_extraction_result=False
+    )
     result = L2ScreeningResult.objects.create(
         citation=row,
         question=question,
@@ -302,7 +308,7 @@ def test_process_l2_screening_service_raises_when_document_metadata_missing():
 
     with pytest.raises(
         ValueError,
-        match="requires document metadata to be available",
+        match="requires text extraction to be completed",
     ):
         ProcessL2ScreeningService(result_id=result.id).perform()
 

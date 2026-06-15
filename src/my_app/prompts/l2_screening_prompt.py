@@ -11,9 +11,9 @@ from proj.llm_client import UnexpectedLLMOutputError, get_client
 
 from my_app.models import (
     Citation,
-    DocumentMetadata,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
+    TextExtractionResult,
 )
 from my_app.queries import options_for_question
 from shortcuts import List, dataclass, logger
@@ -73,12 +73,12 @@ class L2ScreeningPromptBuilder:
         question: L2ScreeningQuestion,
         options: List[L2ScreeningQuestionOption],
         citation: Citation,
-        metadata_record: DocumentMetadata,
+        text_extraction_result: TextExtractionResult,
     ):
         self.question = question
         self.options = options
         self.citation = citation
-        self.metadata_record = metadata_record
+        self.text_extraction_result = text_extraction_result
 
     @dataclass
     class ScreeningPromptArgs:
@@ -92,7 +92,7 @@ class L2ScreeningPromptBuilder:
     def get_screening_prompt_args(
         self,
     ) -> ScreeningPromptArgs:
-        sentences = self.metadata_record.get_sentences()
+        sentences = self.text_extraction_result.get_sentences()
 
         option_info_string = build_option_definition_string(self.options)
         option_string = build_option_string(self.options)
@@ -136,17 +136,17 @@ def get_l2_screening_results(
     question: L2ScreeningQuestion,
     options: List[L2ScreeningQuestionOption],
     citation: Citation,
-    metadata_record: DocumentMetadata,
+    text_extraction_result: TextExtractionResult,
 ) -> L2ScreeningPromptResult:
     if not settings.HAS_LLM:
         logger.warning("LLM is not available, using mock results.")
         return get_mock_l2_screening_results(
-            question, options, citation, metadata_record
+            question, options, citation, text_extraction_result
         )
 
     logger.info("LLM is available, using real LLM results for L2 screening")
     prompt_builder = L2ScreeningPromptBuilder(
-        question, options, citation, metadata_record
+        question, options, citation, text_extraction_result
     )
     prompt = prompt_builder.build_str()
 
@@ -194,11 +194,11 @@ def get_mock_l2_screening_results(
     question: L2ScreeningQuestion,
     options: List[L2ScreeningQuestionOption],
     citation: Citation,
-    metadata_record: DocumentMetadata,
+    text_extraction_result: TextExtractionResult,
 ) -> L2ScreeningPromptResult:
     selected_option = random.choice(options)
 
-    fulltext = metadata_record.get_sentences()
+    fulltext = text_extraction_result.get_sentences()
     explanation = "This is a mock explanation for why the option was selected."
 
     # find sentences using regex for [0], [1], etc. and extract the indices

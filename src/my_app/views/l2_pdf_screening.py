@@ -9,19 +9,19 @@ from proj.htpy.util import static_no_cache
 
 from my_app.models import (
     Citation,
-    DocumentMetadata,
     L2ScreeningQuestion,
     L2ScreeningResult,
     ScreeningResultStatus,
+    TextExtractionResult,
 )
 from my_app.queries import L2ScreeningStatusFetcher
 from my_app.router import route
 from my_app.services.l2_screening import DeferredL2ScreeningService
 from my_app.views.screening_l2 import (
-    _document_processing_badge,
-    _document_processing_badge_for_status,
     _document_upload_badge,
     _l2_screening_badge,
+    _text_extraction_badge,
+    _text_extraction_badge_for_status,
     render_l2_pdf_modal_button,
 )
 from my_app.views.view_utils import MustAccessReviewMixin
@@ -39,12 +39,13 @@ def can_start_l2_screening(citation_row):
     if document is None:
         return False
 
-    metadata = getattr(document, "document_metadata", None)
-    if metadata is None:
+    text_extraction_result = getattr(document, "text_extraction_result", None)
+    if text_extraction_result is None:
         return False
 
     return (
-        metadata.status == DocumentMetadata.DocumentProcessingStatus.COMPLETED
+        text_extraction_result.status
+        == TextExtractionResult.TextExtractionStatus.COMPLETED
     )
 
 
@@ -166,12 +167,12 @@ class L2PdfScreeningPage(BasePageTemplate):
         ]
 
     def render_citation_panel(self, citation_row: Citation):
-        document_processing_badge = _document_processing_badge(citation_row)
+        text_extraction_badge = _text_extraction_badge(citation_row)
         status_fetcher = L2ScreeningStatusFetcher.get_instance()
         document = citation_row.document
-        if document_processing_badge is None:
-            document_processing_badge = _document_processing_badge_for_status(
-                DocumentMetadata.DocumentProcessingStatus.NOT_STARTED
+        if text_extraction_badge is None:
+            text_extraction_badge = _text_extraction_badge_for_status(
+                TextExtractionResult.TextExtractionStatus.NOT_STARTED
             )
 
         return h.section(".border.rounded.p-3.bg-body-tertiary")[
@@ -186,9 +187,9 @@ class L2PdfScreeningPage(BasePageTemplate):
             ],
             h.div(".vstack.gap-2.mt-3.small")[
                 self.render_document_upload_control(citation_row),
-                self.render_document_processing_control(
+                self.render_text_extraction_control(
                     citation_row,
-                    document_processing_badge,
+                    text_extraction_badge,
                 ),
                 render_l2_screening_control(
                     citation_row,
@@ -216,23 +217,25 @@ class L2PdfScreeningPage(BasePageTemplate):
             ),
         ]
 
-    def render_document_processing_control(
+    def render_text_extraction_control(
         self,
         citation_row,
-        document_processing_badge,
+        text_extraction_badge,
     ):
         document = citation_row.document
-        metadata = getattr(document, "document_metadata", None)
+        text_extraction_result = getattr(
+            document, "text_extraction_result", None
+        )
         is_processed = (
-            metadata is not None
-            and metadata.status
-            == DocumentMetadata.DocumentProcessingStatus.COMPLETED
+            text_extraction_result is not None
+            and text_extraction_result.status
+            == TextExtractionResult.TextExtractionStatus.COMPLETED
         )
 
         return h.div(".d-flex.flex-wrap.align-items-center.gap-2")[
             h.div[
-                h.span(".text-muted.me-1")[tdt("Processed")],
-                document_processing_badge,
+                h.span(".text-muted.me-1")[tdt("Text extraction")],
+                text_extraction_badge,
             ],
             (
                 render_l2_pdf_modal_button(citation_row, self.review)
@@ -242,12 +245,14 @@ class L2PdfScreeningPage(BasePageTemplate):
         ]
 
     def render_more_details(self, document, status_fetcher):
-        metadata = getattr(document, "document_metadata", None)
-        if metadata is None:
-            metadata_status = tdt("No metadata yet")
+        text_extraction_result = getattr(
+            document, "text_extraction_result", None
+        )
+        if text_extraction_result is None:
+            text_extraction_status = tdt("No text extraction result yet")
         else:
-            metadata_status = DocumentMetadata.DocumentProcessingStatus(
-                metadata.status
+            text_extraction_status = TextExtractionResult.TextExtractionStatus(
+                text_extraction_result.status
             ).label
 
         return h.details(".mt-3")[
@@ -255,9 +260,9 @@ class L2PdfScreeningPage(BasePageTemplate):
             h.div(".mt-3")[
                 h.div(".small.text-muted")[document.file.name],
                 h.div(".mt-2")[
-                    h.strong[tdt("Metadata status")],
+                    h.strong[tdt("Text extraction status")],
                     ": ",
-                    metadata_status,
+                    text_extraction_status,
                 ],
                 h.div(".d-flex.gap-2.flex-wrap")[
                     render_l2_pdf_modal_button(self.citation_row, self.review),
@@ -385,7 +390,7 @@ class L2PdfScreeningView(MustAccessReviewMixin, DetailView, HtpyTemplateMixin):
     def get_queryset(self):
         return (
             Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__document_metadata")
+            .select_related("document", "document__text_extraction_result")
             .order_by("order")
         )
 
@@ -395,7 +400,7 @@ class L2PdfCitationMixin(MustAccessReviewMixin, View):
     def citation_row(self):
         try:
             return Citation.objects.select_related(
-                "document", "document__document_metadata"
+                "document", "document__text_extraction_result"
             ).get(
                 pk=self.kwargs["row_pk"],
                 dataset__review=self.review,
@@ -464,23 +469,25 @@ class L2PdfCitationView(L2PdfCitationMixin):
 )
 class L2PdfCitationMetadataView(L2PdfCitationMixin):
     def get(self, request, *args, **kwargs):
-        metadata = getattr(self.document, "document_metadata", None)
-        if metadata is None:
+        text_extraction_result = getattr(
+            self.document, "text_extraction_result", None
+        )
+        if text_extraction_result is None:
             raise Http404
 
         return JsonResponse(
             {
-                "pages": metadata.pages,
-                "highlights": self.get_highlights(metadata),
+                "pages": text_extraction_result.pages,
+                "highlights": self.get_highlights(text_extraction_result),
             }
         )
 
-    def get_highlights(self, metadata):
-        sentence_texts = metadata.get_sentence_list()
+    def get_highlights(self, text_extraction_result):
+        sentence_texts = text_extraction_result.get_sentence_list()
         evidence_indices = self.get_evidence_indices()
         sentence_coordinates = [
             coordinate
-            for coordinate in metadata.coordinates
+            for coordinate in text_extraction_result.coordinates
             if coordinate.get("type") == "s"
         ]
 
