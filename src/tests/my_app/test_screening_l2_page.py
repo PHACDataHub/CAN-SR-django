@@ -682,7 +682,7 @@ def test_screen_l2_row_upload_view_uploads_document_and_triggers_refresh(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.screening_l2.QueueTextExtractionService.perform"
+            "my_app.views.screening.l2_screening_views.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
                 reverse("screen_l2_row_upload", args=[review.id, row.id]),
@@ -735,7 +735,7 @@ def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.screening_l2.QueueTextExtractionService.perform"
+            "my_app.views.screening.l2_screening_views.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
                 reverse("screen_l2_row_upload", args=[review.id, row.id]),

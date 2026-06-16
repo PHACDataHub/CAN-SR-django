@@ -1,8 +1,5 @@
 from dataclasses import dataclass
 
-from django.http import HttpResponse
-from django.views import View
-
 from proj.htpy import definition_list as DefList
 from proj.htpy.modal_component import ModalComponent
 
@@ -14,30 +11,13 @@ from my_app.models import (
     ScreeningResultStatus,
 )
 from my_app.queries import L1ScreeningStatusFetcher
-from my_app.router import route
-from my_app.services.l1_screening import DeferredL1ScreeningService
-from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
-from shortcuts import BasePageTemplate, HtpyTemplateMixin, ListView
+from my_app.views.screening.util import BADGE_CLASSES, get_page_number
+from my_app.views.view_utils import url_with_same_params
+from shortcuts import BasePageTemplate
 from shortcuts import breadcrumbs as bc
-from shortcuts import cached_property, get_object_or_404, get_request
+from shortcuts import cached_property, get_request
 from shortcuts import htpy as h
 from shortcuts import reverse, tdt
-
-SCREENING_STATUS_BADGE_CLASSES = {
-    ScreeningResultStatus.NOT_STARTED: "bg-secondary",
-    ScreeningResultStatus.PENDING: "bg-warning text-dark",
-    ScreeningResultStatus.COMPLETED: "bg-success",
-    ScreeningResultStatus.ABANDONED: "bg-danger",
-}
-
-
-def get_page_number(request) -> int:
-    try:
-        page_number = int(request.GET.get("page", 1))
-    except (TypeError, ValueError):
-        page_number = 1
-
-    return max(page_number, 1)
 
 
 def CitationRowDisplay(citation_row: Citation, review: Review):
@@ -56,7 +36,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
                 "screen_l1_row",
                 args=[review.id, citation_row.id],
             ),
-            page=get_page_number(request),
+            page=get_page_number(),
         )
         button_markup = (
             h.button(
@@ -116,7 +96,7 @@ def CitationRowL1StatusBadge(citation_row):
     return h.div(
         id=badge_id(citation_row),
         tabindex="-1",
-        class_=f"badge rounded-pill {SCREENING_STATUS_BADGE_CLASSES[status]}",
+        class_=f"badge rounded-pill {BADGE_CLASSES[status]}",
     )[status.label]
 
 
@@ -336,114 +316,14 @@ class L1ScreeningPageTemplate(BasePageTemplate):
         ]
 
 
-class L1ScreeningBaseView(MustAccessReviewMixin, ListView):
-    paginate_by = 10
-
-    def get_queryset(self):
-        return Citation.objects.filter(dataset__review=self.review).order_by(
-            "order"
-        )
-
-
-@route("/reviews/<int:review_id>/screening_l1/", name="screening_l1")
-class ScreeningL1PageView(L1ScreeningBaseView, HtpyTemplateMixin):
-    template_component = L1ScreeningPageTemplate
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l1/component/",
-    name="screening_l1_component",
-)
-class ScreeningL1ComponentView(L1ScreeningBaseView):
-    def render_to_response(self, context, **response_kwargs):
-        page_obj = context["page_obj"]
-        component = L1ScreeningComponent(
-            review=self.review,
-            page_obj=page_obj,
-            request=self.request,
-        )
-
-        new_page_url = reverse("screening_l1", args=[self.review.id])
-        response_headers = {
-            "HX-Push-Url": url_with_same_params(
-                self.request,
-                path=new_page_url,
-                page=page_obj.number,
-            )
-        }
-
-        return HttpResponse(
-            str(component.render()),
-            headers=response_headers,
-            **response_kwargs,
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/",
-    name="screen_l1_row",
-)
-class ScreenL1RowView(MustAccessReviewMixin, View):
-    @cached_property
-    def citation_row(self):
-        return Citation.objects.get(
-            pk=self.kwargs["row_pk"],
-            dataset__review=self.review,
-        )
-
-    @cached_property
-    def screening_questions(self):
-        return list(
-            L1ScreeningQuestion.objects.filter(
-                review=self.review
-            ).prefetch_related("options")
-        )
-
-    def post(self, request, *args, **kwargs):
-        DeferredL1ScreeningService(
-            rows=[self.citation_row],
-            questions=self.screening_questions,
-        ).perform()
-
-        headers = {
-            "HX-Refocus": "#" + badge_id(self.citation_row),
-        }
-
-        return HttpResponse(
-            str(CitationRowDisplay(self.citation_row, self.review)),
-            headers=headers,
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/details/",
-    name="screen_l1_row_details",
-)
-class L1ScreeningRowDetailsView(MustAccessReviewMixin, View):
-    @cached_property
-    def citation_row(self):
-        return get_object_or_404(
-            Citation,
-            pk=self.kwargs["row_pk"],
-            dataset__review=self.review,
-        )
-
-    @cached_property
-    def screening_columns(self):
-        return list(self.citation_row.dataset.screening_columns.order_by("id"))
-
-    @cached_property
-    def screening_results(self):
-        return list(
-            L1ScreeningResult.objects.filter(citation=self.citation_row)
-            .select_related("question", "selected_option")
-            .order_by("question_id")
-        )
+@dataclass
+class L1ScreeningRowDetailsModal:
+    citation_row: Citation
+    screening_columns: list
+    screening_results: list
 
     @cached_property
     def included_field_pairs(self):
-        included_columns = self.screening_columns
-
         return [
             (
                 tdt("Title"),
@@ -457,7 +337,7 @@ class L1ScreeningRowDetailsView(MustAccessReviewMixin, View):
                         self.citation_row.data.get(column.name)
                     ),
                 )
-                for column in included_columns
+                for column in self.screening_columns
             ],
         ]
 
@@ -499,7 +379,7 @@ class L1ScreeningRowDetailsView(MustAccessReviewMixin, View):
             ]
         )
 
-    def get(self, *args, **kwargs):
+    def render(self):
         modal_body = h.fragment[
             h.h2(".h5.mt-4")[tdt("L1 screening results")],
             (
@@ -526,12 +406,8 @@ class L1ScreeningRowDetailsView(MustAccessReviewMixin, View):
             self.citation_row.title or tdt("Untitled citation"),
         ]
 
-        return HttpResponse(
-            str(
-                ModalComponent(
-                    title=title,
-                    modal_id=f"l1-screening-details-modal-{self.citation_row.id}",
-                    size_cls="modal-xl",
-                )[modal_body]
-            )
-        )
+        return ModalComponent(
+            title=title,
+            modal_id=f"l1-screening-details-modal-{self.citation_row.id}",
+            size_cls="modal-xl",
+        )[modal_body]

@@ -1,5 +1,3 @@
-from django.http import FileResponse, Http404, HttpResponse, JsonResponse
-from django.utils.functional import cached_property
 from django.utils.text import Truncator
 
 import htpy as h
@@ -9,44 +7,28 @@ from proj.htpy.util import static_no_cache
 
 from my_app.models import (
     Citation,
-    L2ScreeningQuestion,
     L2ScreeningResult,
     ScreeningResultStatus,
     TextExtractionResult,
 )
 from my_app.queries import L2ScreeningStatusFetcher
-from my_app.router import route
-from my_app.services.l2_screening import DeferredL2ScreeningService
-from my_app.views.screening_l2 import (
-    _document_upload_badge,
-    _l2_screening_badge,
-    _text_extraction_badge,
-    _text_extraction_badge_for_status,
+from my_app.views.screening.components import NotStartedBadge
+from my_app.views.screening.l2_common_components import (
+    DocumentUploadBadge,
+    FigureExtractionBadge,
+    L2ScreeningBadge,
+    TextExtractionBadge,
     render_l2_pdf_modal_button,
 )
-from my_app.views.view_utils import MustAccessReviewMixin
-from shortcuts import BasePageTemplate, DetailView, HtpyTemplateMixin, View
+from shortcuts import BasePageTemplate
 from shortcuts import breadcrumbs as bc
 from shortcuts import reverse, tdt
+
+from .util import can_start_l2_screening
 
 
 def l2_screening_control_id(citation_row):
     return f"l2-pdf-screening-control-{citation_row.id}"
-
-
-def can_start_l2_screening(citation_row):
-    document = citation_row.document
-    if document is None:
-        return False
-
-    text_extraction_result = getattr(document, "text_extraction_result", None)
-    if text_extraction_result is None:
-        return False
-
-    return (
-        text_extraction_result.status
-        == TextExtractionResult.TextExtractionStatus.COMPLETED
-    )
 
 
 def render_l2_screening_control(citation_row, review, status_fetcher=None):
@@ -74,7 +56,7 @@ def render_l2_screening_control(citation_row, review, status_fetcher=None):
     )[
         h.div[
             h.span(".text-muted.me-1")[tdt("L2 screening")],
-            _l2_screening_badge(citation_row, status_fetcher),
+            L2ScreeningBadge(citation_row, status_fetcher),
         ],
         button,
     ]
@@ -167,13 +149,14 @@ class L2PdfScreeningPage(BasePageTemplate):
         ]
 
     def render_citation_panel(self, citation_row: Citation):
-        text_extraction_badge = _text_extraction_badge(citation_row)
+        text_extraction_badge = (
+            TextExtractionBadge(citation_row) or NotStartedBadge()
+        )
+        figure_extraction_badge = (
+            FigureExtractionBadge(citation_row) or NotStartedBadge()
+        )
         status_fetcher = L2ScreeningStatusFetcher.get_instance()
         document = citation_row.document
-        if text_extraction_badge is None:
-            text_extraction_badge = _text_extraction_badge_for_status(
-                TextExtractionResult.TextExtractionStatus.NOT_STARTED
-            )
 
         return h.section(".border.rounded.p-3.bg-body-tertiary")[
             h.h2(".h5.mb-3")[tdt("Citation")],
@@ -190,6 +173,7 @@ class L2PdfScreeningPage(BasePageTemplate):
                 self.render_text_extraction_control(
                     citation_row,
                     text_extraction_badge,
+                    figure_extraction_badge,
                 ),
                 render_l2_screening_control(
                     citation_row,
@@ -208,7 +192,7 @@ class L2PdfScreeningPage(BasePageTemplate):
         return h.div(".d-flex.flex-wrap.align-items-center.gap-2")[
             h.div[
                 h.span(".text-muted.me-1")[tdt("Document")],
-                _document_upload_badge(citation_row),
+                DocumentUploadBadge(citation_row),
             ],
             (
                 render_l2_pdf_modal_button(citation_row, self.review)
@@ -221,6 +205,7 @@ class L2PdfScreeningPage(BasePageTemplate):
         self,
         citation_row,
         text_extraction_badge,
+        figure_extraction_badge,
     ):
         document = citation_row.document
         text_extraction_result = getattr(
@@ -236,6 +221,10 @@ class L2PdfScreeningPage(BasePageTemplate):
             h.div[
                 h.span(".text-muted.me-1")[tdt("Text extraction")],
                 text_extraction_badge,
+            ],
+            h.div[
+                h.span(".text-muted.me-1")[tdt("Figure extraction")],
+                figure_extraction_badge,
             ],
             (
                 render_l2_pdf_modal_button(citation_row, self.review)
@@ -376,146 +365,3 @@ class L2PdfScreeningPage(BasePageTemplate):
                 for sentence_index in result.evidence_sentences
             ]
         ]
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/details/",
-    name="screen_l2_row_details",
-)
-class L2PdfScreeningView(MustAccessReviewMixin, DetailView, HtpyTemplateMixin):
-    model = Citation
-    pk_url_kwarg = "row_pk"
-    template_component = L2PdfScreeningPage
-
-    def get_queryset(self):
-        return (
-            Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__text_extraction_result")
-            .order_by("order")
-        )
-
-
-class L2PdfCitationMixin(MustAccessReviewMixin, View):
-    @cached_property
-    def citation_row(self):
-        try:
-            return Citation.objects.select_related(
-                "document", "document__text_extraction_result"
-            ).get(
-                pk=self.kwargs["row_pk"],
-                dataset__review=self.review,
-            )
-        except Citation.DoesNotExist as exc:
-            raise Http404 from exc
-
-    @property
-    def document(self):
-        document = self.citation_row.document
-        if document is None:
-            raise Http404
-        return document
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/process/",
-    name="screen_l2_row_process",
-)
-class L2PdfScreeningProcessView(L2PdfCitationMixin):
-    @cached_property
-    def screening_questions(self):
-        return list(L2ScreeningQuestion.objects.filter(review=self.review))
-
-    def post(self, request, *args, **kwargs):
-        if not can_start_l2_screening(self.citation_row):
-            return HttpResponse(
-                str(
-                    render_l2_screening_control(
-                        self.citation_row,
-                        self.review,
-                    )
-                ),
-                status=409,
-            )
-
-        DeferredL2ScreeningService(
-            rows=[self.citation_row],
-            questions=self.screening_questions,
-            overwrite_existing=True,
-        ).perform()
-
-        return HttpResponse(
-            str(render_l2_screening_control(self.citation_row, self.review))
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/pdf/",
-    name="screen_l2_row_pdf",
-)
-class L2PdfCitationView(L2PdfCitationMixin):
-    def get(self, request, *args, **kwargs):
-        document_file = self.document.file
-        return FileResponse(
-            document_file.open("rb"),
-            content_type="application/pdf",
-            as_attachment=False,
-            filename=document_file.name,
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/pdf-metadata/",
-    name="screen_l2_row_pdf_metadata",
-)
-class L2PdfCitationMetadataView(L2PdfCitationMixin):
-    def get(self, request, *args, **kwargs):
-        text_extraction_result = getattr(
-            self.document, "text_extraction_result", None
-        )
-        if text_extraction_result is None:
-            raise Http404
-
-        return JsonResponse(
-            {
-                "pages": text_extraction_result.pages,
-                "highlights": self.get_highlights(text_extraction_result),
-            }
-        )
-
-    def get_highlights(self, text_extraction_result):
-        sentence_texts = text_extraction_result.get_sentence_list()
-        evidence_indices = self.get_evidence_indices()
-        sentence_coordinates = [
-            coordinate
-            for coordinate in text_extraction_result.coordinates
-            if coordinate.get("type") == "s"
-        ]
-
-        highlights = []
-        for sentence_index in evidence_indices:
-            if sentence_index >= len(sentence_texts):
-                continue
-
-            sentence_text = sentence_texts[sentence_index]
-            highlights.extend(
-                {
-                    **coordinate,
-                    "sentence_index": sentence_index,
-                }
-                for coordinate in sentence_coordinates
-                if coordinate.get("text") == sentence_text
-            )
-
-        return highlights
-
-    def get_evidence_indices(self):
-        results = L2ScreeningResult.objects.filter(
-            citation=self.citation_row
-        ).order_by("question_id")
-        evidence_indices = [
-            sentence_index
-            for result in results
-            for sentence_index in result.evidence_sentences
-            if isinstance(sentence_index, int) and sentence_index >= 0
-        ]
-        return list(dict.fromkeys(evidence_indices))
