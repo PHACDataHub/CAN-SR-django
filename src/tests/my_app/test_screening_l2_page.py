@@ -22,6 +22,7 @@ from my_app.model_factories import (
 )
 from my_app.models import (
     Document,
+    FigureExtractionResult,
     L1ScreeningResult,
     L2ScreeningResult,
     ParameterExtractionResult,
@@ -257,6 +258,10 @@ def test_screen_l2_row_process_view_enqueues_screening_and_returns_control(
         document=document,
         status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
+    FigureExtractionResult.objects.create(
+        document=document,
+        status=FigureExtractionResult.Status.COMPLETED,
+    )
     question1 = L2ScreeningQuestionFactory(review=review)
     question2 = L2ScreeningQuestionFactory(review=review)
 
@@ -299,6 +304,10 @@ def test_screen_l2_row_process_view_replaces_existing_screening_results(
     TextExtractionResultFactory(
         document=document,
         status=TextExtractionResult.TextExtractionStatus.COMPLETED,
+    )
+    FigureExtractionResult.objects.create(
+        document=document,
+        status=FigureExtractionResult.Status.COMPLETED,
     )
     question = L2ScreeningQuestionFactory(review=review)
     old_result = L2ScreeningResultFactory(

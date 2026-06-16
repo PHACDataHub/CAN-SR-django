@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import base64
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Callable
+from typing import BinaryIO, Callable
 
 from django.conf import settings
 
@@ -47,6 +48,25 @@ class LLMClientSpec:
 
 def _message_to_payload(message: LLMMessage) -> dict[str, str]:
     return {"role": message.role, "content": message.content}
+
+
+def _file_to_base64(file: bytes | BinaryIO) -> str:
+    if isinstance(file, bytes):
+        file_bytes = file
+    else:
+        if hasattr(file, "open") and getattr(file, "closed", False):
+            file.open("rb")
+
+        original_position = None
+        if hasattr(file, "tell"):
+            original_position = file.tell()
+
+        file_bytes = file.read()
+
+        if original_position is not None and hasattr(file, "seek"):
+            file.seek(original_position)
+
+    return base64.b64encode(file_bytes).decode("ascii")
 
 
 class LLMHttpClient(ABC):
@@ -98,6 +118,12 @@ class LLMClient(ABC):
         return self.complete(self._prompt_messages(prompt))
 
     @abstractmethod
+    def complete_multimodal_prompt(
+        self, prompt: str, files: Sequence[bytes | BinaryIO]
+    ) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
     def complete(self, messages: Sequence[LLMMessage]) -> str:
         raise NotImplementedError
 
@@ -131,8 +157,30 @@ class OllamaLLMClient(LLMClient):
             "stream": False,
         }
 
+    def _multimodal_payload(
+        self, prompt: str, files: Sequence[bytes | BinaryIO]
+    ) -> dict:
+        return {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                    "images": [_file_to_base64(file) for file in files],
+                }
+            ],
+            "stream": False,
+        }
+
     def complete(self, messages: Sequence[LLMMessage]) -> str:
         payload = self._payload(messages)
+        response = self.http_client.complete("/api/chat", payload)
+        return response.get("message", {}).get("content", "")
+
+    def complete_multimodal_prompt(
+        self, prompt: str, files: Sequence[bytes | BinaryIO]
+    ) -> str:
+        payload = self._multimodal_payload(prompt, files)
         response = self.http_client.complete("/api/chat", payload)
         return response.get("message", {}).get("content", "")
 
@@ -150,6 +198,11 @@ class TestLLMClient(LLMClient):
 
     def complete(self, messages: Sequence[LLMMessage]) -> str:
         return self._render(messages)
+
+    def complete_multimodal_prompt(
+        self, prompt: str, files: Sequence[bytes | BinaryIO]
+    ) -> str:
+        return f"{self._render(self._prompt_messages(prompt))} ({len(files)} files)"
 
 
 def _build_test_client() -> LLMClient:

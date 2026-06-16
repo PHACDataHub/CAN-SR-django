@@ -4,9 +4,11 @@ from django.db import transaction
 from django.utils import timezone
 
 from proj.llm_client import ClientFailureError
+from proj.util import MissingPreconditionError
 
 from my_app.models import (
     Citation,
+    FigureExtractionResult,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     L2ScreeningResult,
@@ -26,16 +28,53 @@ def get_text_extraction_result_for_citation(
 ) -> TextExtractionResult:
     document = citation.document
     if document is None:
-        raise ValueError(
+        raise MissingPreconditionError(
             "L2 screening requires a document to be attached to the citation."
         )
 
     try:
-        return document.text_extraction_result
+        text_extraction_result = document.text_extraction_result
     except TextExtractionResult.DoesNotExist as exc:
-        raise ValueError(
+        raise MissingPreconditionError(
             "L2 screening requires text extraction to be completed for the attached document."
         ) from exc
+
+    if (
+        text_extraction_result.status
+        != TextExtractionResult.TextExtractionStatus.COMPLETED
+    ):
+        raise MissingPreconditionError(
+            "L2 screening requires text extraction to be completed for the attached document."
+        )
+
+    return text_extraction_result
+
+
+def get_figure_extraction_result_for_citation(
+    citation: Citation,
+) -> FigureExtractionResult:
+    document = citation.document
+    if document is None:
+        raise MissingPreconditionError(
+            "L2 screening requires a document to be attached to the citation."
+        )
+
+    try:
+        figure_extraction_result = document.figure_extraction_result
+    except FigureExtractionResult.DoesNotExist as exc:
+        raise MissingPreconditionError(
+            "L2 screening requires figure extraction to be completed for the attached document."
+        ) from exc
+
+    if (
+        figure_extraction_result.status
+        != FigureExtractionResult.Status.COMPLETED
+    ):
+        raise MissingPreconditionError(
+            "L2 screening requires figure extraction to be completed for the attached document."
+        )
+
+    return figure_extraction_result
 
 
 class L2ScreeningService:
@@ -86,6 +125,7 @@ class L2ScreeningService:
             for citation_id in citations_to_process:
                 citation = citations_by_id[citation_id]
                 get_text_extraction_result_for_citation(citation)
+                get_figure_extraction_result_for_citation(citation)
                 result = L2ScreeningResult.objects.create(
                     citation_id=citation_id,
                     question_id=question.id,
@@ -144,6 +184,8 @@ class ProcessL2ScreeningService:
         text_extraction_result: TextExtractionResult,
     ):
         options = options_for_question(L2ScreeningQuestionOption, question.id)
+        tables = list(citation.document.documenttables.all())
+        figures = list(citation.document.documentfigures.all())
 
         for retry_num in range(self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT + 1):
             try:
@@ -152,6 +194,8 @@ class ProcessL2ScreeningService:
                     options,
                     citation,
                     text_extraction_result,
+                    tables,
+                    figures,
                 )
             except UnexpectedLLMOutputError:
                 if retry_num == self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT:
@@ -174,12 +218,14 @@ class ProcessL2ScreeningService:
             "citation",
             "citation__document",
             "citation__document__text_extraction_result",
+            "citation__document__figure_extraction_result",
         ).get(id=self.result_id)
         question = result.question
         citation = result.citation
         text_extraction_result = get_text_extraction_result_for_citation(
             citation
         )
+        get_figure_extraction_result_for_citation(citation)
 
         try:
             screening_results = self._get_l2_screening_results_with_retries(
@@ -219,6 +265,8 @@ class ProcessL2ScreeningService:
         result.confidence = screening_results.confidence
         result.explanation = screening_results.explanation
         result.evidence_sentences = screening_results.evidence_sentences
+        result.evidence_tables = screening_results.evidence_tables
+        result.evidence_figures = screening_results.evidence_figures
         result.status = ScreeningResultStatus.COMPLETED
 
         with transaction.atomic():

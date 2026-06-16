@@ -2,6 +2,7 @@ import json
 import math
 import random
 import re
+from typing import BinaryIO
 
 from django.conf import settings
 
@@ -11,6 +12,8 @@ from proj.llm_client import UnexpectedLLMOutputError, get_client
 
 from my_app.models import (
     Citation,
+    DocumentFigure,
+    DocumentTable,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     TextExtractionResult,
@@ -67,18 +70,14 @@ Notes:
 """
 
 
+@dataclass
 class L2ScreeningPromptBuilder:
-    def __init__(
-        self,
-        question: L2ScreeningQuestion,
-        options: List[L2ScreeningQuestionOption],
-        citation: Citation,
-        text_extraction_result: TextExtractionResult,
-    ):
-        self.question = question
-        self.options = options
-        self.citation = citation
-        self.text_extraction_result = text_extraction_result
+    question: L2ScreeningQuestion
+    options: List[L2ScreeningQuestionOption]
+    citation: Citation
+    text_extraction_result: TextExtractionResult
+    tables: List[DocumentTable]
+    figures: List[DocumentFigure]
 
     @dataclass
     class ScreeningPromptArgs:
@@ -88,6 +87,7 @@ class L2ScreeningPromptBuilder:
         fulltext: str
         tables: str
         figures: str
+        figure_image_files: List[BinaryIO]
 
     def get_screening_prompt_args(
         self,
@@ -97,17 +97,21 @@ class L2ScreeningPromptBuilder:
         option_info_string = build_option_definition_string(self.options)
         option_string = build_option_string(self.options)
 
+        table_str = self._build_table_substring()
+        figure_str = self._build_figure_substring()
+
         return self.ScreeningPromptArgs(
             question=self.question.question_text,
             options=option_string,
             definitions=option_info_string,
             fulltext=sentences,
-            tables="(none)",
-            figures="(none)",
+            tables=table_str,
+            figures=figure_str,
+            figure_image_files=[fig.file for fig in self.figures],
         )
 
-    def build_str(self):
-        prompt_args = self.get_screening_prompt_args()
+    @staticmethod
+    def build_str(prompt_args: ScreeningPromptArgs) -> str:
         return PROMPT_JSON_TEMPLATE.format(
             question=prompt_args.question,
             options=prompt_args.options,
@@ -116,6 +120,45 @@ class L2ScreeningPromptBuilder:
             tables=prompt_args.tables,
             figures=prompt_args.figures,
         )
+
+    def _build_table_substring(self) -> str:
+
+        if not self.tables:
+            return "(none)"
+
+        entries = [self._table_entry(table) for table in self.tables]
+        return "\n\n".join(entries)
+
+    @staticmethod
+    def _table_entry(table: DocumentTable) -> str:
+
+        result = ""
+
+        if table.caption:
+            caption = f" caption: {table.caption}"
+        else:
+            caption = ""
+        header = f"Table {table.index} {caption}"
+
+        result = header + "\n" + table.table_markdown
+        return result
+
+    def _build_figure_substring(self) -> str:
+
+        if not self.figures:
+            return "(none)"
+
+        figure_lines = []
+        for fig in self.figures:
+            if fig.caption:
+                caption = fig.caption
+            else:
+                caption = "(no caption)"
+            figure_lines.append(
+                f"Figure [F{fig.index}] caption: {caption} (see attached image F{fig.index})"
+            )
+
+        return "\n".join(figure_lines)
 
 
 class RawL2ScreeningPromptResult(pydantic.BaseModel):
@@ -137,6 +180,8 @@ def get_l2_screening_results(
     options: List[L2ScreeningQuestionOption],
     citation: Citation,
     text_extraction_result: TextExtractionResult,
+    tables: List[DocumentTable],
+    figures: List[DocumentFigure],
 ) -> L2ScreeningPromptResult:
     if not settings.HAS_LLM:
         logger.warning("LLM is not available, using mock results.")
@@ -146,12 +191,20 @@ def get_l2_screening_results(
 
     logger.info("LLM is available, using real LLM results for L2 screening")
     prompt_builder = L2ScreeningPromptBuilder(
-        question, options, citation, text_extraction_result
+        question, options, citation, text_extraction_result, tables, figures
     )
-    prompt = prompt_builder.build_str()
+
+    prompt_args = prompt_builder.get_screening_prompt_args()
+    prompt = prompt_builder.build_str(prompt_args)
+    images = prompt_args.figure_image_files
 
     llm_client = get_client()
-    raw_response = llm_client.complete_prompt(prompt)
+    if images:
+        raw_response = llm_client.complete_multimodal_prompt(
+            prompt, files=images
+        )
+    else:
+        raw_response = llm_client.complete_prompt(prompt)
 
     try:
         response_dict = json.loads(raw_response)

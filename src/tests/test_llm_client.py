@@ -87,6 +87,43 @@ def test_ollama_client_complete_prompt_uses_single_user_message():
     }
 
 
+def test_ollama_client_complete_multimodal_prompt_adds_base64_images():
+    seen = {}
+
+    def handler(request):
+        seen["request"] = request
+        return httpx.Response(200, json={"message": {"content": "reply"}})
+
+    sync_client = build_httpx_clients(handler)
+    http_client = HttpxLLMHttpClient(
+        "http://ollama.example", sync_client=sync_client
+    )
+    client = OllamaLLMClient(http_client=http_client, model="demo")
+
+    result = client.complete_multimodal_prompt("hello", files=[b"image bytes"])
+
+    assert result == "reply"
+    assert json.loads(seen["request"].content) == {
+        "model": "demo",
+        "messages": [
+            {
+                "role": "user",
+                "content": "hello",
+                "images": ["aW1hZ2UgYnl0ZXM="],
+            }
+        ],
+        "stream": False,
+    }
+
+
+def test_test_client_complete_multimodal_prompt_reports_file_count():
+    client = TestLLMClient()
+
+    result = client.complete_multimodal_prompt("hello", files=[b"1", b"2"])
+
+    assert result == "test client response: hello (2 files)"
+
+
 def test_requests_http_client_wraps_status_errors():
     def handler(request):
         return httpx.Response(500, json={"error": "boom"})
