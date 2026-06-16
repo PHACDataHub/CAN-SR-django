@@ -1,3 +1,4 @@
+import pytest
 from data_fetcher.middleware import GlobalRequest
 
 # creating a variable called test_rules triggers pytest to run it as a test!
@@ -6,6 +7,8 @@ from phac_aspc.rules import test_rule as my_test_rule
 from proj.models import User
 
 from my_app.model_factories import ReviewFactory, ReviewUserLinkFactory
+
+pytestmark = pytest.mark.backend
 
 
 def test_review_access_rule(admin_user):

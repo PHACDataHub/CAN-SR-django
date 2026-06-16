@@ -1,3 +1,4 @@
+import pytest
 from data_fetcher.middleware import GlobalRequest
 
 from my_app.model_factories import (
@@ -9,6 +10,8 @@ from my_app.model_factories import (
 )
 from my_app.models import ScreeningResultStatus
 from my_app.queries import L1ScreeningStatusFetcher
+
+pytestmark = [pytest.mark.backend, pytest.mark.l1_screening]
 
 
 def test_l1_screening_status_fetcher_returns_not_started_for_missing_results():

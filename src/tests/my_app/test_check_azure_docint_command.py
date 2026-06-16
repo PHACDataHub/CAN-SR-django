@@ -4,6 +4,8 @@ from unittest.mock import patch
 from django.core.management import CommandError, call_command
 from django.test import override_settings
 
+import pytest
+
 from my_app.management.commands.check_azure_docint import (
     build_docint_smoke_test_pdf,
 )
@@ -15,6 +17,8 @@ from my_app.pdf.figure_extraction.azure import (
 )
 from my_app.pdf.figure_extraction.client import AzureDocIntExtractionClient
 from my_app.pdf.types import PdfCoordinate
+
+pytestmark = pytest.mark.backend
 
 
 class FakeAzureDocIntExtractionClient(AzureDocIntExtractionClient):

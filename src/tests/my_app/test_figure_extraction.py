@@ -6,6 +6,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import override_settings
 
+import pytest
 from django_database_task.models import DatabaseTask
 
 from my_app.model_factories import DocumentFactory
@@ -27,6 +28,8 @@ from my_app.services.figure_extraction_service import (
     FigureExtractionService,
     QueueFigureExtractionService,
 )
+
+pytestmark = pytest.mark.backend
 
 
 def _build_pdf_file(name="example.pdf"):

@@ -13,6 +13,8 @@ from my_app.tasks.example_tasks import (
     record_sr_snapshot_async,
 )
 
+pytestmark = pytest.mark.view
+
 
 def test_background_tasks_demo_page_renders(admin_client):
     response = admin_client.get(reverse("background_tasks_demo"))

@@ -28,6 +28,8 @@ from my_app.services.l2_screening import (
     ProcessL2ScreeningService,
 )
 
+pytestmark = [pytest.mark.backend, pytest.mark.l2_screening]
+
 
 def _build_l2_screening_context(
     *,

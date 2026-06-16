@@ -4,6 +4,8 @@ from my_app.models import Document, TextExtractionResult
 from my_app.pdf.text_extraction.tei import GrobidTeiParser
 from my_app.pdf.types import PdfCoordinate, PdfPage
 
+pytestmark = pytest.mark.backend
+
 XML = """
 <TEI>
   <text>

@@ -19,6 +19,8 @@ from my_app.services.upload_citation_dataset_service import (
     import_citation_dataset,
 )
 
+pytestmark = pytest.mark.view
+
 
 class StubCitationDatasetImportSource:
     def __init__(self, column_names, row_values):

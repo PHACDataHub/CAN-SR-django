@@ -5,6 +5,10 @@ from unittest.mock import patch
 from django.core.management import CommandError, call_command
 from django.test import override_settings
 
+import pytest
+
+pytestmark = pytest.mark.backend
+
 XML = """
 <TEI>
   <text>

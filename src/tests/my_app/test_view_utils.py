@@ -2,7 +2,11 @@ from urllib.parse import parse_qsl, urlparse
 
 from django.test import RequestFactory
 
+import pytest
+
 from my_app.views.view_utils import url_with_same_params
+
+pytestmark = pytest.mark.backend
 
 
 def test_url_with_same_params_preserves_existing_params_and_can_override_path():

@@ -30,6 +30,8 @@ from my_app.models import (
     TextExtractionResult,
 )
 
+pytestmark = [pytest.mark.view, pytest.mark.l2_screening]
+
 
 def _build_pdf_file(name="example.pdf"):
     return SimpleUploadedFile(

@@ -9,6 +9,8 @@ from my_app.pdf.text_extraction.processors import (
     get_pdf_processor,
 )
 
+pytestmark = pytest.mark.backend
+
 
 def test_correct_client_is_used_in_tests():
     processor = get_pdf_processor()

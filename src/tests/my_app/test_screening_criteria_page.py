@@ -31,6 +31,12 @@ from my_app.views.screening_criteria import (
 )
 from tests.utils_for_testing import add_formset_prefix, add_prefix
 
+pytestmark = [
+    pytest.mark.view,
+    pytest.mark.l1_screening,
+    pytest.mark.l2_screening,
+]
+
 
 def test_editor_helper_class_new_question():
     review = ReviewFactory()

@@ -13,6 +13,8 @@ from my_app.services.text_extraction import (
     TextExtractionService,
 )
 
+pytestmark = pytest.mark.backend
+
 
 def _build_pdf_file(name="example.pdf"):
     return SimpleUploadedFile(

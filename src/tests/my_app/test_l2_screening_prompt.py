@@ -23,6 +23,8 @@ from my_app.prompts.l2_screening_prompt import (
     get_l2_screening_results,
 )
 
+pytestmark = [pytest.mark.backend, pytest.mark.l2_screening]
+
 
 def _build_screening_prompt_context():
     sr = ReviewFactory()

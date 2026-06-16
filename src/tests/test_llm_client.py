@@ -15,6 +15,8 @@ from proj.llm_client import (
     get_client,
 )
 
+pytestmark = pytest.mark.backend
+
 
 def build_httpx_clients(response_factory):
     transport = httpx.MockTransport(response_factory)

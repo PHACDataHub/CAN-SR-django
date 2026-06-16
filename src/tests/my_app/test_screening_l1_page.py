@@ -1,5 +1,6 @@
 from django.urls import reverse
 
+import pytest
 from phac_aspc.rules import patch_rules
 
 from my_app.model_factories import (
@@ -12,6 +13,8 @@ from my_app.model_factories import (
     ReviewFactory,
 )
 from my_app.models import L1ScreeningResult, ScreeningResultStatus
+
+pytestmark = [pytest.mark.view, pytest.mark.l1_screening]
 
 
 def test_screening_l1_shell_renders_component_and_refresh_button(
