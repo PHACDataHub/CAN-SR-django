@@ -1,9 +1,6 @@
 from typing import Any, Dict
 
-from my_app.models import (
-    ScreeningResultStatus,
-    TextExtractionResult,
-)
+from my_app.models import ScreeningResultStatus, TextExtractionResult
 from shortcuts import get_request, reverse, tdt
 
 SCREENING_STATUS_BADGE_CLASSES = {
