@@ -67,9 +67,9 @@ class TextExtractionService:
 
         try:
             raw_xml = get_pdf_processor().process_pdf(document.file)
-            structure_processor = GrobidTeiParser(raw_xml)
-            pages = structure_processor.get_pages()
-            coordinates = structure_processor.get_coordinates()
+            parser = GrobidTeiParser(raw_xml)
+            pages = parser.get_pages()
+            coordinates = parser.get_coordinates()
         except Exception:
             text_extraction_result.status = (
                 TextExtractionResult.TextExtractionStatus.FAILED

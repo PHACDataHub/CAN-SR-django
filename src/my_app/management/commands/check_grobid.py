@@ -41,12 +41,12 @@ def build_payload(pdf_path: Path) -> dict:
     with pdf_path.open("rb") as pdf_file:
         raw_xml = pdf_processor.process_pdf(pdf_file)
 
-    structure_processor = GrobidTeiParser(raw_xml)
+    parser = GrobidTeiParser(raw_xml)
 
     return {
         "raw_xml": raw_xml,
-        "pages": structure_processor.get_pages(),
-        "coordinates": structure_processor.get_coordinates(),
+        "pages": parser.get_pages(),
+        "coordinates": parser.get_coordinates(),
     }
 
 

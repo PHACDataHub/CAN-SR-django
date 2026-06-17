@@ -108,6 +108,3 @@ class GrobidTeiParser:
             text=text,
         )
         return coordinate.as_json_dict()
-
-
-StructureProcessor = GrobidTeiParser
