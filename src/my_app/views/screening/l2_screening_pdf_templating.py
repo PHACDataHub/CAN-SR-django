@@ -319,9 +319,6 @@ class L2PdfScreeningPage(BasePageTemplate):
                 h.div(".small.text-muted")[selected_option.option_value],
             ]
 
-        evidence_tables = ", ".join(
-            str(item) for item in result.evidence_tables
-        )
         if result.confidence is None:
             confidence_value = tdt("None")
         else:
@@ -339,29 +336,58 @@ class L2PdfScreeningPage(BasePageTemplate):
                 (tdt("Notes"), result.explanation or tdt("None")),
                 (
                     tdt("Evidence sentences"),
-                    self.render_evidence_sentence_chips(result),
+                    self.render_evidence_chips(
+                        result.evidence_sentences,
+                        "sentence",
+                        tdt("Sentence"),
+                        tdt("Evidence sentences"),
+                    ),
                 ),
-                (tdt("Evidence tables"), evidence_tables or tdt("None")),
+                (
+                    tdt("Evidence tables"),
+                    self.render_evidence_chips(
+                        result.evidence_tables,
+                        "table",
+                        tdt("Table"),
+                        tdt("Evidence tables"),
+                    ),
+                ),
+                (
+                    tdt("Evidence figures"),
+                    self.render_evidence_chips(
+                        result.evidence_figures,
+                        "figure",
+                        tdt("Figure"),
+                        tdt("Evidence figures"),
+                    ),
+                ),
             ]
         )
 
-    def render_evidence_sentence_chips(self, result: L2ScreeningResult):
-        if not result.evidence_sentences:
-            return tdt("None")
+    def render_evidence_chips(
+        self,
+        evidence_indices,
+        evidence_type,
+        label,
+        aria_label,
+    ):
+        if not evidence_indices:
+            return tdt("Nothing to highlight")
 
-        evidence_sentence_list = ", ".join(
-            str(sentence_index) for sentence_index in result.evidence_sentences
+        evidence_list = ", ".join(
+            str(evidence_index) for evidence_index in evidence_indices
         )
         return h.div(
             ".d-flex.flex-wrap.gap-2",
-            aria_label=f"{tdt('Evidence sentences')}: {evidence_sentence_list}",
+            aria_label=f"{aria_label}: {evidence_list}",
         )[
             [
                 h.button(
                     ".btn.btn-sm.btn-outline-primary.l2-evidence-chip",
                     type="button",
-                    data_sentence_index=str(sentence_index),
-                )[tdt("Sentence"), " ", str(sentence_index)]
-                for sentence_index in result.evidence_sentences
+                    data_evidence_type=evidence_type,
+                    data_evidence_index=str(evidence_index),
+                )[label, " ", str(evidence_index)]
+                for evidence_index in evidence_indices
             ]
         ]

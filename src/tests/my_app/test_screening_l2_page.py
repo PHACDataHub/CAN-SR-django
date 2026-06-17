@@ -22,6 +22,8 @@ from my_app.model_factories import (
 )
 from my_app.models import (
     Document,
+    DocumentFigure,
+    DocumentTable,
     FigureExtractionResult,
     L1ScreeningResult,
     L2ScreeningResult,
@@ -177,6 +179,7 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
         explanation="Looks eligible.",
         evidence_sentences=[1, 3],
         evidence_tables=[2],
+        evidence_figures=[4],
     )
 
     with patch_rules(can_access_review=True):
@@ -197,8 +200,6 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert question.question_text in body
     assert selected_option.option_text in body
     assert "Looks eligible." in body
-    assert "1, 3" in body
-    assert "2" in body
     assert 'id="l2-citation-data"' in body
     assert (
         f'data-pdf-url="{reverse("screen_l2_row_pdf", args=[review.id, row.id])}"'
@@ -213,8 +214,22 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert "screen_l2_citation.js" in body
     assert "screen_l2_citation.css" in body
     assert 'class="btn btn-sm btn-outline-primary l2-evidence-chip"' in body
-    assert 'data-sentence-index="1">Sentence 1</button>' in body
-    assert 'data-sentence-index="3">Sentence 3</button>' in body
+    assert (
+        'data-evidence-type="sentence" data-evidence-index="1">Sentence 1</button>'
+        in body
+    )
+    assert (
+        'data-evidence-type="sentence" data-evidence-index="3">Sentence 3</button>'
+        in body
+    )
+    assert (
+        'data-evidence-type="table" data-evidence-index="2">Table 2</button>'
+        in body
+    )
+    assert (
+        'data-evidence-type="figure" data-evidence-index="4">Figure 4</button>'
+        in body
+    )
     assert reverse("screen_l2_row_upload", args=[review.id, row.id]) in body
     assert "More" in body
     assert "Re-upload" in body
@@ -460,11 +475,44 @@ def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
         citation=row,
         question=first_question,
         evidence_sentences=[1, 99, -1, "0"],
+        evidence_tables=[2, 99, -1, "1"],
+        evidence_figures=[3, 99, -1, "1"],
     )
     L2ScreeningResultFactory(
         citation=row,
         question=second_question,
         evidence_sentences=[1, 0],
+        evidence_tables=[2],
+        evidence_figures=[3],
+    )
+    table = DocumentTable.objects.create(
+        document=document,
+        index=2,
+        caption="Evidence table",
+        table_markdown="| Outcome | Count |",
+        bounding_box=[
+            {
+                "page": 1,
+                "x": 130,
+                "y": 140,
+                "width": 150,
+                "height": 160,
+            }
+        ],
+    )
+    figure = DocumentFigure.objects.create(
+        document=document,
+        index=3,
+        caption="Evidence figure",
+        bounding_box=[
+            {
+                "page": 1,
+                "x": 170,
+                "y": 180,
+                "width": 190,
+                "height": 200,
+            }
+        ],
     )
 
     with patch_rules(can_access_review=True):
@@ -479,14 +527,30 @@ def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
             {
                 **coordinates[2],
                 "sentence_index": 1,
+                "evidence_type": "sentence",
+                "evidence_index": 1,
             },
             {
                 **coordinates[1],
                 "sentence_index": 0,
+                "evidence_type": "sentence",
+                "evidence_index": 0,
             },
             {
                 **coordinates[3],
                 "sentence_index": 0,
+                "evidence_type": "sentence",
+                "evidence_index": 0,
+            },
+            {
+                **table.bounding_box[0],
+                "evidence_type": "table",
+                "evidence_index": 2,
+            },
+            {
+                **figure.bounding_box[0],
+                "evidence_type": "figure",
+                "evidence_index": 3,
             },
         ],
     }

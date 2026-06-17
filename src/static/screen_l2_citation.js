@@ -30,16 +30,30 @@ function pageHighlights(pageNumber) {
     );
 }
 
-function sentenceHighlights(sentenceIndex) {
+function evidenceSelector(evidenceType, evidenceIndex) {
+    return `.l2-pdf-highlight[data-evidence-type="${evidenceType}"][data-evidence-index="${evidenceIndex}"]`;
+}
+
+function evidenceLabel(evidenceType) {
+    if (evidenceType === 'table') {
+        return tdt('Table');
+    }
+    if (evidenceType === 'figure') {
+        return tdt('Figure');
+    }
+    return tdt('Sentence');
+}
+
+function evidenceHighlights(evidenceType, evidenceIndex) {
     return Array.from(
         pagesElement.querySelectorAll(
-            `.l2-pdf-highlight[data-sentence-index="${sentenceIndex}"]`,
+            evidenceSelector(evidenceType, evidenceIndex),
         ),
     );
 }
 
-function updateSentenceHighlightState(sentenceIndex) {
-    const highlights = sentenceHighlights(sentenceIndex);
+function updateEvidenceHighlightState(evidenceType, evidenceIndex) {
+    const highlights = evidenceHighlights(evidenceType, evidenceIndex);
     const isActive = highlights.some((highlight) => highlight.matches(':hover, :focus'));
 
     highlights.forEach((highlight) => {
@@ -51,20 +65,26 @@ function renderHighlight(highlight, pageInfo, viewport) {
     const box = document.createElement('button');
     const xScale = viewport.width / numberValue(pageInfo.width);
     const yScale = viewport.height / numberValue(pageInfo.height);
-    const sentenceIndex = Number.parseInt(highlight.sentence_index, 10);
+    const evidenceType = highlight.evidence_type || 'sentence';
+    const evidenceIndex = Number.parseInt(
+        highlight.evidence_index ?? highlight.sentence_index,
+        10,
+    );
+    const label = evidenceLabel(evidenceType);
 
     box.type = 'button';
-    box.className = 'l2-pdf-highlight';
-    box.dataset.sentenceIndex = String(sentenceIndex);
-    box.title = `${tdt('Sentence')} ${sentenceIndex}`;
-    box.setAttribute('aria-label', `${tdt('Sentence')} ${sentenceIndex}`);
+    box.className = `l2-pdf-highlight l2-pdf-highlight-${evidenceType}`;
+    box.dataset.evidenceType = evidenceType;
+    box.dataset.evidenceIndex = String(evidenceIndex);
+    box.title = `${label} ${evidenceIndex}`;
+    box.setAttribute('aria-label', `${label} ${evidenceIndex}`);
     box.style.left = `${numberValue(highlight.x) * xScale}px`;
     box.style.top = `${numberValue(highlight.y) * yScale}px`;
     box.style.width = `${numberValue(highlight.width) * xScale}px`;
     box.style.height = `${numberValue(highlight.height) * yScale}px`;
     ['mouseenter', 'mouseleave', 'focus', 'blur'].forEach((eventName) => {
         box.addEventListener(eventName, () => {
-            updateSentenceHighlightState(sentenceIndex);
+            updateEvidenceHighlightState(evidenceType, evidenceIndex);
         });
     });
 
@@ -139,13 +159,12 @@ async function renderDocument() {
     }
 }
 
-function scrollToSentenceIndex(sentenceIndex) {
-    const highlight = pagesElement.querySelector(
-        `.l2-pdf-highlight[data-sentence-index="${sentenceIndex}"]`,
-    );
+function scrollToEvidence(evidenceType, evidenceIndex) {
+    const label = evidenceLabel(evidenceType);
+    const highlight = pagesElement.querySelector(evidenceSelector(evidenceType, evidenceIndex));
     if (!highlight) {
         setStatus(
-            `${tdt('Sentence')} ${sentenceIndex} ${tdt('could not be located in the PDF.')}`,
+            `${label} ${evidenceIndex} ${tdt('could not be located in the PDF.')}`,
         );
         return;
     }
@@ -157,7 +176,9 @@ function scrollToSentenceIndex(sentenceIndex) {
 function bindEvidenceChips() {
     document.querySelectorAll('.l2-evidence-chip').forEach((chip) => {
         chip.addEventListener('click', () => {
-            scrollToSentenceIndex(chip.dataset.sentenceIndex);
+            const evidenceType = chip.dataset.evidenceType || 'sentence';
+            const evidenceIndex = chip.dataset.evidenceIndex ?? chip.dataset.sentenceIndex;
+            scrollToEvidence(evidenceType, evidenceIndex);
         });
     });
 }

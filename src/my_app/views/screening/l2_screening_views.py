@@ -5,6 +5,8 @@ from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from my_app.models import (
     Citation,
     Document,
+    DocumentFigure,
+    DocumentTable,
     L1ScreeningResult,
     L2ScreeningQuestion,
     L2ScreeningResult,
@@ -295,8 +297,17 @@ class L2PdfCitationMetadataView(L2PdfCitationMixin):
         )
 
     def get_highlights(self, text_extraction_result):
+        highlights = []
+        highlights.extend(self.get_sentence_highlights(text_extraction_result))
+        highlights.extend(self.get_artifact_highlights(DocumentTable, "table"))
+        highlights.extend(
+            self.get_artifact_highlights(DocumentFigure, "figure")
+        )
+        return highlights
+
+    def get_sentence_highlights(self, text_extraction_result):
         sentence_texts = text_extraction_result.get_sentence_list()
-        evidence_indices = self.get_evidence_indices()
+        evidence_indices = self.get_evidence_indices("evidence_sentences")
         sentence_coordinates = [
             coordinate
             for coordinate in text_extraction_result.coordinates
@@ -313,6 +324,8 @@ class L2PdfCitationMetadataView(L2PdfCitationMixin):
                 {
                     **coordinate,
                     "sentence_index": sentence_index,
+                    "evidence_type": "sentence",
+                    "evidence_index": sentence_index,
                 }
                 for coordinate in sentence_coordinates
                 if coordinate.get("text") == sentence_text
@@ -320,14 +333,33 @@ class L2PdfCitationMetadataView(L2PdfCitationMixin):
 
         return highlights
 
-    def get_evidence_indices(self):
+    def get_artifact_highlights(self, artifact_model, evidence_type):
+        evidence_indices = self.get_evidence_indices(
+            f"evidence_{evidence_type}s"
+        )
+        artifacts = artifact_model.objects.filter(
+            document=self.document,
+            index__in=evidence_indices,
+        )
+
+        return [
+            {
+                **coordinate,
+                "evidence_type": evidence_type,
+                "evidence_index": artifact.index,
+            }
+            for artifact in artifacts
+            for coordinate in artifact.bounding_box
+        ]
+
+    def get_evidence_indices(self, evidence_field):
         results = L2ScreeningResult.objects.filter(
             citation=self.citation_row
         ).order_by("question_id")
         evidence_indices = [
-            sentence_index
+            evidence_index
             for result in results
-            for sentence_index in result.evidence_sentences
-            if isinstance(sentence_index, int) and sentence_index >= 0
+            for evidence_index in getattr(result, evidence_field)
+            if isinstance(evidence_index, int) and evidence_index >= 0
         ]
         return list(dict.fromkeys(evidence_indices))
