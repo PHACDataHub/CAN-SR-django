@@ -1,0 +1,66 @@
+- model: my_app.languagemodel
+  pk: 1
+  fields:
+    name: Qwen 3 1.7B
+    key: qwen3:1.7b
+    deployment: qwen3:1.7b
+    is_active: true
+    order: 10
+    is_default: true
+    has_multimodal: false
+    supported_env: ollama
+- model: my_app.languagemodel
+  pk: 2
+  fields:
+    name: Llama 3.2 1B
+    key: llama3.2:1b
+    deployment: llama3.2:1b
+    is_active: true
+    order: 20
+    is_default: false
+    has_multimodal: false
+    supported_env: ollama
+- model: my_app.languagemodel
+  pk: 3
+  fields:
+    name: GPT-5 mini
+    key: gpt-5-mini
+    deployment: gpt-5-mini
+    is_active: true
+    order: 10
+    is_default: true
+    has_multimodal: true
+    supported_env: azure
+- model: my_app.languagemodel
+  pk: 4
+  fields:
+    name: GPT-4.1 mini
+    key: gpt-4.1-mini
+    deployment: gpt-4.1-mini
+    is_active: true
+    order: 20
+    is_default: false
+    has_multimodal: true
+    supported_env: azure
+- model: my_app.languagemodel
+  pk: 5
+  fields:
+    name: Dummy 1
+    key: dummy-1
+    deployment: dummy-1
+    is_active: true
+    order: 10
+    is_default: true
+    has_multimodal: true
+    supported_env: local
+- model: my_app.languagemodel
+  pk: 6
+  fields:
+    name: Dummy 2
+    key: dummy-2
+    deployment: dummy-2
+    is_active: true
+    order: 20
+    is_default: false
+    has_multimodal: false
+    supported_env: local

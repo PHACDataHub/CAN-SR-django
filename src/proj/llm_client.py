@@ -9,6 +9,9 @@ from typing import BinaryIO, Callable
 from django.conf import settings
 
 import httpx
+import pydantic
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from openai import AzureOpenAI
 
 from shortcuts import logger
 
@@ -36,6 +39,14 @@ class ClientFailureError(RuntimeError):
 class LLMMessage:
     role: str
     content: str
+
+
+class LanguageModelSpec(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(from_attributes=True)
+
+    key: str
+    deployment: str
+    has_multimodal: bool = False
 
 
 @dataclass(frozen=True)
@@ -113,18 +124,35 @@ class LLMClient(ABC):
     def _prompt_messages(self, prompt: str) -> Sequence[LLMMessage]:
         return [LLMMessage(role="user", content=prompt)]
 
-    def complete_prompt(self, prompt: str) -> str:
-        # Convenience method for simple prompt-based interactions
-        return self.complete(self._prompt_messages(prompt))
+    def complete_prompt(self, prompt: str, model: LanguageModelSpec) -> str:
+        return self.complete(self._prompt_messages(prompt), model)
+
+    def complete_multimodal_prompt(
+        self,
+        prompt: str,
+        files: Sequence[bytes | BinaryIO],
+        model: LanguageModelSpec,
+    ) -> str:
+        model_spec = LanguageModelSpec.model_validate(model)
+        if not model_spec.has_multimodal:
+            raise LLMConfigurationError(
+                f"Language model '{model_spec.key}' does not support multimodal input"
+            )
+        return self._complete_multimodal_prompt(prompt, files, model_spec)
 
     @abstractmethod
-    def complete_multimodal_prompt(
-        self, prompt: str, files: Sequence[bytes | BinaryIO]
+    def _complete_multimodal_prompt(
+        self,
+        prompt: str,
+        files: Sequence[bytes | BinaryIO],
+        model: LanguageModelSpec,
     ) -> str:
         raise NotImplementedError
 
     @abstractmethod
-    def complete(self, messages: Sequence[LLMMessage]) -> str:
+    def complete(
+        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+    ) -> str:
         raise NotImplementedError
 
 
@@ -134,13 +162,12 @@ class OllamaLLMClient(LLMClient):
         http_client: LLMHttpClient | None = None,
         *,
         base_url: str | None = None,
-        model: str | None = None,
         timeout: int | None = None,
     ):
         if http_client is None:
-            if base_url is None or model is None:
+            if base_url is None:
                 raise LLMConfigurationError(
-                    "Ollama client requires base_url and model configuration"
+                    "Ollama client requires base_url configuration"
                 )
             http_client = HttpxLLMHttpClient(
                 base_url=base_url,
@@ -148,20 +175,24 @@ class OllamaLLMClient(LLMClient):
             )
 
         self.http_client = http_client
-        self.model = model
 
-    def _payload(self, messages: Sequence[LLMMessage]) -> dict:
+    def _payload(
+        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+    ) -> dict:
         return {
-            "model": self.model,
+            "model": model.key,
             "messages": [_message_to_payload(message) for message in messages],
             "stream": False,
         }
 
     def _multimodal_payload(
-        self, prompt: str, files: Sequence[bytes | BinaryIO]
+        self,
+        prompt: str,
+        files: Sequence[bytes | BinaryIO],
+        model: LanguageModelSpec,
     ) -> dict:
         return {
-            "model": self.model,
+            "model": model.key,
             "messages": [
                 {
                     "role": "user",
@@ -172,15 +203,21 @@ class OllamaLLMClient(LLMClient):
             "stream": False,
         }
 
-    def complete(self, messages: Sequence[LLMMessage]) -> str:
-        payload = self._payload(messages)
+    def complete(
+        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+    ) -> str:
+        model_spec = LanguageModelSpec.model_validate(model)
+        payload = self._payload(messages, model_spec)
         response = self.http_client.complete("/api/chat", payload)
         return response.get("message", {}).get("content", "")
 
-    def complete_multimodal_prompt(
-        self, prompt: str, files: Sequence[bytes | BinaryIO]
+    def _complete_multimodal_prompt(
+        self,
+        prompt: str,
+        files: Sequence[bytes | BinaryIO],
+        model: LanguageModelSpec,
     ) -> str:
-        payload = self._multimodal_payload(prompt, files)
+        payload = self._multimodal_payload(prompt, files, model)
         response = self.http_client.complete("/api/chat", payload)
         return response.get("message", {}).get("content", "")
 
@@ -196,13 +233,65 @@ class TestLLMClient(LLMClient):
             return f"test client response: {user_message}"
         return "test client response"
 
-    def complete(self, messages: Sequence[LLMMessage]) -> str:
+    def complete(
+        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+    ) -> str:
         return self._render(messages)
 
-    def complete_multimodal_prompt(
-        self, prompt: str, files: Sequence[bytes | BinaryIO]
+    def _complete_multimodal_prompt(
+        self,
+        prompt: str,
+        files: Sequence[bytes | BinaryIO],
+        model: LanguageModelSpec,
     ) -> str:
         return f"{self._render(self._prompt_messages(prompt))} ({len(files)} files)"
+
+
+class AzureLLMClient(LLMClient):
+    def __init__(self, client: AzureOpenAI):
+        self.client = client
+
+    def _create_completion(
+        self, messages: list[dict], model: LanguageModelSpec
+    ):
+        try:
+            return self.client.chat.completions.create(
+                model=model.deployment,
+                messages=messages,
+            )
+        except Exception as exc:
+            logger.exception(exc)
+            raise ClientFailureError("Azure OpenAI request failed") from exc
+
+    def complete(
+        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+    ) -> str:
+        model_spec = LanguageModelSpec.model_validate(model)
+        response = self._create_completion(
+            [_message_to_payload(message) for message in messages], model_spec
+        )
+        return response.choices[0].message.content or ""
+
+    def _complete_multimodal_prompt(
+        self,
+        prompt: str,
+        files: Sequence[bytes | BinaryIO],
+        model: LanguageModelSpec,
+    ) -> str:
+        content = [{"type": "text", "text": prompt}]
+        content.extend(
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/png;base64,{_file_to_base64(file)}"
+                },
+            }
+            for file in files
+        )
+        response = self._create_completion(
+            [{"role": "user", "content": content}], model
+        )
+        return response.choices[0].message.content or ""
 
 
 def _build_test_client() -> LLMClient:
@@ -211,6 +300,10 @@ def _build_test_client() -> LLMClient:
 
 def _build_ollama_client() -> LLMClient:
     return get_ollama_client()
+
+
+def _build_azure_client() -> LLMClient:
+    return get_azure_client()
 
 
 LLM_CLIENT_SPECS: dict[str, LLMClientSpec] = {
@@ -231,6 +324,12 @@ LLM_CLIENT_SPECS: dict[str, LLMClientSpec] = {
         label="ollama",
         is_real=True,
         factory=_build_ollama_client,
+    ),
+    "azure": LLMClientSpec(
+        mode="azure",
+        label="Azure OpenAI",
+        is_real=True,
+        factory=_build_azure_client,
     ),
 }
 
@@ -269,19 +368,47 @@ def get_client() -> LLMClient:
 
 def get_ollama_client() -> OllamaLLMClient:
     base_url = settings.LLM_OLLAMA_URL
-    model = settings.LLM_OLLAMA_MODEL
     timeout = settings.LLM_OLLAMA_TIMEOUT
 
-    if not base_url or not model:
-        raise LLMConfigurationError(
-            "LLM_MODE=ollama requires LLM_OLLAMA_URL and LLM_OLLAMA_MODEL"
-        )
+    if not base_url:
+        raise LLMConfigurationError("LLM_MODE=ollama requires LLM_OLLAMA_URL")
 
     return OllamaLLMClient(
         base_url=base_url,
-        model=model,
         timeout=timeout,
     )
+
+
+def get_azure_client() -> AzureLLMClient:
+    endpoint = settings.AZURE_OPENAI_ENDPOINT
+    auth_mode = settings.AZURE_OPENAI_MODE
+
+    if not endpoint:
+        raise LLMConfigurationError(
+            "LLM_MODE=azure requires AZURE_OPENAI_ENDPOINT"
+        )
+
+    client_kwargs = {
+        "azure_endpoint": endpoint,
+        "api_version": "2025-04-01-preview",
+    }
+    if auth_mode == "key":
+        if not settings.AZURE_OPENAI_API_KEY:
+            raise LLMConfigurationError(
+                "AZURE_OPENAI_API_KEY is required for key-based auth"
+            )
+        client_kwargs["api_key"] = settings.AZURE_OPENAI_API_KEY
+    elif auth_mode == "entra":
+        client_kwargs["azure_ad_token_provider"] = get_bearer_token_provider(
+            DefaultAzureCredential(),
+            "https://cognitiveservices.azure.com/.default",
+        )
+    else:
+        raise LLMConfigurationError(
+            f"Unsupported AZURE_OPENAI_MODE: {auth_mode}. Must be 'key' or 'entra'"
+        )
+
+    return AzureLLMClient(AzureOpenAI(**client_kwargs))
 
 
 RequestsLLMHttpClient = HttpxLLMHttpClient
