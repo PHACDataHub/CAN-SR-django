@@ -29,3 +29,4 @@ pytz==2024.1
 requests==2.32.4
 rules==3.3
 whitenoise==6.4.0
+PyYAML==6.0.3
