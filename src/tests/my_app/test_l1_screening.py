@@ -20,6 +20,8 @@ from my_app.services.l1_screening import (
     ProcessL1ScreeningService,
 )
 
+pytestmark = [pytest.mark.backend, pytest.mark.l1_screening]
+
 
 def test_deferred_l1_screening_service_enqueues_created_results():
     review = ReviewFactory()

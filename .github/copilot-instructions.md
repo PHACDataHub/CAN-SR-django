@@ -1,3 +1,5 @@
+When running scripts or tests, always use ./venv/bin/python or specify the full path to your virtual environment interpreter
+
 # What's in this repo
 
 This is evidence-synthesis / systematic-review workflow software for the public health agency of Canada.
@@ -35,6 +37,7 @@ Rendering or "templates"
 - this is react-like, but server-side
 - sometimes these are formal "templates", that receive a request and context object (and plug into django's template API), other times it's a simple function return htpy nodes
 - to DRY-out (dont repeat yourself) presentational code, prefer composition over inheritance
+- generally, htpy components should be PascalCase, and not \_private
 - For complex presentation components, you can use class-based HtpyComponents, this unlocks inheritance and single-responsibility methods
 - Feel free to use data_fetcher's get_request() and derivative context-based approaches to get data into components, rather than passing everything through multiple layers of composition
 

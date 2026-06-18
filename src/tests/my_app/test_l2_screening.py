@@ -5,6 +5,8 @@ from django.test import override_settings
 
 import pytest
 
+from proj.util import MissingPreconditionError
+
 from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
@@ -14,17 +16,29 @@ from my_app.model_factories import (
 )
 from my_app.models import (
     Document,
-    DocumentMetadata,
+    DocumentFigure,
+    DocumentTable,
+    FigureExtractionResult,
     L2ScreeningResult,
     ScreeningResultStatus,
+    TextExtractionResult,
 )
 from my_app.services.l2_screening import (
     DeferredL2ScreeningService,
     ProcessL2ScreeningService,
 )
 
+pytestmark = [pytest.mark.backend, pytest.mark.l2_screening]
 
-def _build_l2_screening_context(*, with_document=True, with_metadata=True):
+
+def _build_l2_screening_context(
+    *,
+    with_document=True,
+    with_text_extraction_result=True,
+    text_extraction_status=TextExtractionResult.TextExtractionStatus.COMPLETED,
+    with_figure_extraction_result=True,
+    figure_extraction_status=FigureExtractionResult.Status.COMPLETED,
+):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     citation = CitationFactory(
@@ -41,9 +55,10 @@ def _build_l2_screening_context(*, with_document=True, with_metadata=True):
         citation.document = document
         citation.save(update_fields=["document"])
 
-        if with_metadata:
-            metadata_record = DocumentMetadata.objects.create(
+        if with_text_extraction_result:
+            text_extraction_result = TextExtractionResult.objects.create(
                 document=document,
+                status=text_extraction_status,
                 coordinates=[
                     {
                         "type": "s",
@@ -56,9 +71,15 @@ def _build_l2_screening_context(*, with_document=True, with_metadata=True):
                 ],
             )
         else:
-            metadata_record = None
+            text_extraction_result = None
+
+        if with_figure_extraction_result:
+            FigureExtractionResult.objects.create(
+                document=document,
+                status=figure_extraction_status,
+            )
     else:
-        metadata_record = None
+        text_extraction_result = None
 
     question = L2ScreeningQuestionFactory(
         review=review,
@@ -75,7 +96,7 @@ def _build_l2_screening_context(*, with_document=True, with_metadata=True):
         option_value="Exclude the citation",
     )
 
-    return review, dataset, citation, metadata_record, question
+    return review, dataset, citation, text_extraction_result, question
 
 
 def test_deferred_l2_screening_service_enqueues_created_results():
@@ -202,7 +223,7 @@ def test_deferred_l2_screening_service_overwrite_targets_only_requested_rows_and
 
 
 @override_settings(HAS_LLM=False)
-def test_process_l2_screening_service_uses_mock_results_helper_with_metadata():
+def test_process_l2_screening_service_uses_mock_results_helper_with_text_extraction_result():
     _, _, row, _, question = _build_l2_screening_context()
     result = L2ScreeningResult.objects.create(
         citation=row,
@@ -224,6 +245,16 @@ def test_process_l2_screening_service_uses_mock_results_helper_with_metadata():
 
 def test_process_l2_screening_service_persists_evidence_sentences():
     _, _, row, _, question = _build_l2_screening_context()
+    table = DocumentTable.objects.create(
+        document=row.document,
+        index=2,
+        table_markdown="| Outcome | Count |\n| --- | --- |\n| Cases | 12 |",
+    )
+    figure = DocumentFigure.objects.create(
+        document=row.document,
+        index=3,
+        caption="Outcome chart",
+    )
     selected_option = question.options.get(option_text="Include")
     result = L2ScreeningResult.objects.create(
         citation=row,
@@ -236,12 +267,14 @@ def test_process_l2_screening_service_persists_evidence_sentences():
         confidence=0.88,
         explanation="Relevant evidence was found.",
         evidence_sentences=[0, 1],
+        evidence_tables=[2],
+        evidence_figures=[3],
     )
 
     with patch(
         "my_app.services.l2_screening.get_l2_screening_results",
         return_value=screening_result,
-    ):
+    ) as get_results:
         ProcessL2ScreeningService(result_id=result.id).perform()
 
     result.refresh_from_db()
@@ -249,8 +282,12 @@ def test_process_l2_screening_service_persists_evidence_sentences():
     assert result.status == ScreeningResultStatus.COMPLETED
     assert result.selected_option == selected_option
     assert result.evidence_sentences == [0, 1]
+    assert result.evidence_tables == [2]
+    assert result.evidence_figures == [3]
     assert result.explanation == "Relevant evidence was found."
     assert result.confidence == 0.88
+    assert get_results.call_args.args[4] == [table]
+    assert get_results.call_args.args[5] == [figure]
 
 
 def test_process_l2_screening_service_raises_when_document_missing():
@@ -261,15 +298,19 @@ def test_process_l2_screening_service_raises_when_document_missing():
         status=ScreeningResultStatus.PENDING,
     )
 
-    with pytest.raises(ValueError, match="requires a document to be attached"):
+    with pytest.raises(
+        MissingPreconditionError, match="requires a document to be attached"
+    ):
         ProcessL2ScreeningService(result_id=result.id).perform()
 
     result.refresh_from_db()
     assert result.status == ScreeningResultStatus.PENDING
 
 
-def test_deferred_l2_screening_service_raises_when_document_metadata_missing():
-    _, _, row, _, question = _build_l2_screening_context(with_metadata=False)
+def test_deferred_l2_screening_service_raises_when_text_extraction_result_missing():
+    _, _, row, _, question = _build_l2_screening_context(
+        with_text_extraction_result=False
+    )
 
     task_mock = MagicMock()
     task_mock.enqueue = MagicMock()
@@ -279,8 +320,8 @@ def test_deferred_l2_screening_service_raises_when_document_metadata_missing():
         task_mock,
     ):
         with pytest.raises(
-            ValueError,
-            match="requires document metadata to be available",
+            MissingPreconditionError,
+            match="requires text extraction to be completed",
         ):
             DeferredL2ScreeningService(
                 rows=[row],
@@ -292,8 +333,36 @@ def test_deferred_l2_screening_service_raises_when_document_metadata_missing():
     assert task_mock.enqueue.call_count == 0
 
 
-def test_process_l2_screening_service_raises_when_document_metadata_missing():
-    _, _, row, _, question = _build_l2_screening_context(with_metadata=False)
+def test_deferred_l2_screening_service_raises_when_text_extraction_incomplete():
+    _, _, row, _, question = _build_l2_screening_context(
+        text_extraction_status=TextExtractionResult.TextExtractionStatus.PENDING
+    )
+
+    task_mock = MagicMock()
+    task_mock.enqueue = MagicMock()
+
+    with patch(
+        "my_app.tasks.l2_screening.process_l2_screening_task",
+        task_mock,
+    ):
+        with pytest.raises(
+            MissingPreconditionError,
+            match="requires text extraction to be completed",
+        ):
+            DeferredL2ScreeningService(
+                rows=[row],
+                questions=[question],
+                overwrite_existing=False,
+            ).perform()
+
+    assert L2ScreeningResult.objects.count() == 0
+    assert task_mock.enqueue.call_count == 0
+
+
+def test_process_l2_screening_service_raises_when_text_extraction_result_missing():
+    _, _, row, _, question = _build_l2_screening_context(
+        with_text_extraction_result=False
+    )
     result = L2ScreeningResult.objects.create(
         citation=row,
         question=question,
@@ -301,8 +370,54 @@ def test_process_l2_screening_service_raises_when_document_metadata_missing():
     )
 
     with pytest.raises(
-        ValueError,
-        match="requires document metadata to be available",
+        MissingPreconditionError,
+        match="requires text extraction to be completed",
+    ):
+        ProcessL2ScreeningService(result_id=result.id).perform()
+
+    result.refresh_from_db()
+    assert result.status == ScreeningResultStatus.PENDING
+
+
+def test_deferred_l2_screening_service_raises_when_figure_extraction_result_missing():
+    _, _, row, _, question = _build_l2_screening_context(
+        with_figure_extraction_result=False
+    )
+
+    task_mock = MagicMock()
+    task_mock.enqueue = MagicMock()
+
+    with patch(
+        "my_app.tasks.l2_screening.process_l2_screening_task",
+        task_mock,
+    ):
+        with pytest.raises(
+            MissingPreconditionError,
+            match="requires figure extraction to be completed",
+        ):
+            DeferredL2ScreeningService(
+                rows=[row],
+                questions=[question],
+                overwrite_existing=False,
+            ).perform()
+
+    assert L2ScreeningResult.objects.count() == 0
+    assert task_mock.enqueue.call_count == 0
+
+
+def test_process_l2_screening_service_raises_when_figure_extraction_incomplete():
+    _, _, row, _, question = _build_l2_screening_context(
+        figure_extraction_status=FigureExtractionResult.Status.PENDING
+    )
+    result = L2ScreeningResult.objects.create(
+        citation=row,
+        question=question,
+        status=ScreeningResultStatus.PENDING,
+    )
+
+    with pytest.raises(
+        MissingPreconditionError,
+        match="requires figure extraction to be completed",
     ):
         ProcessL2ScreeningService(result_id=result.id).perform()
 

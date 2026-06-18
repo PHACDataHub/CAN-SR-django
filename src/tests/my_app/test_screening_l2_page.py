@@ -10,7 +10,6 @@ from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
     DocumentFactory,
-    DocumentMetadataFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningResultFactory,
     L2ScreeningQuestionFactory,
@@ -19,15 +18,21 @@ from my_app.model_factories import (
     ParameterExtractionResultFactory,
     ParameterQuestionFactory,
     ReviewFactory,
+    TextExtractionResultFactory,
 )
 from my_app.models import (
     Document,
-    DocumentMetadata,
+    DocumentFigure,
+    DocumentTable,
+    FigureExtractionResult,
     L1ScreeningResult,
     L2ScreeningResult,
     ParameterExtractionResult,
     ScreeningResultStatus,
+    TextExtractionResult,
 )
+
+pytestmark = [pytest.mark.view, pytest.mark.l2_screening]
 
 
 def _build_pdf_file(name="example.pdf"):
@@ -159,9 +164,9 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     document = DocumentFactory()
     row.document = document
     row.save(update_fields=["document"])
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
 
     question = L2ScreeningQuestionFactory(review=review)
@@ -174,6 +179,7 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
         explanation="Looks eligible.",
         evidence_sentences=[1, 3],
         evidence_tables=[2],
+        evidence_figures=[4],
     )
 
     with patch_rules(can_access_review=True):
@@ -194,8 +200,6 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert question.question_text in body
     assert selected_option.option_text in body
     assert "Looks eligible." in body
-    assert "1, 3" in body
-    assert "2" in body
     assert 'id="l2-citation-data"' in body
     assert (
         f'data-pdf-url="{reverse("screen_l2_row_pdf", args=[review.id, row.id])}"'
@@ -210,8 +214,22 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert "screen_l2_citation.js" in body
     assert "screen_l2_citation.css" in body
     assert 'class="btn btn-sm btn-outline-primary l2-evidence-chip"' in body
-    assert 'data-sentence-index="1">Sentence 1</button>' in body
-    assert 'data-sentence-index="3">Sentence 3</button>' in body
+    assert (
+        'data-evidence-type="sentence" data-evidence-index="1">Sentence 1</button>'
+        in body
+    )
+    assert (
+        'data-evidence-type="sentence" data-evidence-index="3">Sentence 3</button>'
+        in body
+    )
+    assert (
+        'data-evidence-type="table" data-evidence-index="2">Table 2</button>'
+        in body
+    )
+    assert (
+        'data-evidence-type="figure" data-evidence-index="4">Figure 4</button>'
+        in body
+    )
     assert reverse("screen_l2_row_upload", args=[review.id, row.id]) in body
     assert "More" in body
     assert "Re-upload" in body
@@ -225,9 +243,9 @@ def test_screen_l2_row_details_view_renders_screening_process_button(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
 
     with patch_rules(can_access_review=True):
@@ -253,9 +271,13 @@ def test_screen_l2_row_process_view_enqueues_screening_and_returns_control(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
+    )
+    FigureExtractionResult.objects.create(
+        document=document,
+        status=FigureExtractionResult.Status.COMPLETED,
     )
     question1 = L2ScreeningQuestionFactory(review=review)
     question2 = L2ScreeningQuestionFactory(review=review)
@@ -296,9 +318,13 @@ def test_screen_l2_row_process_view_replaces_existing_screening_results(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
+    )
+    FigureExtractionResult.objects.create(
+        document=document,
+        status=FigureExtractionResult.Status.COMPLETED,
     )
     question = L2ScreeningQuestionFactory(review=review)
     old_result = L2ScreeningResultFactory(
@@ -330,9 +356,9 @@ def test_screen_l2_row_process_view_rejects_unprocessed_document(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.PENDING,
+        status=TextExtractionResult.TextExtractionStatus.PENDING,
     )
     L2ScreeningQuestionFactory(review=review)
 
@@ -438,7 +464,7 @@ def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
             "height": "120",
         },
     ]
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
         pages=pages,
         coordinates=coordinates,
@@ -449,11 +475,44 @@ def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
         citation=row,
         question=first_question,
         evidence_sentences=[1, 99, -1, "0"],
+        evidence_tables=[2, 99, -1, "1"],
+        evidence_figures=[3, 99, -1, "1"],
     )
     L2ScreeningResultFactory(
         citation=row,
         question=second_question,
         evidence_sentences=[1, 0],
+        evidence_tables=[2],
+        evidence_figures=[3],
+    )
+    table = DocumentTable.objects.create(
+        document=document,
+        index=2,
+        caption="Evidence table",
+        table_markdown="| Outcome | Count |",
+        bounding_box=[
+            {
+                "page": 1,
+                "x": 130,
+                "y": 140,
+                "width": 150,
+                "height": 160,
+            }
+        ],
+    )
+    figure = DocumentFigure.objects.create(
+        document=document,
+        index=3,
+        caption="Evidence figure",
+        bounding_box=[
+            {
+                "page": 1,
+                "x": 170,
+                "y": 180,
+                "width": 190,
+                "height": 200,
+            }
+        ],
     )
 
     with patch_rules(can_access_review=True):
@@ -468,14 +527,30 @@ def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
             {
                 **coordinates[2],
                 "sentence_index": 1,
+                "evidence_type": "sentence",
+                "evidence_index": 1,
             },
             {
                 **coordinates[1],
                 "sentence_index": 0,
+                "evidence_type": "sentence",
+                "evidence_index": 0,
             },
             {
                 **coordinates[3],
                 "sentence_index": 0,
+                "evidence_type": "sentence",
+                "evidence_index": 0,
+            },
+            {
+                **table.bounding_box[0],
+                "evidence_type": "table",
+                "evidence_index": 2,
+            },
+            {
+                **figure.bounding_box[0],
+                "evidence_type": "figure",
+                "evidence_index": 3,
             },
         ],
     }
@@ -504,7 +579,7 @@ def test_screen_l2_row_pdf_views_return_404_without_document(
     assert response.status_code == 404
 
 
-def test_screen_l2_row_pdf_metadata_view_returns_404_without_metadata(
+def test_screen_l2_row_pdf_metadata_view_returns_404_without_result(
     vanilla_client,
 ):
     review = ReviewFactory()
@@ -540,7 +615,7 @@ def test_screen_l2_row_pdf_views_require_review_access(
     dataset = CitationDatasetFactory(review=review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(document=document)
+    TextExtractionResultFactory(document=document)
 
     with patch_rules(can_access_review=False):
         url = reverse(url_name, args=[review.id, row.id])
@@ -570,7 +645,7 @@ def test_screen_l2_row_pdf_views_return_404_for_row_from_another_review(
     dataset = CitationDatasetFactory(review=row_review)
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
-    DocumentMetadataFactory(document=document)
+    TextExtractionResultFactory(document=document)
 
     with patch_rules(can_access_review=True):
         url = reverse(url_name, args=[requested_review.id, row.id])
@@ -594,9 +669,9 @@ def test_screening_l2_component_view_renders_upload_and_screening_statuses(
     document = DocumentFactory()
     uploaded_row.document = document
     uploaded_row.save(update_fields=["document"])
-    DocumentMetadataFactory(
+    TextExtractionResultFactory(
         document=document,
-        status=DocumentMetadata.DocumentProcessingStatus.COMPLETED,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
     L2ScreeningResultFactory(
         citation=uploaded_row,
@@ -673,7 +748,7 @@ def test_screen_l2_row_upload_view_uploads_document_and_triggers_refresh(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.screening_l2.QueuePreprocessPDFService.perform"
+            "my_app.views.screening.l2_screening_views.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
                 reverse("screen_l2_row_upload", args=[review.id, row.id]),
@@ -703,7 +778,7 @@ def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
     old_document = DocumentFactory()
     row.document = old_document
     row.save(update_fields=["document"])
-    DocumentMetadataFactory(document=old_document)
+    TextExtractionResultFactory(document=old_document)
 
     L1ScreeningResultFactory(
         citation=row,
@@ -726,7 +801,7 @@ def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.screening_l2.QueuePreprocessPDFService.perform"
+            "my_app.views.screening.l2_screening_views.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
                 reverse("screen_l2_row_upload", args=[review.id, row.id]),

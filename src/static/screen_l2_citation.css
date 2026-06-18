@@ -60,6 +60,16 @@
     position: absolute;
 }
 
+.l2-pdf-highlight-table {
+    background: rgb(13 110 253 / 20%);
+    border-color: rgb(13 110 253 / 80%);
+}
+
+.l2-pdf-highlight-figure {
+    background: rgb(25 135 84 / 22%);
+    border-color: rgb(25 135 84 / 82%);
+}
+
 .l2-pdf-highlight:focus,
 .l2-pdf-highlight:hover,
 .l2-pdf-highlight-active {

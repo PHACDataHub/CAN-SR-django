@@ -5,10 +5,14 @@ from unittest.mock import patch
 from django.core.management import CommandError, call_command
 from django.test import override_settings
 
+import pytest
+
 from my_app.management.commands.check_llm import (
     EXPECTED_SELECTED,
     SMOKE_TEST_PROMPT,
 )
+
+pytestmark = pytest.mark.backend
 
 
 def test_check_llm_rejects_dummy_client_mode():

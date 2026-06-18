@@ -2,6 +2,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
+import pytest
 from phac_aspc.rules import patch_rules
 
 from my_app.model_factories import ReviewFactory, ReviewUserLinkFactory
@@ -9,6 +10,8 @@ from my_app.models import CitationDataset
 from my_app.services.upload_citation_dataset_service import (
     import_citation_dataset,
 )
+
+pytestmark = pytest.mark.view
 
 EXAMPLE_CSV = """title,year,abstract,month,day
 First citation,2020,An abstract,January,1

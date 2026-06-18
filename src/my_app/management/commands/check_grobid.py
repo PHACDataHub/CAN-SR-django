@@ -7,7 +7,8 @@ from urllib.parse import urlparse
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from my_app.pdf_processor import StructureProcessor, get_pdf_processor
+from my_app.pdf.text_extraction.processors import get_pdf_processor
+from my_app.pdf.text_extraction.tei import GrobidTeiParser
 
 
 def validate_grobid_url() -> str:
@@ -40,12 +41,12 @@ def build_payload(pdf_path: Path) -> dict:
     with pdf_path.open("rb") as pdf_file:
         raw_xml = pdf_processor.process_pdf(pdf_file)
 
-    structure_processor = StructureProcessor(raw_xml)
+    parser = GrobidTeiParser(raw_xml)
 
     return {
         "raw_xml": raw_xml,
-        "pages": structure_processor.get_pages(),
-        "coordinates": structure_processor.get_coordinates(),
+        "pages": parser.get_pages(),
+        "coordinates": parser.get_coordinates(),
     }
 
 

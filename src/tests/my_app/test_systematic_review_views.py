@@ -1,9 +1,12 @@
 from django.urls import reverse
 
+import pytest
 from phac_aspc.rules import patch_rules
 
 from my_app.model_factories import ReviewFactory, ReviewUserLinkFactory
 from my_app.models import Review, ReviewUserLink
+
+pytestmark = pytest.mark.view
 
 
 def test_create_review_creates_link_and_redirects(

@@ -1,4 +1,8 @@
+import pytest
+
 from proj.htpy.modal_base import ModalComponent
+
+pytestmark = pytest.mark.backend
 
 
 def test_modal_component_allows_disabling_outside_click_close():

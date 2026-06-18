@@ -1,6 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 
 import pytest
@@ -10,15 +11,19 @@ from my_app.models import (
     Citation,
     CitationDataset,
     Document,
-    DocumentMetadata,
+    DocumentFigure,
+    DocumentTable,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
+    TextExtractionResult,
 )
 from my_app.prompts.l2_screening_prompt import (
     L2ScreeningPromptBuilder,
     UnexpectedLLMOutputError,
     get_l2_screening_results,
 )
+
+pytestmark = [pytest.mark.backend, pytest.mark.l2_screening]
 
 
 def _build_screening_prompt_context():
@@ -36,8 +41,11 @@ def _build_screening_prompt_context():
     document = Document.objects.create(
         file="documents/example.pdf",
     )
-    metadata_record = DocumentMetadata.objects.create(
+    row.document = document
+    row.save(update_fields=["document"])
+    text_extraction_result = TextExtractionResult.objects.create(
         document=document,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
         coordinates=[
             {
                 "type": "s",
@@ -68,7 +76,7 @@ def _build_screening_prompt_context():
         sr,
         dataset,
         row,
-        metadata_record,
+        text_extraction_result,
         question,
         include_option,
         exclude_option,
@@ -76,7 +84,7 @@ def _build_screening_prompt_context():
 
 
 def test_screening_prompt_builder():
-    _, _, row, metadata_record, question, *options = (
+    _, _, row, text_extraction_result, question, *options = (
         _build_screening_prompt_context()
     )
 
@@ -84,7 +92,9 @@ def test_screening_prompt_builder():
         question=question,
         options=options,
         citation=row,
-        metadata_record=metadata_record,
+        text_extraction_result=text_extraction_result,
+        tables=[],
+        figures=[],
     )
     prompt_args = prompt_builder.get_screening_prompt_args()
 
@@ -102,16 +112,66 @@ def test_screening_prompt_builder():
     assert prompt_args.tables == "(none)"
     assert prompt_args.figures == "(none)"
 
-    prompt_str = prompt_builder.build_str()
+    prompt_str = prompt_builder.build_str(prompt_args)
     assert "Is this relevant?" in prompt_str
     assert "[0] First sentence." in prompt_str
 
 
-@override_settings(HAS_LLM=True)
-def test_get_l2_screening_results_returns_exact_matching_option():
-    _, _, row, metadata_record, question, include_option, exclude_option = (
+def test_screening_prompt_builder_includes_tables_and_figures(tmp_path):
+    _, _, row, text_extraction_result, question, *options = (
         _build_screening_prompt_context()
     )
+    document = row.document
+
+    with override_settings(MEDIA_ROOT=tmp_path):
+        table = DocumentTable.objects.create(
+            document=document,
+            index=1,
+            caption="Baseline characteristics",
+            table_markdown="| Group | Count |\n| --- | --- |\n| A | 12 |",
+        )
+        figure = DocumentFigure.objects.create(
+            document=document,
+            index=2,
+            caption="Participant flow",
+            file=SimpleUploadedFile(
+                "figure.png", b"figure bytes", content_type="image/png"
+            ),
+        )
+
+        prompt_builder = L2ScreeningPromptBuilder(
+            question=question,
+            options=options,
+            citation=row,
+            text_extraction_result=text_extraction_result,
+            tables=[table],
+            figures=[figure],
+        )
+        prompt_args = prompt_builder.get_screening_prompt_args()
+
+        assert (
+            "Table 1  caption: Baseline characteristics" in prompt_args.tables
+        )
+        assert "| A | 12 |" in prompt_args.tables
+        assert (
+            "Figure [F2] caption: Participant flow (see attached image F2)"
+            in prompt_args.figures
+        )
+        assert len(prompt_args.figure_image_files) == 1
+        assert prompt_args.figure_image_files[0].read() == b"figure bytes"
+
+
+@override_settings(HAS_LLM=True)
+def test_get_l2_screening_results_returns_exact_matching_option():
+    (
+        _,
+        _,
+        row,
+        text_extraction_result,
+        question,
+        include_option,
+        exclude_option,
+    ) = _build_screening_prompt_context()
 
     client = MagicMock()
     client.complete_prompt.return_value = json.dumps(
@@ -132,7 +192,9 @@ def test_get_l2_screening_results_returns_exact_matching_option():
             question,
             [include_option, exclude_option],
             row,
-            metadata_record,
+            text_extraction_result,
+            [],
+            [],
         )
 
     assert result.selected == include_option
@@ -145,8 +207,63 @@ def test_get_l2_screening_results_returns_exact_matching_option():
 
 
 @override_settings(HAS_LLM=True)
+def test_get_l2_screening_results_sends_figures_as_multimodal_files(tmp_path):
+    (
+        _,
+        _,
+        row,
+        text_extraction_result,
+        question,
+        include_option,
+        exclude_option,
+    ) = _build_screening_prompt_context()
+
+    with override_settings(MEDIA_ROOT=tmp_path):
+        figure = DocumentFigure.objects.create(
+            document=row.document,
+            index=1,
+            caption="Outcome figure",
+            file=SimpleUploadedFile(
+                "figure.png", b"figure bytes", content_type="image/png"
+            ),
+        )
+
+        client = MagicMock()
+        client.complete_multimodal_prompt.return_value = json.dumps(
+            {
+                "selected": "Include",
+                "explanation": "The figure supports inclusion.",
+                "confidence": 0.72,
+                "evidence_sentences": [0],
+                "evidence_tables": [],
+                "evidence_figures": [1],
+            }
+        )
+
+        with patch(
+            "my_app.prompts.l2_screening_prompt.get_client",
+            return_value=client,
+        ):
+            result = get_l2_screening_results(
+                question,
+                [include_option, exclude_option],
+                row,
+                text_extraction_result,
+                [],
+                [figure],
+            )
+
+    assert result.selected == include_option
+    assert result.evidence_figures == [1]
+    client.complete_prompt.assert_not_called()
+    client.complete_multimodal_prompt.assert_called_once()
+    _, kwargs = client.complete_multimodal_prompt.call_args
+    assert kwargs["files"] == [figure.file]
+
+
+@override_settings(HAS_LLM=True)
 def test_get_l2_screening_results_raises_when_json_is_invalid():
-    _, _, row, metadata_record, question, *options = (
+    _, _, row, text_extraction_result, question, *options = (
         _build_screening_prompt_context()
     )
 
@@ -157,12 +274,14 @@ def test_get_l2_screening_results_raises_when_json_is_invalid():
         "my_app.prompts.l2_screening_prompt.get_client", return_value=client
     ):
         with pytest.raises(UnexpectedLLMOutputError, match="invalid JSON"):
-            get_l2_screening_results(question, options, row, metadata_record)
+            get_l2_screening_results(
+                question, options, row, text_extraction_result, [], []
+            )
 
 
 @override_settings(HAS_LLM=True)
 def test_get_l2_screening_results_raises_when_selected_option_does_not_match():
-    _, _, row, metadata_record, question, *options = (
+    _, _, row, text_extraction_result, question, *options = (
         _build_screening_prompt_context()
     )
 
@@ -185,12 +304,14 @@ def test_get_l2_screening_results_raises_when_selected_option_does_not_match():
             UnexpectedLLMOutputError,
             match="doesn't match available options",
         ):
-            get_l2_screening_results(question, options, row, metadata_record)
+            get_l2_screening_results(
+                question, options, row, text_extraction_result, [], []
+            )
 
 
 @override_settings(HAS_LLM=True)
 def test_get_l2_screening_results_raises_on_pydantic_validation_error():
-    _, _, row, metadata_record, question, *options = (
+    _, _, row, text_extraction_result, question, *options = (
         _build_screening_prompt_context()
     )
 
@@ -210,4 +331,6 @@ def test_get_l2_screening_results_raises_on_pydantic_validation_error():
         "my_app.prompts.l2_screening_prompt.get_client", return_value=client
     ):
         with pytest.raises(UnexpectedLLMOutputError):
-            get_l2_screening_results(question, options, row, metadata_record)
+            get_l2_screening_results(
+                question, options, row, text_extraction_result, [], []
+            )

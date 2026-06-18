@@ -1,6 +1,10 @@
 from django.urls import reverse
 
+import pytest
+
 from proj.models import User
+
+pytestmark = pytest.mark.view
 
 
 def is_client_logged_in(client):

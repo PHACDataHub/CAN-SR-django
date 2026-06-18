@@ -80,6 +80,10 @@ class L2ScreeningResult(CitationQueryResult):
         default=list,
         blank=True,
     )
+    evidence_figures = models.JSONField(
+        default=list,
+        blank=True,
+    )
 
     class Meta:
         unique_together = ("citation", "question")
