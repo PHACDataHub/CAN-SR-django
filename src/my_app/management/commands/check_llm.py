@@ -23,6 +23,7 @@ from proj.llm_client import (
     get_real_client_modes,
 )
 
+from my_app.models import LanguageModel
 from shortcuts import logger
 
 SMOKE_TEST_PROMPT = """
@@ -91,7 +92,12 @@ class Command(BaseCommand):
 
         try:
             client = get_client()
-            raw_response = client.complete_prompt(SMOKE_TEST_PROMPT)
+            model = LanguageModel.get_default_model()
+            if model is None:
+                raise LLMConfigurationError(
+                    f"No active default language model configured for {mode}"
+                )
+            raw_response = client.complete_prompt(SMOKE_TEST_PROMPT, model)
             logger.info(
                 "\n\n✅ 1/3 configuration and connection check passed  \n\n"
             )

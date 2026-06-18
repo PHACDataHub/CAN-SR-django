@@ -98,12 +98,13 @@ from decouple import Csv, config
 
 LLM_MODE = config("LLM_MODE", default="local")
 HAS_LLM = LLM_MODE != "local"
-# Only local Ollama is supported in normal runtime today.
 if LLM_MODE == "ollama":
     LLM_OLLAMA_URL = config("OLLAMA_URL", default="http://localhost:11434")
-    LLM_OLLAMA_MODELS = config("OLLAMA_MODELS", cast=Csv())
-    LLM_OLLAMA_MODEL = LLM_OLLAMA_MODELS[0]
     LLM_OLLAMA_TIMEOUT = config("LLM_OLLAMA_TIMEOUT", default=60, cast=int)
+
+AZURE_OPENAI_MODE = config("AZURE_OPENAI_MODE", default="")
+AZURE_OPENAI_API_KEY = config("AZURE_OPENAI_API_KEY", default="")
+AZURE_OPENAI_ENDPOINT = config("AZURE_OPENAI_ENDPOINT", default="")
 
 # END LLM settings
 

@@ -25,7 +25,8 @@ Depending on which features you're using, postgres is optional, you can also opt
 **populate DB**
 
 1. `python manage.py migrate`
-2. `python manage.py runscript my_app.scripts.dev`
+2. `python src/manage.py loaddata my_app/fixtures/language_models.yaml`
+3. `python manage.py runscript my_app.scripts.dev`
 
 
 ## General documentation
@@ -102,18 +103,28 @@ You can check LLM configuration and connection by running `python -m manage chec
 
 ## LLM configuration
 
-Two modes are supported as of now:
+Three modes are supported:
 
 1. using nothing at all (dummy dev client)
 2. using local ollama instance
+3. using Azure OpenAI
 
 ```
 LLM_MODE=local
 OLLAMA_URL=http://localhost:11434
-OLLAMA_MODELS='llama3.2:1b', 
 ```
 
-OLLAMA_MODELS is a comma-separated list of models to load from ollama, but currently the settings only takes the first one.
+Available models are loaded from the database. From `src/`, populate them with
+`python -m manage loaddata my_app/fixtures/language_models.yaml`.
+
+Azure OpenAI supports API-key and Entra authentication:
+
+```env
+LLM_MODE=azure
+AZURE_OPENAI_MODE=key
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_ENDPOINT=https://example.openai.azure.com
+```
 
 You can check LLM configuration and connection by running `python -m manage check_llm` which will attempt to make a test call to the configured LLM
 
@@ -124,4 +135,3 @@ From the `src/` directory run the following
 2. `coverage html -i`
 3. `python -m http.server 1337`
 4. visit `http://localhost:1337/htmlcov/` and dig into modules to see which individual line coverage
-

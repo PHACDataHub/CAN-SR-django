@@ -11,6 +11,7 @@ from my_app.models import (
     Citation,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
+    LanguageModel,
 )
 from shortcuts import List, dataclass, logger
 
@@ -118,7 +119,8 @@ def get_l1_screening_results(
     prompt = prompt_builder.build_str()
 
     llm_client = get_client()
-    raw_answer = llm_client.complete_prompt(prompt)
+    model = LanguageModel.get_default_model()
+    raw_answer = llm_client.complete_prompt(prompt, model)
 
     try:
         json_answer = json.loads(raw_answer)

@@ -4,6 +4,7 @@ azure-ai-documentintelligence==1.0.2
 azure-core==1.38.0
 
 beautifulsoup4==4.14.3
+azure-identity==1.23.0
 django-debug-toolbar==4.4.6
 django-extensions==4.1
 django-htmx==1.21.0
@@ -20,6 +21,7 @@ grobid-client-python==0.1.4
 htpy==25.12.0
 httpx==0.28.1
 ipython==8.10.0
+openai==2.43.0
 psycopg[binary,pool]==3.2.3
 python-decouple==3.8
 pydantic==2.13.4
@@ -27,3 +29,4 @@ pytz==2024.1
 requests==2.32.4
 rules==3.3
 whitenoise==6.4.0
+PyYAML==6.0.3

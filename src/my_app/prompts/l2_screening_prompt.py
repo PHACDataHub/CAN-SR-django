@@ -16,6 +16,7 @@ from my_app.models import (
     DocumentTable,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
+    LanguageModel,
     TextExtractionResult,
 )
 from my_app.queries import options_for_question
@@ -199,12 +200,13 @@ def get_l2_screening_results(
     images = prompt_args.figure_image_files
 
     llm_client = get_client()
+    model = LanguageModel.get_default_model()
     if images:
         raw_response = llm_client.complete_multimodal_prompt(
-            prompt, files=images
+            prompt, files=images, model=model
         )
     else:
-        raw_response = llm_client.complete_prompt(prompt)
+        raw_response = llm_client.complete_prompt(prompt, model)
 
     try:
         response_dict = json.loads(raw_response)
