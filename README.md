@@ -25,7 +25,7 @@ Depending on which features you're using, postgres is optional, you can also opt
 **populate DB**
 
 1. `python manage.py migrate`
-2. `python src/manage.py loaddata my_app/fixtures/language_models.yaml`
+2. `python manage.py loaddata my_app/fixtures/language_models.yaml`
 3. `python manage.py runscript my_app.scripts.dev`
 
 
