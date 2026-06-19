@@ -20,6 +20,4 @@ def build_option_definition_string(options: List[AbstractScreeningQuestion]):
 
 
 def build_option_string(options: List[AbstractScreeningQuestion]):
-    return "\n".join(
-        [f"{j}. {opt.option_text}" for j, opt in enumerate(options)]
-    )
+    return "\n".join([f"'{opt.option_text}'" for opt in options])

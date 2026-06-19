@@ -25,9 +25,24 @@ Depending on which features you're using, postgres is optional, you can also opt
 **populate DB**
 
 1. `python manage.py migrate`
-2. `python src/manage.py loaddata my_app/fixtures/language_models.yaml`
+2. `python manage.py loaddata my_app/fixtures/language_models.yaml`
 3. `python manage.py runscript my_app.scripts.dev`
 
+
+## Developing with all dependencies from your phac machine
+
+1. Configure your .env 
+    - `USE_SQLITE=True` (postgres may be preferred for certain cases)
+    - `GROBID_URL=...` ask around for this
+    - LLM:
+        - `LLM_MODE=azure`
+        - `AZURE_OPENAI_MODE=entra`
+        - `AZURE_OPENAI_ENDPOINT=...` ask around for this
+    - Figure extraction docint
+        - `FIGURE_EXTRACTION_MODE=azure_doc_int`
+        - `AZURE_DOC_INT_MODE=entra`
+        - `AZURE_DOC_INT_ENDPOINT=...` ask around for this
+2. Before running `runserver`, run `az login` and use the "development" project
 
 ## General documentation
 

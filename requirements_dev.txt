@@ -1,4 +1,5 @@
 -r requirements_formatting.txt
+azure-cli~=2.87
 coverage==7.14.0
 pytest==9.0.2
 pytest==9.0.2
