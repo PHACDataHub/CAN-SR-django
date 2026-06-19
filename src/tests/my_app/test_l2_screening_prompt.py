@@ -103,8 +103,10 @@ def test_screening_prompt_builder():
     assert prompt_args.fulltext == (
         "[0] First sentence.\n\n[1] Second sentence."
     )
-    assert "0. Include" in prompt_args.options
-    assert "1. No" in prompt_args.options
+    assert "'Include'" in prompt_args.options
+    assert "0. 'Include'" not in prompt_args.options
+    assert "'No'" in prompt_args.options
+    assert "1. 'No'" not in prompt_args.options
 
     assert "<Include>\nyes_def\n</Include>" in prompt_args.definitions
     assert "<No>\nno_def\n</No>" in prompt_args.definitions
