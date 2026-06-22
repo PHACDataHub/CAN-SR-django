@@ -2,7 +2,9 @@ from django.test import override_settings
 
 import pytest
 
+from my_app.model_factories import ReviewFactory
 from my_app.models import LanguageModel
+from my_app.queries import get_model_for_review
 
 pytestmark = pytest.mark.backend
 
@@ -63,3 +65,59 @@ def test_get_default_model_ignores_inactive_default():
         model = LanguageModel.get_default_model()
 
     assert model is None
+
+
+@override_settings(LLM_MODE="ollama")
+def test_get_model_for_review_returns_selected_supported_model():
+    selected_model = LanguageModel.objects.create(
+        name="Selected",
+        key="selected",
+        deployment="selected",
+        supported_env="ollama",
+    )
+    review = ReviewFactory(language_model=selected_model)
+
+    assert get_model_for_review(review.id) == selected_model
+
+
+@override_settings(LLM_MODE="ollama")
+def test_get_model_for_review_returns_default_when_none_selected():
+    LanguageModel.objects.filter(supported_env="ollama").update(
+        is_default=False
+    )
+    default_model = LanguageModel.objects.create(
+        name="Default",
+        key="default",
+        deployment="default",
+        supported_env="ollama",
+        is_default=True,
+    )
+    review = ReviewFactory(language_model=None)
+
+    assert get_model_for_review(review.id) == default_model
+
+
+@override_settings(LLM_MODE="ollama")
+def test_get_model_for_review_logs_and_falls_back_for_unsupported_model(
+    caplog,
+):
+    LanguageModel.objects.filter(supported_env="ollama").update(
+        is_default=False
+    )
+    default_model = LanguageModel.objects.create(
+        name="Default",
+        key="default",
+        deployment="default",
+        supported_env="ollama",
+        is_default=True,
+    )
+    unsupported_model = LanguageModel.objects.create(
+        name="Unsupported",
+        key="unsupported",
+        deployment="unsupported",
+        supported_env="azure",
+    )
+    review = ReviewFactory(language_model=unsupported_model)
+
+    assert get_model_for_review(review.id) == default_model
+    assert "unsupported or inactive language model" in caplog.text

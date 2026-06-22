@@ -48,6 +48,7 @@ class ReviewFactory(factory.django.DjangoModelFactory):
 
     title = factory.Faker("sentence", nb_words=4)
     description = factory.Faker("text")
+    language_model = None
 
 
 class DocumentFactory(factory.django.DjangoModelFactory):

@@ -4,7 +4,7 @@ from my_app.htpy.review import (
     ReviewEditPage,
     ReviewListPage,
 )
-from my_app.models import Review, ReviewUserLink
+from my_app.models import LanguageModel, Review, ReviewUserLink
 from my_app.queries import get_accessible_reviews
 from my_app.router import route
 from my_app.views.view_utils import MustAccessReviewMixin
@@ -28,7 +28,16 @@ from shortcuts import (
 class ReviewForm(ModelForm, StandardFormMixin):
     class Meta:
         model = Review
-        fields = ["title", "description"]
+        fields = ["title", "description", "language_model"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        supported_models = LanguageModel.get_supported_models()
+        default_model = supported_models.filter(is_default=True).first()
+        self.fields["language_model"].queryset = supported_models
+        self.fields["language_model"].empty_label = tdt(
+            f"Default (currently {default_model})"
+        )
 
 
 @route("reviews/", name="review_list")

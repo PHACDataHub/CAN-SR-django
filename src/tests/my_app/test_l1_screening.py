@@ -14,7 +14,11 @@ from my_app.model_factories import (
     L1ScreeningQuestionOptionFactory,
     ReviewFactory,
 )
-from my_app.models import L1ScreeningResult, ScreeningResultStatus
+from my_app.models import (
+    L1ScreeningResult,
+    LanguageModel,
+    ScreeningResultStatus,
+)
 from my_app.services.l1_screening import (
     DeferredL1ScreeningService,
     ProcessL1ScreeningService,
@@ -24,7 +28,8 @@ pytestmark = [pytest.mark.backend, pytest.mark.l1_screening]
 
 
 def test_deferred_l1_screening_service_enqueues_created_results():
-    review = ReviewFactory()
+    model = LanguageModel.get_default_model()
+    review = ReviewFactory(language_model=model)
     dataset = CitationDatasetFactory(review=review)
     row_1 = CitationFactory(
         dataset=dataset,
@@ -83,6 +88,7 @@ def test_deferred_l1_screening_service_enqueues_created_results():
     assert [result.citation_id for result in results] == [row_1.id, row_2.id]
     assert results[0].id == existing_result.id
     assert results[1].status == ScreeningResultStatus.PENDING
+    assert results[1].language_model == model
     assert task_mock.enqueue.call_count == 1
     assert task_mock.enqueue.call_args.kwargs == {"result_id": results[1].id}
 

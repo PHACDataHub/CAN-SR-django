@@ -1,5 +1,5 @@
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, sentinel
 
 from django.test import override_settings
 
@@ -105,13 +105,15 @@ def test_get_l1_screening_results_returns_exact_matching_option():
         "my_app.prompts.l1_screening_prompt.get_client", return_value=client
     ):
         result = get_l1_screening_results(
-            question, [include_option, exclude_option], row
+            question, [include_option, exclude_option], row, sentinel.model
         )
 
     assert result.selected == include_option
     assert result.explanation == "The citation matches the inclusion criteria."
     assert result.confidence == 0.88
-    client.complete_prompt.assert_called_once()
+    client.complete_prompt.assert_called_once_with(
+        client.complete_prompt.call_args.args[0], sentinel.model
+    )
 
 
 @override_settings(HAS_LLM=True)
@@ -125,7 +127,7 @@ def test_get_l1_screening_results_raises_when_json_is_invalid():
         "my_app.prompts.l1_screening_prompt.get_client", return_value=client
     ):
         with pytest.raises(UnexpectedLLMOutputError, match="invalid JSON"):
-            get_l1_screening_results(question, options, row)
+            get_l1_screening_results(question, options, row, sentinel.model)
 
 
 @override_settings(HAS_LLM=True)
@@ -148,7 +150,7 @@ def test_get_l1_screening_results_raises_when_selected_option_does_not_match():
             UnexpectedLLMOutputError,
             match="doesn't match available options",
         ):
-            get_l1_screening_results(question, options, row)
+            get_l1_screening_results(question, options, row, sentinel.model)
 
 
 @override_settings(HAS_LLM=True)
@@ -168,4 +170,4 @@ def test_get_l1_screening_results_raises_on_pydantic_validation_error():
         "my_app.prompts.l1_screening_prompt.get_client", return_value=client
     ):
         with pytest.raises(UnexpectedLLMOutputError):
-            get_l1_screening_results(question, options, row)
+            get_l1_screening_results(question, options, row, sentinel.model)
