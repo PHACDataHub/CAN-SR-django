@@ -379,6 +379,121 @@ def test_screen_l2_row_process_view_rejects_unprocessed_document(
     assert task_mock.enqueue.call_count == 0
 
 
+def test_l2_human_validation_can_be_set_and_undone(
+    vanilla_client, vanilla_user
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset)
+    question = L2ScreeningQuestionFactory(review=review)
+    selected_option = L2ScreeningQuestionOptionFactory(question=question)
+    result = L2ScreeningResultFactory(
+        citation=row,
+        question=question,
+        selected_option=selected_option,
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.post(
+            reverse("screen_l2_validate_correct", args=[review.id, result.id])
+        )
+
+    result.refresh_from_db()
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert result.human_validated_by == vanilla_user
+    assert result.human_validation_timestamp is not None
+    assert "Validated" in body
+    assert vanilla_user.username in body
+    assert "Undo" in body
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.post(
+            reverse("screen_l2_undo_validation", args=[review.id, result.id])
+        )
+
+    result.refresh_from_db()
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert result.human_validated_by is None
+    assert result.human_validation_timestamp is None
+    assert "Validate correct" in body
+    assert "Manually answer screening" in body
+
+
+def test_l2_human_answer_modal_saves_question_option_and_notes(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset)
+    question = L2ScreeningQuestionFactory(review=review)
+    answer = L2ScreeningQuestionOptionFactory(question=question)
+    other_answer = L2ScreeningQuestionOptionFactory()
+    result = L2ScreeningResultFactory(citation=row, question=question)
+    url = reverse("screen_l2_human_answer", args=[review.id, result.id])
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(url)
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "Manually answer screening" in body
+    assert answer.option_text in body
+    assert other_answer.option_text not in body
+    assert "human_selected_answer" in body
+    assert "human_notes" in body
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.post(
+            url,
+            {
+                "human_selected_answer": answer.id,
+                "human_notes": "Human review notes.",
+            },
+        )
+
+    result.refresh_from_db()
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert result.human_selected_answer == answer
+    assert result.human_notes == "Human review notes."
+    assert result.human_validation_timestamp is None
+    assert result.human_validated_by is None
+    assert response["HX-Trigger-After-Settle"] == "modal-close"
+    assert response["HX-Retarget"] == f"#l2-human-review-{result.id}"
+    assert answer.option_text in body
+    assert "Human review notes." in body
+    assert "Human entered" in body
+    assert "Edit" in body
+
+
+def test_l2_human_review_views_require_access_and_matching_review(
+    vanilla_client,
+):
+    result = L2ScreeningResultFactory()
+    other_review = ReviewFactory()
+    endpoints = [
+        "screen_l2_validate_correct",
+        "screen_l2_undo_validation",
+        "screen_l2_human_answer",
+    ]
+
+    with patch_rules(can_access_review=False):
+        for endpoint in endpoints:
+            response = vanilla_client.post(
+                reverse(endpoint, args=[result.question.review_id, result.id])
+            )
+            assert response.status_code == 403
+
+    with patch_rules(can_access_review=True):
+        for endpoint in endpoints:
+            response = vanilla_client.post(
+                reverse(endpoint, args=[other_review.id, result.id])
+            )
+            assert response.status_code == 404
+
+
 def test_screen_l2_row_details_view_renders_empty_pdf_viewer_without_document(
     vanilla_client,
 ):
