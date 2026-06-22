@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 from phac_aspc.django import fields
@@ -52,7 +53,31 @@ class CitationQueryResult(models.Model):
     explanation = models.TextField(null=True, blank=True)
 
 
-class L1ScreeningResult(CitationQueryResult):
+class HumanValidatedScreeningResult(CitationQueryResult):
+    class Meta:
+        abstract = True
+
+    human_validation_timestamp = models.DateTimeField(
+        null=True,
+        default=None,
+        verbose_name=tdt("Human validation timestamp"),
+    )
+    human_validated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=tdt("Human validated by"),
+    )
+    human_notes = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name=tdt("Human notes"),
+    )
+
+
+class L1ScreeningResult(HumanValidatedScreeningResult):
     question = models.ForeignKey(
         "L1ScreeningQuestion", on_delete=models.CASCADE
     )
@@ -62,12 +87,20 @@ class L1ScreeningResult(CitationQueryResult):
         null=True,
         blank=True,
     )
+    human_selected_answer = models.ForeignKey(
+        "L1ScreeningQuestionOption",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=tdt("Human selected answer"),
+    )
 
     class Meta:
         unique_together = ("citation", "question")
 
 
-class L2ScreeningResult(CitationQueryResult):
+class L2ScreeningResult(HumanValidatedScreeningResult):
     question = models.ForeignKey(
         "L2ScreeningQuestion", on_delete=models.CASCADE
     )
@@ -76,6 +109,14 @@ class L2ScreeningResult(CitationQueryResult):
         on_delete=models.CASCADE,
         null=True,
         blank=True,
+    )
+    human_selected_answer = models.ForeignKey(
+        "L2ScreeningQuestionOption",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        verbose_name=tdt("Human selected answer"),
     )
 
     evidence_sentences = models.JSONField(

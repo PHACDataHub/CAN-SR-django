@@ -18,6 +18,7 @@ from my_app.views.screening.l2_common_components import (
     FigureExtractionBadge,
     L2ScreeningBadge,
     TextExtractionBadge,
+    render_l2_human_review_control,
     render_l2_pdf_modal_button,
 )
 from shortcuts import BasePageTemplate
@@ -303,22 +304,16 @@ class L2PdfScreeningPage(BasePageTemplate):
     def get_results(self, citation_row: Citation):
         return list(
             L2ScreeningResult.objects.filter(citation=citation_row)
-            .select_related("question", "selected_option")
+            .select_related(
+                "question",
+                "selected_option",
+                "human_selected_answer",
+                "human_validated_by",
+            )
             .order_by("question_id")
         )
 
     def render_result(self, result: L2ScreeningResult):
-        selected_option = result.selected_option
-        if selected_option is None:
-            selected_option_content = h.span(".text-muted")[
-                tdt("No option selected")
-            ]
-        else:
-            selected_option_content = h.div[
-                h.div(".fw-semibold")[selected_option.option_text],
-                h.div(".small.text-muted")[selected_option.option_value],
-            ]
-
         if result.confidence is None:
             confidence_value = tdt("None")
         else:
@@ -331,7 +326,10 @@ class L2PdfScreeningPage(BasePageTemplate):
                     tdt("Status"),
                     ScreeningResultStatus(result.status).label,
                 ),
-                (tdt("Selected option"), selected_option_content),
+                (
+                    tdt("Selected option"),
+                    render_l2_human_review_control(result, self.review),
+                ),
                 (tdt("Confidence"), confidence_value),
                 (tdt("Notes"), result.explanation or tdt("None")),
                 (
