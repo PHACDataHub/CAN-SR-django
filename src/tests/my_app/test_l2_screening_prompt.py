@@ -1,5 +1,5 @@
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, sentinel
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
@@ -197,6 +197,7 @@ def test_get_l2_screening_results_returns_exact_matching_option():
             text_extraction_result,
             [],
             [],
+            sentinel.model,
         )
 
     assert result.selected == include_option
@@ -205,7 +206,9 @@ def test_get_l2_screening_results_returns_exact_matching_option():
     assert result.evidence_sentences == [0, 1]
     assert result.evidence_tables == [2]
     assert result.evidence_figures == [3]
-    client.complete_prompt.assert_called_once()
+    client.complete_prompt.assert_called_once_with(
+        client.complete_prompt.call_args.args[0], sentinel.model
+    )
 
 
 @override_settings(HAS_LLM=True)
@@ -253,6 +256,7 @@ def test_get_l2_screening_results_sends_figures_as_multimodal_files(tmp_path):
                 text_extraction_result,
                 [],
                 [figure],
+                sentinel.model,
             )
 
     assert result.selected == include_option
@@ -261,6 +265,7 @@ def test_get_l2_screening_results_sends_figures_as_multimodal_files(tmp_path):
     client.complete_multimodal_prompt.assert_called_once()
     _, kwargs = client.complete_multimodal_prompt.call_args
     assert kwargs["files"] == [figure.file]
+    assert kwargs["model"] is sentinel.model
 
 
 @override_settings(HAS_LLM=True)
@@ -277,7 +282,13 @@ def test_get_l2_screening_results_raises_when_json_is_invalid():
     ):
         with pytest.raises(UnexpectedLLMOutputError, match="invalid JSON"):
             get_l2_screening_results(
-                question, options, row, text_extraction_result, [], []
+                question,
+                options,
+                row,
+                text_extraction_result,
+                [],
+                [],
+                sentinel.model,
             )
 
 
@@ -307,7 +318,13 @@ def test_get_l2_screening_results_raises_when_selected_option_does_not_match():
             match="doesn't match available options",
         ):
             get_l2_screening_results(
-                question, options, row, text_extraction_result, [], []
+                question,
+                options,
+                row,
+                text_extraction_result,
+                [],
+                [],
+                sentinel.model,
             )
 
 
@@ -334,5 +351,11 @@ def test_get_l2_screening_results_raises_on_pydantic_validation_error():
     ):
         with pytest.raises(UnexpectedLLMOutputError):
             get_l2_screening_results(
-                question, options, row, text_extraction_result, [], []
+                question,
+                options,
+                row,
+                text_extraction_result,
+                [],
+                [],
+                sentinel.model,
             )

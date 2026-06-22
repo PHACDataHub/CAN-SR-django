@@ -183,6 +183,7 @@ def get_l2_screening_results(
     text_extraction_result: TextExtractionResult,
     tables: List[DocumentTable],
     figures: List[DocumentFigure],
+    model: LanguageModel,
 ) -> L2ScreeningPromptResult:
     if not settings.HAS_LLM:
         logger.warning("LLM is not available, using mock results.")
@@ -200,7 +201,6 @@ def get_l2_screening_results(
     images = prompt_args.figure_image_files
 
     llm_client = get_client()
-    model = LanguageModel.get_default_model()
     if images:
         raw_response = llm_client.complete_multimodal_prompt(
             prompt, files=images, model=model

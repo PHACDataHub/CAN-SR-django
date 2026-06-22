@@ -4,7 +4,7 @@ from phac_aspc.django import fields
 
 from proj.model_util import add_to_admin, track_versions
 from proj.models import User
-from proj.text import tm
+from proj.text import tdt, tm
 
 
 @track_versions
@@ -20,6 +20,13 @@ class Review(models.Model):
     )
     description = fields.TextField(
         verbose_name=tm("systematic_review_description")
+    )
+    language_model = fields.ForeignKey(
+        "LanguageModel",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=tdt("Language model"),
     )
     created_at = fields.DateTimeField(
         auto_now_add=True, verbose_name=tm("systematic_review_created_at")

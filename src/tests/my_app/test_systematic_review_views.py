@@ -1,12 +1,46 @@
+from django.test import override_settings
 from django.urls import reverse
 
 import pytest
 from phac_aspc.rules import patch_rules
 
 from my_app.model_factories import ReviewFactory, ReviewUserLinkFactory
-from my_app.models import Review, ReviewUserLink
+from my_app.models import LanguageModel, Review, ReviewUserLink
+from my_app.views.review import ReviewForm
 
 pytestmark = pytest.mark.view
+
+
+@override_settings(LLM_MODE="ollama")
+def test_review_form_only_lists_supported_models_and_labels_default():
+    LanguageModel.objects.filter(supported_env="ollama").update(
+        is_active=False
+    )
+    default_model = LanguageModel.objects.create(
+        name="Default model",
+        key="default-model",
+        deployment="default-model",
+        supported_env="ollama",
+        is_default=True,
+    )
+    supported_model = LanguageModel.objects.create(
+        name="Supported model",
+        key="supported-model",
+        deployment="supported-model",
+        supported_env="ollama",
+    )
+    LanguageModel.objects.create(
+        name="Inactive model",
+        key="inactive-model",
+        deployment="inactive-model",
+        supported_env="ollama",
+        is_active=False,
+    )
+
+    field = ReviewForm().fields["language_model"]
+
+    assert list(field.queryset) == [default_model, supported_model]
+    assert field.empty_label == "Default (currently Default model)"
 
 
 def test_create_review_creates_link_and_redirects(

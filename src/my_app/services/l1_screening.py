@@ -16,7 +16,7 @@ from my_app.prompts.l1_screening_prompt import (
     UnexpectedLLMOutputError,
     get_l1_screening_results,
 )
-from my_app.queries import options_for_question
+from my_app.queries import get_model_for_review, options_for_question
 from shortcuts import logger
 
 
@@ -52,6 +52,7 @@ class L1ScreeningService:
             ).delete()
 
         for question in self.questions:
+            model = get_model_for_review(question.review_id)
             existing_results = L1ScreeningResult.objects.filter(
                 question=question,
                 citation_id__in=citation_ids,
@@ -71,6 +72,7 @@ class L1ScreeningService:
                 result = L1ScreeningResult.objects.create(
                     citation_id=citation_id,
                     question_id=question.id,
+                    language_model=model,
                     status=ScreeningResultStatus.PENDING,
                 )
 
@@ -129,13 +131,16 @@ class ProcessL1ScreeningService:
         self,
         question: L1ScreeningQuestion,
         citation: Citation,
+        model,
     ):
 
         options = options_for_question(L1ScreeningQuestionOption, question.id)
 
         for retry_num in range(self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT + 1):
             try:
-                return get_l1_screening_results(question, options, citation)
+                return get_l1_screening_results(
+                    question, options, citation, model
+                )
             except UnexpectedLLMOutputError:
                 if retry_num == self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT:
                     raise
@@ -153,7 +158,7 @@ class ProcessL1ScreeningService:
             self.result_id,
         )
         result = L1ScreeningResult.objects.select_related(
-            "question", "citation"
+            "question", "citation", "language_model"
         ).get(id=self.result_id)
         question = result.question
         citation = result.citation
@@ -162,6 +167,7 @@ class ProcessL1ScreeningService:
             screening_results = self._get_l1_screening_results_with_retries(
                 question,
                 citation,
+                result.language_model,
             )
         except UnexpectedLLMOutputError as exc:
             logger.exception(

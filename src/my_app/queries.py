@@ -10,10 +10,33 @@ from my_app.models import (
     L1ScreeningResult,
     L2ScreeningQuestion,
     L2ScreeningResult,
+    LanguageModel,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
 )
+from shortcuts import logger
+
+
+@cached_within_request
+def get_model_for_review(review_id):
+    review_model_id = Review.objects.values_list(
+        "language_model_id", flat=True
+    ).get(id=review_id)
+    supported_models = LanguageModel.get_supported_models()
+
+    if review_model_id is not None:
+        selected_model = supported_models.filter(id=review_model_id).first()
+        if selected_model is not None:
+            return selected_model
+
+        logger.error(
+            "Review id=%s has unsupported or inactive language model id=%s; falling back to the default model",
+            review_id,
+            review_model_id,
+        )
+
+    return supported_models.filter(is_default=True).first()
 
 
 @cached_within_request

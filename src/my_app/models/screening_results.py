@@ -28,6 +28,12 @@ class CitationQueryResult(models.Model):
         abstract = True
 
     citation = models.ForeignKey("Citation", on_delete=models.CASCADE)
+    language_model = models.ForeignKey(
+        "LanguageModel",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
 
     # question =  models.ForeignKey(... override)
     # selected_option = models.ForeignKey(... override)

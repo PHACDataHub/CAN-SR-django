@@ -19,7 +19,7 @@ from my_app.prompts.l2_screening_prompt import (
     UnexpectedLLMOutputError,
     get_l2_screening_results,
 )
-from my_app.queries import options_for_question
+from my_app.queries import get_model_for_review, options_for_question
 from shortcuts import logger
 
 
@@ -108,6 +108,7 @@ class L2ScreeningService:
             ).delete()
 
         for question in self.questions:
+            model = get_model_for_review(question.review_id)
             existing_results = L2ScreeningResult.objects.filter(
                 question=question,
                 citation_id__in=citation_ids,
@@ -129,6 +130,7 @@ class L2ScreeningService:
                 result = L2ScreeningResult.objects.create(
                     citation_id=citation_id,
                     question_id=question.id,
+                    language_model=model,
                     status=ScreeningResultStatus.PENDING,
                 )
 
@@ -182,6 +184,7 @@ class ProcessL2ScreeningService:
         question: L2ScreeningQuestion,
         citation: Citation,
         text_extraction_result: TextExtractionResult,
+        model,
     ):
         options = options_for_question(L2ScreeningQuestionOption, question.id)
         tables = list(citation.document.documenttables.all())
@@ -196,6 +199,7 @@ class ProcessL2ScreeningService:
                     text_extraction_result,
                     tables,
                     figures,
+                    model,
                 )
             except UnexpectedLLMOutputError:
                 if retry_num == self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT:
@@ -215,6 +219,7 @@ class ProcessL2ScreeningService:
         )
         result = L2ScreeningResult.objects.select_related(
             "question",
+            "language_model",
             "citation",
             "citation__document",
             "citation__document__text_extraction_result",
@@ -232,6 +237,7 @@ class ProcessL2ScreeningService:
                 question,
                 citation,
                 text_extraction_result,
+                result.language_model,
             )
         except UnexpectedLLMOutputError as exc:
             logger.exception(

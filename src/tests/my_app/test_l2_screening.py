@@ -20,6 +20,7 @@ from my_app.models import (
     DocumentTable,
     FigureExtractionResult,
     L2ScreeningResult,
+    LanguageModel,
     ScreeningResultStatus,
     TextExtractionResult,
 )
@@ -33,13 +34,14 @@ pytestmark = [pytest.mark.backend, pytest.mark.l2_screening]
 
 def _build_l2_screening_context(
     *,
+    language_model=None,
     with_document=True,
     with_text_extraction_result=True,
     text_extraction_status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     with_figure_extraction_result=True,
     figure_extraction_status=FigureExtractionResult.Status.COMPLETED,
 ):
-    review = ReviewFactory()
+    review = ReviewFactory(language_model=language_model)
     dataset = CitationDatasetFactory(review=review)
     citation = CitationFactory(
         dataset=dataset,
@@ -100,7 +102,10 @@ def _build_l2_screening_context(
 
 
 def test_deferred_l2_screening_service_enqueues_created_results():
-    _, _, row_1, _, question = _build_l2_screening_context()
+    model = LanguageModel.get_default_model()
+    review, _, row_1, _, question = _build_l2_screening_context(
+        language_model=model
+    )
     _, _, row_2, _, _ = _build_l2_screening_context()
     row_2.dataset = row_1.dataset
     row_2.save(update_fields=["dataset"])
@@ -135,6 +140,7 @@ def test_deferred_l2_screening_service_enqueues_created_results():
     assert [result.citation_id for result in results] == [row_1.id, row_2.id]
     assert results[0].id == existing_result.id
     assert results[1].status == ScreeningResultStatus.PENDING
+    assert results[1].language_model == model
     assert task_mock.enqueue.call_count == 1
     assert task_mock.enqueue.call_args.kwargs == {"result_id": results[1].id}
 
@@ -288,6 +294,7 @@ def test_process_l2_screening_service_persists_evidence_sentences():
     assert result.confidence == 0.88
     assert get_results.call_args.args[4] == [table]
     assert get_results.call_args.args[5] == [figure]
+    assert get_results.call_args.args[6] is result.language_model
 
 
 def test_process_l2_screening_service_raises_when_document_missing():

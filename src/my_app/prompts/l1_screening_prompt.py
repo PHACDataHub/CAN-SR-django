@@ -107,6 +107,7 @@ def get_l1_screening_results(
     question: L1ScreeningQuestion,
     options: List[L1ScreeningQuestionOption],
     citation: Citation,
+    model: LanguageModel,
 ):
     if not settings.HAS_LLM:
         logger.warning(
@@ -119,7 +120,6 @@ def get_l1_screening_results(
     prompt = prompt_builder.build_str()
 
     llm_client = get_client()
-    model = LanguageModel.get_default_model()
     raw_answer = llm_client.complete_prompt(prompt, model)
 
     try:
