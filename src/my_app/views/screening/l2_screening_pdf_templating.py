@@ -11,8 +11,14 @@ from my_app.models import (
     ScreeningResultStatus,
     TextExtractionResult,
 )
-from my_app.queries import L2ScreeningStatusFetcher
-from my_app.views.screening.components import NotStartedBadge
+from my_app.queries import (
+    L2ScreeningStatusFetcher,
+    get_l2_screening_progress_stats,
+)
+from my_app.views.screening.components import (
+    CitationScreeningProgressNav,
+    NotStartedBadge,
+)
 from my_app.views.screening.l2_common_components import (
     DocumentUploadBadge,
     FigureExtractionBadge,
@@ -110,6 +116,13 @@ class L2PdfScreeningPage(BasePageTemplate):
                 bc.BreadcrumbItem(label=tdt("PDF screening")),
             ],
             h.h1[tdt("L2 PDF screening")],
+            CitationScreeningProgressNav(
+                citation_row,
+                review,
+                detail_route_name="screen_l2_row_details",
+                progress_stats=get_l2_screening_progress_stats(review.id),
+                nav_label=tdt("L2 citation navigation"),
+            ),
             h.div(".row.g-4.l2-screening-layout")[
                 h.div(".col-lg-9")[self.render_pdf_panel(citation_row),],
                 h.div(".col-lg-3.l2-screening-sidebar")[

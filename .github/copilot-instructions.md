@@ -21,6 +21,7 @@ code style
   - especially if ternaries are nested or when both branches are non-null
 - prefer comprehensions to loops
 - Dont over-comment obvious code
+- avoid passing route names as variables to `reverse()`, prefer string literals, even if it means more redundancy
 
 Commands: Always run `python src/manage.py {command}` to avoid path errors. Run `makemigrations` as needed when touching models
 
@@ -55,7 +56,6 @@ Views:
 
 - default to sync views, only ever use async if asked explicitly
 - use class-based views, django generic views encouraged
-- all views registered in urls.py
 - Use HtpyTemplateMixin when building views that need a traditional template_name, e.g. to interop with generic views
   - if a view has a template, that template should take care of all presentational concerns, including even querying additional data used by render logic
 - For smaller views with small responses (e.g. htmx endpoints) return htpy nodes directly from the view
