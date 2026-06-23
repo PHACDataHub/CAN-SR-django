@@ -9,8 +9,12 @@ from my_app.models import (
     Review,
     ScreeningResultStatus,
 )
-from my_app.queries import L1ScreeningStatusFetcher
+from my_app.queries import (
+    L1ScreeningStatusFetcher,
+    get_l1_screening_progress_stats,
+)
 from my_app.views.screening.components import (
+    CitationScreeningProgressNav,
     human_review_control_id,
     render_human_review_control,
 )
@@ -401,6 +405,13 @@ class L1CitationScreeningPage(BasePageTemplate):
                 bc.BreadcrumbItem(label=tdt("Citation screening")),
             ],
             h.h1[tdt("L1 citation screening")],
+            CitationScreeningProgressNav(
+                self.citation_row,
+                review,
+                detail_route_name="screen_l1_row_details",
+                progress_stats=get_l1_screening_progress_stats(review.id),
+                nav_label=tdt("L1 citation navigation"),
+            ),
             h.div(".row.g-4")[
                 h.div(".col-lg-8")[self.render_citation_panel()],
                 h.div(".col-lg-4")[

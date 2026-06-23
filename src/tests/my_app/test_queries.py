@@ -5,11 +5,17 @@ from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
     L1ScreeningQuestionFactory,
+    L1ScreeningQuestionOptionFactory,
     L1ScreeningResultFactory,
     ReviewFactory,
+    UserFactory,
 )
 from my_app.models import ScreeningResultStatus
-from my_app.queries import L1ScreeningStatusFetcher
+from my_app.queries import (
+    L1ScreeningStatusFetcher,
+    get_adjacent_citation_ids,
+    get_l1_screening_progress_stats,
+)
 
 pytestmark = [pytest.mark.backend, pytest.mark.l1_screening]
 
@@ -116,3 +122,61 @@ def test_l1_screening_status_fetcher_returns_statuses_in_request_order():
         ScreeningResultStatus.PENDING,
         ScreeningResultStatus.PENDING,
     ]
+
+
+def test_get_adjacent_citation_ids_uses_order_within_same_dataset():
+    dataset = CitationDatasetFactory()
+    other_dataset = CitationDatasetFactory()
+    previous_row = CitationFactory(dataset=dataset, order=10)
+    current_row = CitationFactory(dataset=dataset, order=20)
+    next_row = CitationFactory(dataset=dataset, order=30)
+    CitationFactory(dataset=other_dataset, order=25)
+
+    previous_id, next_id = get_adjacent_citation_ids(current_row.id)
+
+    assert previous_id == previous_row.id
+    assert next_id == next_row.id
+
+
+def test_l1_screening_progress_stats_counts_review_citations_by_human_review_status():
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    question = L1ScreeningQuestionFactory(review=review)
+    answer = L1ScreeningQuestionOptionFactory(question=question)
+    user = UserFactory()
+
+    incomplete_row = CitationFactory(dataset=dataset, order=1)
+    completed_row = CitationFactory(dataset=dataset, order=2)
+    human_answered_row = CitationFactory(dataset=dataset, order=3)
+    human_validated_row = CitationFactory(dataset=dataset, order=4)
+
+    L1ScreeningResultFactory(
+        citation=incomplete_row,
+        question=question,
+        status=ScreeningResultStatus.PENDING,
+    )
+    L1ScreeningResultFactory(
+        citation=completed_row,
+        question=question,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    L1ScreeningResultFactory(
+        citation=human_answered_row,
+        question=question,
+        status=ScreeningResultStatus.COMPLETED,
+        human_selected_answer=answer,
+    )
+    L1ScreeningResultFactory(
+        citation=human_validated_row,
+        question=question,
+        status=ScreeningResultStatus.COMPLETED,
+        human_validated_by=user,
+    )
+
+    stats = get_l1_screening_progress_stats(review.id)
+
+    assert stats.total_citations == 4
+    assert stats.incomplete_citations == 1
+    assert stats.completed_not_human_reviewed_citations == 1
+    assert stats.human_reviewed_citations == 2
+    assert stats.human_reviewed_percent == 50

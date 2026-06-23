@@ -3,8 +3,9 @@ from django.utils import formats, timezone
 import htpy as h
 
 from my_app.models import ScreeningResultStatus
+from my_app.queries import get_adjacent_citation_ids
 from my_app.views.screening.util import BADGE_CLASSES
-from shortcuts import tdt
+from shortcuts import reverse, tdt
 
 
 def Badge(label, class_name, badge_id=None):
@@ -26,6 +27,99 @@ def NotStartedBadge():
 
 def EmptyCitationPageMessage():
     return h.p(".text-muted.mb-0")[tdt("No citations on this page.")]
+
+
+def CitationScreeningProgressNav(
+    citation_row,
+    review,
+    *,
+    detail_route_name,
+    progress_stats,
+    nav_label,
+):
+    previous_id, next_id = get_adjacent_citation_ids(citation_row.id)
+    progress_title = (
+        f"{tdt('Total citations')}: {progress_stats.total_citations}; "
+        f"{tdt('Incomplete')}: {progress_stats.incomplete_citations}; "
+        f"{tdt('Complete, awaiting human review')}: "
+        f"{progress_stats.completed_not_human_reviewed_citations}; "
+        f"{tdt('Human reviewed')}: {progress_stats.human_reviewed_citations}"
+    )
+    position_label = (
+        f"{tdt('Viewing')} {citation_row.order} {tdt('of')} "
+        f"{progress_stats.total_citations}"
+    )
+
+    return h.section(".border.rounded.p-3.mb-4")[
+        h.div(".row.g-3.align-items-center")[
+            h.div(".col-md-4")[
+                h.div(".d-flex.flex-wrap.align-items-center.gap-3")[
+                    h.div(
+                        ".btn-group",
+                        role="group",
+                        aria_label=nav_label,
+                    )[
+                        _citation_nav_button(
+                            previous_id,
+                            review,
+                            detail_route_name,
+                            tdt("Previous"),
+                        ),
+                        _citation_nav_button(
+                            next_id,
+                            review,
+                            detail_route_name,
+                            tdt("Next"),
+                        ),
+                    ],
+                    h.div(".small.text-muted")[position_label],
+                ]
+            ],
+            h.div(".col-md-8")[
+                h.div(
+                    ".d-flex.justify-content-between.align-items-center.mb-2"
+                )[
+                    h.span(".small.text-muted")[tdt("Human reviewed")],
+                    h.span(".small.fw-semibold", title=progress_title)[
+                        str(progress_stats.human_reviewed_citations),
+                        " / ",
+                        str(progress_stats.total_citations),
+                    ],
+                ],
+                h.div(
+                    ".progress",
+                    role="progressbar",
+                    aria_label=progress_title,
+                    aria_valuenow=str(progress_stats.human_reviewed_percent),
+                    aria_valuemin="0",
+                    aria_valuemax="100",
+                    title=progress_title,
+                )[
+                    h.div(
+                        ".progress-bar",
+                        style=(
+                            f"width: {progress_stats.human_reviewed_percent}%"
+                        ),
+                    )[f"{progress_stats.human_reviewed_percent}%"],
+                ],
+            ],
+        ]
+    ]
+
+
+def _citation_nav_button(citation_id, review, detail_route_name, label):
+    if citation_id is None:
+        return h.a(
+            ".btn.btn-outline-primary.disabled",
+            href="#",
+            aria_disabled="true",
+            tabindex="-1",
+        )[label]
+
+    return h.a(
+        ".btn.btn-outline-primary",
+        href=reverse(detail_route_name, args=[review.id, citation_id]),
+    )[label]
 
 
 def human_review_control_id(prefix, result):

@@ -1,4 +1,7 @@
+from dataclasses import dataclass
 from typing import List
+
+from django.db.models import Count, Q
 
 from data_fetcher import DataFetcher
 from data_fetcher.extras import cache_within_request as cached_within_request
@@ -123,6 +126,137 @@ class L1ScreeningStatusFetcher(ScreeningStatusFetcher):
 class L2ScreeningStatusFetcher(ScreeningStatusFetcher):
     QuestionModel = L2ScreeningQuestion
     ResultModel = L2ScreeningResult
+
+
+@dataclass(frozen=True)
+class CitationScreeningProgressStats:
+    total_citations: int
+    incomplete_citations: int
+    completed_not_human_reviewed_citations: int
+    human_reviewed_citations: int
+
+    @property
+    def human_reviewed_percent(self):
+        if self.total_citations == 0:
+            return 0
+
+        return int(
+            (self.human_reviewed_citations / self.total_citations) * 100
+        )
+
+
+@cached_within_request
+def get_adjacent_citation_ids(citation_id: int):
+    citation = Citation.objects.select_related("dataset").get(id=citation_id)
+
+    previous_id = (
+        Citation.objects.filter(
+            dataset=citation.dataset,
+            order__lt=citation.order,
+        )
+        .order_by("-order", "-id")
+        .values_list("id", flat=True)
+        .first()
+    )
+    next_id = (
+        Citation.objects.filter(
+            dataset=citation.dataset,
+            order__gt=citation.order,
+        )
+        .order_by("order", "id")
+        .values_list("id", flat=True)
+        .first()
+    )
+
+    return previous_id, next_id
+
+
+def _get_screening_progress_stats(
+    review_id: int,
+    question_model: type,
+    result_relation_name: str,
+):
+    question_count = question_model.objects.filter(review_id=review_id).count()
+    citations = Citation.objects.filter(dataset__review_id=review_id)
+    total_citations = citations.count()
+
+    if question_count == 0:
+        return CitationScreeningProgressStats(
+            total_citations=total_citations,
+            incomplete_citations=total_citations,
+            completed_not_human_reviewed_citations=0,
+            human_reviewed_citations=0,
+        )
+
+    status_field = f"{result_relation_name}__status"
+    human_validated_field = f"{result_relation_name}__human_validated_by"
+    human_answered_field = f"{result_relation_name}__human_selected_answer"
+
+    rows = citations.annotate(
+        result_count=Count(result_relation_name, distinct=True),
+        completed_count=Count(
+            result_relation_name,
+            filter=Q(**{status_field: ScreeningResultStatus.COMPLETED}),
+            distinct=True,
+        ),
+        human_reviewed_count=Count(
+            result_relation_name,
+            filter=(
+                Q(**{status_field: ScreeningResultStatus.COMPLETED})
+                & (
+                    Q(**{f"{human_validated_field}__isnull": False})
+                    | Q(**{f"{human_answered_field}__isnull": False})
+                )
+            ),
+            distinct=True,
+        ),
+    ).values("result_count", "completed_count", "human_reviewed_count")
+
+    completed_not_human_reviewed_citations = 0
+    human_reviewed_citations = 0
+    for row in rows:
+        is_complete = (
+            row["result_count"] >= question_count
+            and row["completed_count"] >= question_count
+        )
+        if not is_complete:
+            continue
+
+        if row["human_reviewed_count"] >= question_count:
+            human_reviewed_citations += 1
+        else:
+            completed_not_human_reviewed_citations += 1
+
+    incomplete_citations = (
+        total_citations
+        - completed_not_human_reviewed_citations
+        - human_reviewed_citations
+    )
+
+    return CitationScreeningProgressStats(
+        total_citations=total_citations,
+        incomplete_citations=incomplete_citations,
+        completed_not_human_reviewed_citations=completed_not_human_reviewed_citations,
+        human_reviewed_citations=human_reviewed_citations,
+    )
+
+
+@cached_within_request
+def get_l1_screening_progress_stats(review_id: int):
+    return _get_screening_progress_stats(
+        review_id,
+        L1ScreeningQuestion,
+        "l1screeningresult",
+    )
+
+
+@cached_within_request
+def get_l2_screening_progress_stats(review_id: int):
+    return _get_screening_progress_stats(
+        review_id,
+        L2ScreeningQuestion,
+        "l2screeningresult",
+    )
 
 
 @cached_within_request

@@ -159,6 +159,11 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
     )
     dataset.screening_columns.add(included_column)
 
+    previous_row = CitationFactory(
+        dataset=dataset,
+        order=0,
+        title="Previous citation",
+    )
     row = CitationFactory(
         dataset=dataset,
         order=1,
@@ -168,6 +173,11 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
             "Journal": "The BMJ",
             "Ignored": "Hidden value",
         },
+    )
+    next_row = CitationFactory(
+        dataset=dataset,
+        order=2,
+        title="Next citation",
     )
     question = L1ScreeningQuestionFactory(
         review=review,
@@ -196,6 +206,16 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
     assert response.status_code == 200
     assert "L1 citation screening" in body
     assert reverse("screening_l1", args=[review.id]) in body
+    assert (
+        reverse("screen_l1_row_details", args=[review.id, previous_row.id])
+        in body
+    )
+    assert (
+        reverse("screen_l1_row_details", args=[review.id, next_row.id]) in body
+    )
+    assert "Viewing 1 of 3" in body
+    assert "Human reviewed" in body
+    assert "0 / 3" in body
     assert "Included fields" in body
     assert "A test citation" in body
     assert "A test abstract" in body

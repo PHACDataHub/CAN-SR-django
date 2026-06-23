@@ -155,11 +155,21 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
 ):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
+    previous_row = CitationFactory(
+        dataset=dataset,
+        order=0,
+        title="Previous full text",
+    )
     row = CitationFactory(
         dataset=dataset,
         order=1,
         title="A full-text citation",
         abstract="With an abstract",
+    )
+    next_row = CitationFactory(
+        dataset=dataset,
+        order=2,
+        title="Next full text",
     )
     document = DocumentFactory()
     row.document = document
@@ -192,6 +202,16 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert response.status_code == 200
     assert "L2 PDF screening" in body
     assert reverse("screening_l2", args=[review.id]) in body
+    assert (
+        reverse("screen_l2_row_details", args=[review.id, previous_row.id])
+        in body
+    )
+    assert (
+        reverse("screen_l2_row_details", args=[review.id, next_row.id]) in body
+    )
+    assert "Viewing 1 of 3" in body
+    assert "Human reviewed" in body
+    assert "0 / 3" in body
     assert "A full-text citation" in body
     assert "With an abstract" not in body
     assert "Uploaded" in body
