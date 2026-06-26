@@ -7,17 +7,16 @@ from proj.llm_client import ClientFailureError
 
 from my_app.models import (
     Citation,
-    L2ScreeningQuestion,
-    L2ScreeningQuestionOption,
-    L2ScreeningResult,
+    Parameter,
+    ParameterExtractionResult,
     ScreeningResultStatus,
     TextExtractionResult,
 )
-from my_app.prompts.l2_screening_prompt import (
+from my_app.prompts.parameter_extraction_prompt import (
     UnexpectedLLMOutputError,
-    get_l2_screening_results,
+    get_parameter_extraction_results,
 )
-from my_app.queries import get_model_for_review, options_for_question
+from my_app.queries import get_model_for_review
 from my_app.services.service_util import (
     get_figure_extraction_result_for_citation,
     get_text_extraction_result_for_citation,
@@ -25,20 +24,20 @@ from my_app.services.service_util import (
 from shortcuts import logger
 
 
-class L2ScreeningService:
+class ParameterExtractionService:
     """
     creates the empty result objects
     to be later used by the processing task
 
 
-    will make N+1 queries (N=questions, not citations)
-    ideally questions are not very numerous
+    will make N+1 queries (N=parameters, not citations)
+    ideally parameters are not very numerous
     """
 
     def __init__(
         self,
         rows: List[Citation],
-        questions: List[L2ScreeningQuestion],
+        questions: List[Parameter],
         overwrite_existing=False,
     ):
         self.rows = rows
@@ -50,14 +49,14 @@ class L2ScreeningService:
         citations_by_id = {row.id: row for row in self.rows}
 
         if self.overwrite_existing:
-            L2ScreeningResult.objects.filter(
+            ParameterExtractionResult.objects.filter(
                 question__in=self.questions,
                 citation_id__in=citation_ids,
             ).delete()
 
         for question in self.questions:
-            model = get_model_for_review(question.review_id)
-            existing_results = L2ScreeningResult.objects.filter(
+            model = get_model_for_review(question.category.review_id)
+            existing_results = ParameterExtractionResult.objects.filter(
                 question=question,
                 citation_id__in=citation_ids,
             )
@@ -75,7 +74,7 @@ class L2ScreeningService:
                 citation = citations_by_id[citation_id]
                 get_text_extraction_result_for_citation(citation)
                 get_figure_extraction_result_for_citation(citation)
-                result = L2ScreeningResult.objects.create(
+                result = ParameterExtractionResult.objects.create(
                     citation_id=citation_id,
                     question_id=question.id,
                     language_model=model,
@@ -88,30 +87,32 @@ class L2ScreeningService:
         raise NotImplementedError
 
 
-class ImmediateL2ScreeningService(L2ScreeningService):
+class ImmediateParameterExtractionService(ParameterExtractionService):
     def process_screening(self, result_id: int):
         logger.info(
-            "Immediately processing L2 screening for result_id=%s",
+            "Immediately processing parameter extraction for result_id=%s",
             result_id,
         )
 
-        ProcessL2ScreeningService(result_id=result_id).perform()
+        ProcessParameterExtractionService(result_id=result_id).perform()
 
 
-class DeferredL2ScreeningService(L2ScreeningService):
+class DeferredParameterExtractionService(ParameterExtractionService):
     def process_screening(self, result_id: int):
         logger.info(
-            "Enqueuing background L2 screening processing for result_id=%s",
+            "Enqueuing background parameter extraction processing for result_id=%s",
             result_id,
         )
-        from my_app.tasks.l2_screening import process_l2_screening_task
+        from my_app.tasks.parameter_extraction import (
+            process_parameter_extraction_task,
+        )
 
-        process_l2_screening_task.enqueue(result_id=result_id)
+        process_parameter_extraction_task.enqueue(result_id=result_id)
 
 
-class ProcessL2ScreeningService:
+class ProcessParameterExtractionService:
     """
-    immediately processes a single result for a citation-question pair,
+    immediately processes a single result for a citation-parameter pair,
     meant to be used in a task for background processing
     """
 
@@ -120,30 +121,28 @@ class ProcessL2ScreeningService:
     def __init__(self, result_id: int):
         self.result_id = result_id
 
-    def _mark_abandoned(self, result: L2ScreeningResult, error: Exception):
+    def _mark_abandoned(
+        self, result: ParameterExtractionResult, error: Exception
+    ):
         result.status = ScreeningResultStatus.ABANDONED
         result.abandoned_at = timezone.now()
-        result.explanation = (
-            f"Screening could not be completed: {error.__class__.__name__}"
-        )
+        result.explanation = f"Parameter extraction could not be completed: {error.__class__.__name__}"
 
-    def _get_l2_screening_results_with_retries(
+    def _get_parameter_extraction_results_with_retries(
         self,
-        question: L2ScreeningQuestion,
+        question: Parameter,
         citation: Citation,
         text_extraction_result: TextExtractionResult,
         model,
     ):
-        options = options_for_question(L2ScreeningQuestionOption, question.id)
         tables = list(citation.document.documenttables.all())
         figures = list(citation.document.documentfigures.all())
 
         for retry_num in range(self.NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT + 1):
             try:
-                return get_l2_screening_results(
-                    question,
-                    options,
+                return get_parameter_extraction_results(
                     citation,
+                    question,
                     text_extraction_result,
                     tables,
                     figures,
@@ -162,10 +161,10 @@ class ProcessL2ScreeningService:
 
     def perform(self):
         logger.info(
-            "Starting processing of L2 screening for result_id=%s",
+            "Starting processing of parameter extraction for result_id=%s",
             self.result_id,
         )
-        result = L2ScreeningResult.objects.select_related(
+        result = ParameterExtractionResult.objects.select_related(
             "question",
             "language_model",
             "citation",
@@ -181,15 +180,17 @@ class ProcessL2ScreeningService:
         get_figure_extraction_result_for_citation(citation)
 
         try:
-            screening_results = self._get_l2_screening_results_with_retries(
-                question,
-                citation,
-                text_extraction_result,
-                result.language_model,
+            extraction_results = (
+                self._get_parameter_extraction_results_with_retries(
+                    question,
+                    citation,
+                    text_extraction_result,
+                    result.language_model,
+                )
             )
         except UnexpectedLLMOutputError as exc:
             logger.exception(
-                "error processing L2 screening for result_id=%s question_id=%s citation_id=%s",
+                "error processing parameter extraction for result_id=%s question_id=%s citation_id=%s",
                 self.result_id,
                 question.id,
                 citation.id,
@@ -200,7 +201,7 @@ class ProcessL2ScreeningService:
             return
         except ClientFailureError:
             logger.exception(
-                "API failure processing L2 screening for result_id=%s question_id=%s citation_id=%s",
+                "API failure processing parameter extraction for result_id=%s question_id=%s citation_id=%s",
                 self.result_id,
                 question.id,
                 citation.id,
@@ -208,19 +209,19 @@ class ProcessL2ScreeningService:
             raise
         except Exception:
             logger.exception(
-                "Unexpected error processing L2 screening for result_id=%s question_id=%s citation_id=%s",
+                "Unexpected error processing parameter extraction for result_id=%s question_id=%s citation_id=%s",
                 self.result_id,
                 question.id,
                 citation.id,
             )
             raise
 
-        result.selected_option = screening_results.selected
-        result.confidence = screening_results.confidence
-        result.explanation = screening_results.explanation
-        result.evidence_sentences = screening_results.evidence_sentences
-        result.evidence_tables = screening_results.evidence_tables
-        result.evidence_figures = screening_results.evidence_figures
+        result.found = extraction_results.found
+        result.value = extraction_results.value
+        result.explanation = extraction_results.explanation
+        result.evidence_sentences = extraction_results.evidence_sentences
+        result.evidence_tables = extraction_results.evidence_tables
+        result.evidence_figures = extraction_results.evidence_figures
         result.status = ScreeningResultStatus.COMPLETED
 
         with transaction.atomic():

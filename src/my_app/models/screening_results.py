@@ -137,11 +137,20 @@ class L2ScreeningResult(HumanValidatedScreeningResult):
 
 
 class ParameterExtractionResult(CitationQueryResult):
-    question = models.ForeignKey("ParameterCategory", on_delete=models.CASCADE)
-    selected_option = models.ForeignKey(
-        "Parameter",
-        on_delete=models.CASCADE,
-        null=True,
+    question = models.ForeignKey("Parameter", on_delete=models.CASCADE)
+    found = models.BooleanField(default=False)
+    value = models.TextField(null=True, blank=True)
+    explanation = models.TextField(null=True, blank=True)
+    evidence_sentences = models.JSONField(
+        default=list,
+        blank=True,
+    )
+    evidence_tables = models.JSONField(
+        default=list,
+        blank=True,
+    )
+    evidence_figures = models.JSONField(
+        default=list,
         blank=True,
     )
 
