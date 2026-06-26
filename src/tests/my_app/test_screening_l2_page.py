@@ -15,8 +15,8 @@ from my_app.model_factories import (
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
     L2ScreeningResultFactory,
+    ParameterCategoryFactory,
     ParameterExtractionResultFactory,
-    ParameterQuestionFactory,
     ReviewFactory,
     TextExtractionResultFactory,
 )
@@ -925,7 +925,7 @@ def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
         question=l2_question,
         status=ScreeningResultStatus.PENDING,
     )
-    parameter_question = ParameterQuestionFactory(review=review)
+    parameter_question = ParameterCategoryFactory(review=review)
     ParameterExtractionResultFactory(
         citation=row,
         question=parameter_question,

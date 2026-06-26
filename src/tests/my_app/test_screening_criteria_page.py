@@ -10,8 +10,8 @@ from my_app.model_factories import (
     L1ScreeningQuestionOptionFactory,
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
-    ParameterQuestionFactory,
-    ParameterQuestionOptionFactory,
+    ParameterCategoryFactory,
+    ParameterFactory,
     ReviewFactory,
     ReviewUserLinkFactory,
 )
@@ -20,8 +20,7 @@ from my_app.models import (
     L1ScreeningQuestionOption,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
-    ParameterQuestion,
-    ParameterQuestionOption,
+    ParameterCategory,
 )
 from my_app.views.screening_criteria import (
     ChildEditor,
@@ -62,7 +61,7 @@ def test_editor_helper_class_new_question():
     }
 
     editor = ChildEditor(
-        child=unsaved_obj,
+        parent=unsaved_obj,
         data=data,
         adapter=L1FormsetAdapter,
     )
@@ -115,7 +114,7 @@ def test_editor_helper_class_modify_question():
     }
 
     editor = ChildEditor(
-        child=question_obj,
+        parent=question_obj,
         data=data,
         adapter=L1FormsetAdapter,
     )
@@ -139,11 +138,11 @@ def test_editor_helper_class_modify_question():
 
 def test_editor_helper_new_parameter():
     review = ReviewFactory()
-    unsaved_obj = ParameterQuestion(review=review)
+    unsaved_obj = ParameterCategory(review=review)
     fs_prefix = "options"
 
     data = {
-        "question_text": "Test parameter",
+        "name": "Test parameter category",
         **add_prefix(
             fs_prefix,
             {"TOTAL_FORMS": 1, "INITIAL_FORMS": 0},
@@ -152,29 +151,29 @@ def test_editor_helper_new_parameter():
             fs_prefix,
             0,
             {
-                "param_name": "Option 1",
-                "param_description": "The first option",
+                "name": "Parameter 1",
+                "description": "The first parameter",
             },
         ),
     }
 
     editor = ChildEditor(
-        child=unsaved_obj,
+        parent=unsaved_obj,
         data=data,
         adapter=ParameterFormsetAdapter,
     )
     editor.save()
 
-    assert ParameterQuestion.objects.count() == 1
-    param = ParameterQuestion.objects.first()
+    assert ParameterCategory.objects.count() == 1
+    param = ParameterCategory.objects.first()
 
     assert param.review == review
-    assert param.question_text == "Test parameter"
+    assert param.name == "Test parameter category"
 
-    assert param.options.count() == 1
-    option1 = param.options.first()
-    assert option1.param_name == "Option 1"
-    assert option1.param_description == "The first option"
+    assert param.parameters.count() == 1
+    option1 = param.parameters.first()
+    assert option1.name == "Parameter 1"
+    assert option1.description == "The first parameter"
 
 
 def test_editor_new_invalid_data():
@@ -200,13 +199,13 @@ def test_editor_new_invalid_data():
     }
 
     editor = ChildEditor(
-        child=unsaved_obj,
+        parent=unsaved_obj,
         data=data,
         adapter=L1FormsetAdapter,
     )
     assert not editor.is_valid()
     assert editor.child_form.is_valid()
-    assert editor.option_formset.is_valid() is False
+    assert editor.child_formset.is_valid() is False
 
 
 def _get_page_body(vanilla_user_client, review):
@@ -265,14 +264,14 @@ def test_screening_criteria_page_renders_existing_questions(
         option_text="Maybe",
         option_value="Needs review",
     )
-    parameter_question = ParameterQuestionFactory(
+    parameter_question = ParameterCategoryFactory(
         review=review,
-        question_text="Parameter question",
+        name="Parameter category",
     )
-    ParameterQuestionOptionFactory(
-        question=parameter_question,
-        param_name="Age",
-        param_description="Adults only",
+    ParameterFactory(
+        category=parameter_question,
+        name="Age",
+        description="Adults only",
     )
 
     body = _get_page_body(vanilla_user_client, review)
@@ -291,7 +290,7 @@ def test_screening_criteria_page_renders_existing_questions(
         f'id="edit-l2formsetadapter-section-{l2_question.pk}-button"' in body
     )
 
-    assert "Parameter question" in body
+    assert "Parameter category" in body
     assert "Age" in body
     assert "Adults only" in body
     assert (
@@ -520,7 +519,7 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
         (
             "add_parameter_question",
             "ParameterFormsetAdapter",
-            ("Parameter", "Add option", "Save"),
+            ("Parameter category name", "Add parameter", "Save"),
         ),
         (
             "edit_l1_question",
@@ -535,7 +534,7 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
         (
             "edit_parameter_question",
             "ParameterFormsetAdapter",
-            ("Editable parameter question", "Age", "Adults only"),
+            ("Editable parameter category", "Age", "Adults only"),
         ),
     ],
 )
@@ -576,14 +575,14 @@ def test_other_screening_criteria_modals_render(
         )
         url = reverse(route_name, args=[review.pk, question.pk])
     else:
-        question = ParameterQuestionFactory(
+        question = ParameterCategoryFactory(
             review=review,
-            question_text="Editable parameter question",
+            name="Editable parameter category",
         )
-        ParameterQuestionOptionFactory(
-            question=question,
-            param_name="Age",
-            param_description="Adults only",
+        ParameterFactory(
+            category=question,
+            name="Age",
+            description="Adults only",
         )
         url = reverse(route_name, args=[review.pk, question.pk])
 

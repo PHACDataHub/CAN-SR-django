@@ -10,7 +10,7 @@ from .review import Review
 from .screening_criteria import (
     L1ScreeningQuestion,
     L2ScreeningQuestion,
-    ParameterQuestion,
+    ParameterCategory,
 )
 
 
@@ -137,9 +137,9 @@ class L2ScreeningResult(HumanValidatedScreeningResult):
 
 
 class ParameterExtractionResult(CitationQueryResult):
-    question = models.ForeignKey("ParameterQuestion", on_delete=models.CASCADE)
+    question = models.ForeignKey("ParameterCategory", on_delete=models.CASCADE)
     selected_option = models.ForeignKey(
-        "ParameterQuestionOption",
+        "Parameter",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
