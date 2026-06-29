@@ -188,8 +188,7 @@ class ParameterExtractionResultFactory(factory.django.DjangoModelFactory):
 
     citation = factory.SubFactory(CitationFactory)
     question = factory.SubFactory(
-        ParameterCategoryFactory,
-        review=factory.SelfAttribute("..citation.dataset.review"),
+        ParameterFactory,
+        category__review=factory.SelfAttribute("..citation.dataset.review"),
     )
-    selected_option = None
     status = ScreeningResultStatus.PENDING

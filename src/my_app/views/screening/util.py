@@ -1,6 +1,10 @@
 from typing import Any, Dict
 
-from my_app.models import ScreeningResultStatus, TextExtractionResult
+from my_app.models import (
+    FigureExtractionResult,
+    ScreeningResultStatus,
+    TextExtractionResult,
+)
 from shortcuts import get_request, reverse, tdt
 
 SCREENING_STATUS_BADGE_CLASSES = {
@@ -41,6 +45,29 @@ def can_start_l2_screening(citation_row):
     return (
         text_extraction_result.status
         == TextExtractionResult.TextExtractionStatus.COMPLETED
+    )
+
+
+def can_start_parameter_extraction(citation_row):
+    document = citation_row.document
+    if document is None:
+        return False
+
+    text_extraction_result = getattr(document, "text_extraction_result", None)
+    if text_extraction_result is None:
+        return False
+
+    figure_extraction_result = getattr(
+        document, "figure_extraction_result", None
+    )
+    if figure_extraction_result is None:
+        return False
+
+    return (
+        text_extraction_result.status
+        == TextExtractionResult.TextExtractionStatus.COMPLETED
+        and figure_extraction_result.status
+        == FigureExtractionResult.Status.COMPLETED
     )
 
 

@@ -169,11 +169,12 @@ class ReviewDetailPage(BasePageTemplate):
                             "Extract outcome and study parameters for included studies"
                         ),
                         h.a(
-                            href="#",
-                            class_="btn btn-secondary disabled",
-                            aria_disabled="true",
-                            tabindex="-1",
-                        )[tdt("Coming soon")],
+                            href=reverse(
+                                "parameter_extraction",
+                                args=[review.id],
+                            ),
+                            class_="btn btn-primary",
+                        )[tdt("Parameter extraction")],
                     )
                 ],
             ],

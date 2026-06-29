@@ -1,7 +1,6 @@
 from django import forms
 from django.core.validators import FileExtensionValidator
 from django.http import HttpResponse
-from django.utils import timezone
 
 import htpy as h
 
@@ -11,32 +10,25 @@ from my_app.models import (
     Citation,
     Document,
     L1ScreeningResult,
-    L2ScreeningQuestion,
-    L2ScreeningQuestionOption,
     L2ScreeningResult,
+    Parameter,
     ParameterExtractionResult,
 )
 from my_app.router import route
-from my_app.services.l2_screening import DeferredL2ScreeningService
+from my_app.services.parameter_extraction import (
+    DeferredParameterExtractionService,
+)
 from my_app.services.process_document import QueueProcessDocumentService
-from my_app.views.pdf_views import (
-    PdfCitationFileView,
-    PdfCitationMetadataView,
-    PdfCitationMixin,
+from my_app.views.parameter_extraction_templating import (
+    ParameterExtractionComponent,
+    ParameterExtractionPageTemplate,
+    ParameterExtractionPdfPage,
+    parameter_extraction_human_review_control_id,
+    render_parameter_extraction_control,
 )
-from my_app.views.screening.l2_common_components import (
-    L2DocumentUploadModal,
-    l2_human_review_control_id,
-    render_l2_human_review_control,
-)
-from my_app.views.screening.l2_screening_index_templating import (
-    L2ScreeningComponent,
-    L2ScreeningPageTemplate,
-)
-from my_app.views.screening.l2_screening_pdf_templating import (
-    L2PdfScreeningPage,
-    render_l2_screening_control,
-)
+from my_app.views.pdf_components import DocumentUploadModal
+from my_app.views.pdf_views import PdfCitationFileView, PdfCitationMetadataView
+from my_app.views.screening.util import can_start_parameter_extraction
 from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
 from shortcuts import (
     DetailView,
@@ -52,10 +44,31 @@ from shortcuts import (
     transaction,
 )
 
-from .util import can_start_l2_screening
+
+class ParameterExtractionHumanAnswerForm(
+    forms.ModelForm,
+    StandardFormMixin,
+):
+    human_found = forms.TypedChoiceField(
+        label=tdt("Human found"),
+        choices=((True, tdt("Yes")), (False, tdt("No"))),
+        coerce=lambda value: value == "True",
+        widget=forms.RadioSelect,
+    )
+
+    class Meta:
+        model = ParameterExtractionResult
+        fields = ["human_found", "human_value"]
+        labels = {
+            "human_found": tdt("Human found"),
+            "human_value": tdt("Human value"),
+        }
+
+    def clean_human_value(self):
+        return self.cleaned_data["human_value"] or None
 
 
-class L2CitationUploadForm(StandardFormMixin):
+class ParameterExtractionDocumentUploadForm(StandardFormMixin):
     document_file = forms.FileField(
         label=tdt("PDF document"),
         validators=[FileExtensionValidator(["pdf"])],
@@ -76,26 +89,7 @@ class L2CitationUploadForm(StandardFormMixin):
             self.fields.pop("confirm_replace", None)
 
 
-class L2HumanAnswerForm(forms.ModelForm, StandardFormMixin):
-    class Meta:
-        model = L2ScreeningResult
-        fields = ["human_selected_answer", "human_notes"]
-        labels = {
-            "human_selected_answer": tdt("Human answer"),
-            "human_notes": tdt("Notes"),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["human_selected_answer"].queryset = (
-            L2ScreeningQuestionOption.objects.filter(
-                question=self.instance.question
-            )
-        )
-        self.fields["human_selected_answer"].required = True
-
-
-class L2ScreeningBaseView(MustAccessReviewMixin, ListView):
+class ParameterExtractionBaseView(MustAccessReviewMixin, ListView):
     paginate_by = 10
 
     def get_queryset(self):
@@ -106,25 +100,31 @@ class L2ScreeningBaseView(MustAccessReviewMixin, ListView):
         )
 
 
-@route("/reviews/<int:review_id>/screening_l2/", name="screening_l2")
-class ScreeningL2PageView(L2ScreeningBaseView, HtpyTemplateMixin):
-    template_component = L2ScreeningPageTemplate
+@route(
+    "/reviews/<int:review_id>/parameter_extraction/",
+    name="parameter_extraction",
+)
+class ParameterExtractionPageView(
+    ParameterExtractionBaseView,
+    HtpyTemplateMixin,
+):
+    template_component = ParameterExtractionPageTemplate
 
 
 @route(
-    "/reviews/<int:review_id>/screening_l2/component/",
-    name="screening_l2_component",
+    "/reviews/<int:review_id>/parameter_extraction/component/",
+    name="parameter_extraction_component",
 )
-class ScreeningL2ComponentView(L2ScreeningBaseView):
+class ParameterExtractionComponentView(ParameterExtractionBaseView):
     def render_to_response(self, context, **response_kwargs):
         page_obj = context["page_obj"]
-        component = L2ScreeningComponent(
+        component = ParameterExtractionComponent(
             review=self.review,
             page_obj=page_obj,
             request=self.request,
         )
 
-        new_page_url = reverse("screening_l2", args=[self.review.id])
+        new_page_url = reverse("parameter_extraction", args=[self.review.id])
         response_headers = {
             "HX-Push-Url": url_with_same_params(
                 self.request,
@@ -140,7 +140,7 @@ class ScreeningL2ComponentView(L2ScreeningBaseView):
         )
 
 
-class L2ScreeningDocumentUploadViewMixin(MustAccessReviewMixin):
+class ParameterExtractionDocumentUploadViewMixin(MustAccessReviewMixin):
     @cached_property
     def citation_row(self):
         return get_object_or_404(
@@ -155,7 +155,7 @@ class L2ScreeningDocumentUploadViewMixin(MustAccessReviewMixin):
 
     @cached_property
     def form(self):
-        return L2CitationUploadForm(
+        return ParameterExtractionDocumentUploadForm(
             self.request.POST or None,
             self.request.FILES or None,
             existing_document=self.existing_document is not None,
@@ -163,11 +163,13 @@ class L2ScreeningDocumentUploadViewMixin(MustAccessReviewMixin):
 
     @cached_property
     def modal(self):
-        return L2DocumentUploadModal(
+        return DocumentUploadModal(
             form=self.form,
             review=self.review,
             citation_row=self.citation_row,
             existing_document=self.existing_document,
+            route_name="parameter_extraction_row_upload",
+            prefix="parameter-extraction",
         )
 
     def render_modal(self):
@@ -216,22 +218,29 @@ class L2ScreeningDocumentUploadViewMixin(MustAccessReviewMixin):
 
 
 @route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/upload/",
-    name="screen_l2_row_upload",
+    "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/upload/",
+    name="parameter_extraction_row_upload",
 )
-class L2ScreeningRowUploadView(L2ScreeningDocumentUploadViewMixin, View):
+class ParameterExtractionRowUploadView(
+    ParameterExtractionDocumentUploadViewMixin,
+    View,
+):
     def get(self, *args, **kwargs):
         return HttpResponse(self.render_modal())
 
 
 @route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/details/",
-    name="screen_l2_row_details",
+    "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/details/",
+    name="parameter_extraction_row_details",
 )
-class L2PdfScreeningView(MustAccessReviewMixin, DetailView, HtpyTemplateMixin):
+class ParameterExtractionPdfView(
+    MustAccessReviewMixin,
+    DetailView,
+    HtpyTemplateMixin,
+):
     model = Citation
     pk_url_kwarg = "row_pk"
-    template_component = L2PdfScreeningPage
+    template_component = ParameterExtractionPdfPage
 
     def get_queryset(self):
         return (
@@ -241,75 +250,104 @@ class L2PdfScreeningView(MustAccessReviewMixin, DetailView, HtpyTemplateMixin):
         )
 
 
-class L2HumanReviewMixin(MustAccessReviewMixin, View):
+@route(
+    "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/process/",
+    name="parameter_extraction_row_process",
+)
+class ParameterExtractionProcessView(MustAccessReviewMixin, View):
+    @cached_property
+    def citation_row(self):
+        return get_object_or_404(
+            Citation.objects.select_related(
+                "document",
+                "document__text_extraction_result",
+                "document__figure_extraction_result",
+            ),
+            pk=self.kwargs["row_pk"],
+            dataset__review=self.review,
+        )
+
+    @cached_property
+    def parameters(self):
+        return list(Parameter.objects.filter(category__review=self.review))
+
+    def post(self, request, *args, **kwargs):
+        if not can_start_parameter_extraction(self.citation_row):
+            return HttpResponse(
+                str(
+                    render_parameter_extraction_control(
+                        self.citation_row,
+                        self.review,
+                    )
+                ),
+                status=409,
+            )
+
+        DeferredParameterExtractionService(
+            rows=[self.citation_row],
+            questions=self.parameters,
+            overwrite_existing=True,
+        ).perform()
+
+        return HttpResponse(
+            str(
+                render_parameter_extraction_control(
+                    self.citation_row,
+                    self.review,
+                )
+            )
+        )
+
+
+class ParameterExtractionHumanReviewMixin(MustAccessReviewMixin, View):
     @cached_property
     def result(self):
         return get_object_or_404(
-            L2ScreeningResult.objects.select_related(
+            ParameterExtractionResult.objects.select_related(
+                "citation",
                 "question",
-                "human_selected_answer",
-                "human_validated_by",
+                "question__category",
             ),
             pk=self.kwargs["result_pk"],
             citation__dataset__review=self.review,
         )
 
     def render_control(self):
-        return str(render_l2_human_review_control(self.result, self.review))
+        component = ParameterExtractionPdfPage(
+            context={"object": self.result.citation, "review": self.review},
+            request=self.request,
+        )
+        return str(component.render_human_review_control(self.result))
 
 
 @route(
-    "/reviews/<int:review_id>/screening_l2/results/<int:result_pk>/validate/",
-    name="screen_l2_validate_correct",
+    "/reviews/<int:review_id>/parameter_extraction/results/<int:result_pk>/validate-ai-answer/",
+    name="parameter_extraction_validate_ai_answer",
 )
-class L2ValidateCorrectView(L2HumanReviewMixin):
+class ParameterExtractionValidateAiAnswerView(
+    ParameterExtractionHumanReviewMixin
+):
     def post(self, request, *args, **kwargs):
-        self.result.human_validation_timestamp = timezone.now()
-        self.result.human_validated_by = request.user
-        self.result.human_selected_answer = None
-        self.result.human_notes = None
-        self.result.save(
-            update_fields=[
-                "human_validation_timestamp",
-                "human_validated_by",
-                "human_selected_answer",
-                "human_notes",
-            ]
-        )
+        self.result.human_found = self.result.found
+        self.result.human_value = self.result.value
+        self.result.save(update_fields=["human_found", "human_value"])
         return HttpResponse(self.render_control())
 
 
 @route(
-    "/reviews/<int:review_id>/screening_l2/results/<int:result_pk>/undo-validation/",
-    name="screen_l2_undo_validation",
+    "/reviews/<int:review_id>/parameter_extraction/results/<int:result_pk>/human-answer/",
+    name="parameter_extraction_human_answer",
 )
-class L2UndoValidationView(L2HumanReviewMixin):
-    def post(self, request, *args, **kwargs):
-        self.result.human_validation_timestamp = None
-        self.result.human_validated_by = None
-        self.result.save(
-            update_fields=[
-                "human_validation_timestamp",
-                "human_validated_by",
-            ]
-        )
-        return HttpResponse(self.render_control())
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/results/<int:result_pk>/human-answer/",
-    name="screen_l2_human_answer",
-)
-class L2HumanAnswerView(L2HumanReviewMixin):
+class ParameterExtractionHumanAnswerView(ParameterExtractionHumanReviewMixin):
     @cached_property
     def form(self):
-        return L2HumanAnswerForm(
+        return ParameterExtractionHumanAnswerForm(
             self.request.POST or None,
             instance=self.result,
         )
 
     def render_modal(self):
-        form_id = f"l2-human-answer-form-{self.result.id}"
+        form_id = f"parameter-extraction-human-answer-form-{self.result.id}"
         footer = h.fragment[
             h.button(
                 ".btn.btn-secondary",
@@ -325,14 +363,14 @@ class L2HumanAnswerView(L2HumanReviewMixin):
         ]
         return str(
             ModalComponent(
-                title=tdt("Manually answer screening"),
-                modal_id=f"l2-human-answer-modal-{self.result.id}",
+                title=tdt("Modify human values"),
+                modal_id=f"parameter-extraction-human-answer-modal-{self.result.id}",
                 footer=footer,
             )[
                 h.form(
                     id=form_id,
                     hx_post=reverse(
-                        "screen_l2_human_answer",
+                        "parameter_extraction_human_answer",
                         args=[self.review.id, self.result.id],
                     ),
                     hx_target="#modal-slot",
@@ -348,61 +386,28 @@ class L2HumanAnswerView(L2HumanReviewMixin):
         if not self.form.is_valid():
             return HttpResponse(self.render_modal())
 
-        result = self.form.save(commit=False)
-        result.human_validation_timestamp = None
-        result.human_validated_by = None
-        result.save()
+        self.form.save()
 
         response = HttpResponse(self.render_control())
-        response["HX-Retarget"] = f"#{l2_human_review_control_id(self.result)}"
+        response["HX-Retarget"] = (
+            f"#{parameter_extraction_human_review_control_id(self.result)}"
+        )
         response["HX-Reswap"] = "outerHTML"
         response["HX-Trigger-After-Settle"] = "modal-close"
         return response
 
 
 @route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/process/",
-    name="screen_l2_row_process",
+    "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/pdf/",
+    name="parameter_extraction_row_pdf",
 )
-class L2PdfScreeningProcessView(PdfCitationMixin):
-    @cached_property
-    def screening_questions(self):
-        return list(L2ScreeningQuestion.objects.filter(review=self.review))
-
-    def post(self, request, *args, **kwargs):
-        if not can_start_l2_screening(self.citation_row):
-            return HttpResponse(
-                str(
-                    render_l2_screening_control(
-                        self.citation_row,
-                        self.review,
-                    )
-                ),
-                status=409,
-            )
-
-        DeferredL2ScreeningService(
-            rows=[self.citation_row],
-            questions=self.screening_questions,
-            overwrite_existing=True,
-        ).perform()
-
-        return HttpResponse(
-            str(render_l2_screening_control(self.citation_row, self.review))
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/pdf/",
-    name="screen_l2_row_pdf",
-)
-class L2PdfCitationView(PdfCitationFileView):
+class ParameterExtractionPdfCitationView(PdfCitationFileView):
     pass
 
 
 @route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/pdf-metadata/",
-    name="screen_l2_row_pdf_metadata",
+    "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/pdf-metadata/",
+    name="parameter_extraction_row_pdf_metadata",
 )
-class L2PdfCitationMetadataView(PdfCitationMetadataView):
-    result_model = L2ScreeningResult
+class ParameterExtractionPdfCitationMetadataView(PdfCitationMetadataView):
+    result_model = ParameterExtractionResult

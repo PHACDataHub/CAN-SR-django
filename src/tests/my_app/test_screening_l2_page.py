@@ -17,6 +17,7 @@ from my_app.model_factories import (
     L2ScreeningResultFactory,
     ParameterCategoryFactory,
     ParameterExtractionResultFactory,
+    ParameterFactory,
     ReviewFactory,
     TextExtractionResultFactory,
 )
@@ -229,11 +230,11 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
         f'data-metadata-url="{reverse("screen_l2_row_pdf_metadata", args=[review.id, row.id])}"'
         in body
     )
-    assert 'id="l2-pdf-scroll"' in body
-    assert 'id="l2-pdf-pages"' in body
-    assert "screen_l2_citation.js" in body
-    assert "screen_l2_citation.css" in body
-    assert 'class="btn btn-sm btn-outline-primary l2-evidence-chip"' in body
+    assert 'id="citation-pdf-scroll"' in body
+    assert 'id="citation-pdf-pages"' in body
+    assert "citation_pdf.js" in body
+    assert "citation_pdf.css" in body
+    assert 'class="btn btn-sm btn-outline-primary evidence-chip"' in body
     assert (
         'data-evidence-type="sentence" data-evidence-index="1">Sentence 1</button>'
         in body
@@ -530,8 +531,8 @@ def test_screen_l2_row_details_view_renders_empty_pdf_viewer_without_document(
 
     assert response.status_code == 200
     assert "Upload a PDF to view the document." in body
-    assert 'id="l2-pdf-scroll"' in body
-    assert 'id="l2-pdf-pages"' in body
+    assert 'id="citation-pdf-scroll"' in body
+    assert 'id="citation-pdf-pages"' in body
     assert "data-pdf-url" not in body
     assert "data-metadata-url" not in body
 
@@ -925,7 +926,9 @@ def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
         question=l2_question,
         status=ScreeningResultStatus.PENDING,
     )
-    parameter_question = ParameterCategoryFactory(review=review)
+    parameter_question = ParameterFactory(
+        category=ParameterCategoryFactory(review=review)
+    )
     ParameterExtractionResultFactory(
         citation=row,
         question=parameter_question,
