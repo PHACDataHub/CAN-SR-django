@@ -35,14 +35,7 @@ from shortcuts import (
     StandardFormMixin,
 )
 from shortcuts import breadcrumbs as bc
-from shortcuts import (
-    cached_property,
-    dataclass,
-    reverse,
-    tdt,
-    tm,
-    transaction,
-)
+from shortcuts import cached_property, dataclass, reverse, tdt, tm, transaction
 
 ParentType = L1ScreeningQuestion | L2ScreeningQuestion | ParameterCategory
 ChildType = L1ScreeningQuestionOption | L2ScreeningQuestionOption | Parameter
