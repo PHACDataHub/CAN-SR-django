@@ -3,7 +3,6 @@ from django.utils.text import Truncator
 import htpy as h
 
 from proj.htpy import definition_list as DefList
-from proj.htpy.util import static_no_cache
 
 from my_app.models import (
     Citation,
@@ -14,6 +13,11 @@ from my_app.models import (
 from my_app.queries import (
     L2ScreeningStatusFetcher,
     get_l2_screening_progress_stats,
+)
+from my_app.views.pdf_components import (
+    PdfPanel,
+    PdfViewerAssets,
+    render_evidence_chips,
 )
 from my_app.views.screening.components import (
     CitationScreeningProgressNav,
@@ -81,32 +85,14 @@ class L2PdfScreeningPage(BasePageTemplate):
     def content(self):
         review = self.review
         citation_row = self.citation_row
-        pdf_url = None
-        metadata_url = None
-        if citation_row.document_id is not None:
-            pdf_url = reverse(
-                "screen_l2_row_pdf", args=[review.id, citation_row.id]
-            )
-            metadata_url = reverse(
-                "screen_l2_row_pdf_metadata",
-                args=[review.id, citation_row.id],
-            )
 
         return [
-            h.template(
-                id="l2-citation-data",
-                data_citation_id=str(citation_row.id),
-                data_review_id=str(review.id),
-                data_pdf_url=pdf_url,
-                data_metadata_url=metadata_url,
-            ),
-            h.script(
-                src=static_no_cache("screen_l2_citation.js"),
-                type="module",
-            ),
-            h.link(
-                rel="stylesheet",
-                href=static_no_cache("screen_l2_citation.css"),
+            PdfViewerAssets(
+                citation_row,
+                review,
+                data_id="l2-citation-data",
+                pdf_route_name="screen_l2_row_pdf",
+                metadata_route_name="screen_l2_row_pdf_metadata",
             ),
             bc.BreadcrumbTrailForReview(review)[
                 bc.BreadcrumbItem(
@@ -123,9 +109,9 @@ class L2PdfScreeningPage(BasePageTemplate):
                 progress_stats=get_l2_screening_progress_stats(review.id),
                 nav_label=tdt("L2 citation navigation"),
             ),
-            h.div(".row.g-4.l2-screening-layout")[
+            h.div(".row.g-4.citation-workflow-layout")[
                 h.div(".col-lg-9")[self.render_pdf_panel(citation_row),],
-                h.div(".col-lg-3.l2-screening-sidebar")[
+                h.div(".col-lg-3.citation-workflow-sidebar")[
                     h.div(".vstack.gap-4")[
                         self.render_citation_panel(citation_row),
                         self.render_results_panel(citation_row),
@@ -135,32 +121,7 @@ class L2PdfScreeningPage(BasePageTemplate):
         ]
 
     def render_pdf_panel(self, citation_row: Citation):
-        if citation_row.document_id is None:
-            initial_status = tdt("Upload a PDF to view the document.")
-        else:
-            initial_status = tdt("Loading PDF...")
-
-        return h.section(
-            ".l2-pdf-panel",
-            aria_label=tdt("Citation PDF viewer"),
-        )[
-            h.div(".l2-pdf-toolbar")[
-                h.h2(".h5.mb-0")[tdt("Document")],
-                h.span(
-                    ".small.text-muted",
-                    id="l2-pdf-status",
-                    role="status",
-                    aria_live="polite",
-                )[initial_status],
-            ],
-            h.div(
-                ".l2-pdf-scroll",
-                id="l2-pdf-scroll",
-                tabindex="0",
-            )[
-                h.div(".l2-pdf-pages", id="l2-pdf-pages"),
-            ],
-        ]
+        return PdfPanel(citation_row)
 
     def render_citation_panel(self, citation_row: Citation):
         text_extraction_badge = (
@@ -347,7 +308,7 @@ class L2PdfScreeningPage(BasePageTemplate):
                 (tdt("Notes"), result.explanation or tdt("None")),
                 (
                     tdt("Evidence sentences"),
-                    self.render_evidence_chips(
+                    render_evidence_chips(
                         result.evidence_sentences,
                         "sentence",
                         tdt("Sentence"),
@@ -356,7 +317,7 @@ class L2PdfScreeningPage(BasePageTemplate):
                 ),
                 (
                     tdt("Evidence tables"),
-                    self.render_evidence_chips(
+                    render_evidence_chips(
                         result.evidence_tables,
                         "table",
                         tdt("Table"),
@@ -365,7 +326,7 @@ class L2PdfScreeningPage(BasePageTemplate):
                 ),
                 (
                     tdt("Evidence figures"),
-                    self.render_evidence_chips(
+                    render_evidence_chips(
                         result.evidence_figures,
                         "figure",
                         tdt("Figure"),
@@ -374,31 +335,3 @@ class L2PdfScreeningPage(BasePageTemplate):
                 ),
             ]
         )
-
-    def render_evidence_chips(
-        self,
-        evidence_indices,
-        evidence_type,
-        label,
-        aria_label,
-    ):
-        if not evidence_indices:
-            return tdt("Nothing to highlight")
-
-        evidence_list = ", ".join(
-            str(evidence_index) for evidence_index in evidence_indices
-        )
-        return h.div(
-            ".d-flex.flex-wrap.gap-2",
-            aria_label=f"{aria_label}: {evidence_list}",
-        )[
-            [
-                h.button(
-                    ".btn.btn-sm.btn-outline-primary.l2-evidence-chip",
-                    type="button",
-                    data_evidence_type=evidence_type,
-                    data_evidence_index=str(evidence_index),
-                )[label, " ", str(evidence_index)]
-                for evidence_index in evidence_indices
-            ]
-        ]

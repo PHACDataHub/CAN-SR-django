@@ -17,8 +17,8 @@ from my_app.models import (
     L1ScreeningQuestionOption,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
-    ParameterQuestion,
-    ParameterQuestionOption,
+    Parameter,
+    ParameterCategory,
     Review,
 )
 from my_app.router import route
@@ -37,12 +37,8 @@ from shortcuts import (
 from shortcuts import breadcrumbs as bc
 from shortcuts import cached_property, dataclass, reverse, tdt, tm, transaction
 
-ChildType = L1ScreeningQuestion | L2ScreeningQuestion | ParameterQuestion
-OptionType = (
-    L1ScreeningQuestionOption
-    | L2ScreeningQuestionOption
-    | ParameterQuestionOption
-)
+ParentType = L1ScreeningQuestion | L2ScreeningQuestion | ParameterCategory
+ChildType = L1ScreeningQuestionOption | L2ScreeningQuestionOption | Parameter
 
 
 class FormsetAdapterMeta(abc.ABCMeta):
@@ -50,18 +46,18 @@ class FormsetAdapterMeta(abc.ABCMeta):
         new_cls = super().__new__(cls, name, bases, attrs)
 
         if abc.ABC not in bases:
-            assert hasattr(new_cls, "model"), "model is required"
+            assert hasattr(new_cls, "parent_model"), "parent_model is required"
             assert hasattr(new_cls, "FormClass"), "FormClass is required"
-            assert hasattr(new_cls, "option_model"), "option_model is required"
+            assert hasattr(new_cls, "child_model"), "child_model is required"
             assert hasattr(
                 new_cls, "form_renderer"
             ), "form_renderer is required"
             assert hasattr(
-                new_cls, "option_form_renderer"
-            ), "option_form_renderer is required"
+                new_cls, "child_form_renderer"
+            ), "child_form_renderer is required"
             assert hasattr(
-                new_cls, "OptionFormClass"
-            ), "OptionFormClass is required"
+                new_cls, "ChildFormClass"
+            ), "ChildFormClass is required"
 
         return new_cls
 
@@ -79,10 +75,12 @@ class FormsetAdapter(abc.ABC, metaclass=FormsetAdapterMeta):
         return GenericForm(form)
 
     @staticmethod
-    def option_form_renderer(form):
+    def child_form_renderer(form):
         return h.div[GenericForm(form)]
 
     add_button_text = tdt("Add question")
+    add_child_button_text = tdt("Add option")
+    child_list_label = tdt("options")
 
     @classmethod
     def get_section_name(cls):
@@ -90,15 +88,16 @@ class FormsetAdapter(abc.ABC, metaclass=FormsetAdapterMeta):
 
 
 class L1FormsetAdapter(FormsetAdapter):
+    parent_model = L1ScreeningQuestion
+    child_model = L1ScreeningQuestionOption
+    child_relation_name = "options"
+
     class FormClass(ModelForm, StandardFormMixin):
         class Meta:
             model = L1ScreeningQuestion
             fields = ["question_text"]
 
-    model = L1ScreeningQuestion
-    option_model = L1ScreeningQuestionOption
-
-    class OptionFormClass(ModelForm, StandardFormMixin):
+    class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
             model = L1ScreeningQuestionOption
             fields = ["option_text", "option_value"]
@@ -113,16 +112,16 @@ class L1FormsetAdapter(FormsetAdapter):
 
 
 class L2FormsetAdapter(FormsetAdapter):
-    model = L2ScreeningQuestion
+    parent_model = L2ScreeningQuestion
+    child_model = L2ScreeningQuestionOption
+    child_relation_name = "options"
 
     class FormClass(ModelForm, StandardFormMixin):
         class Meta:
             model = L2ScreeningQuestion
             fields = ["question_text"]
 
-    option_model = L2ScreeningQuestionOption
-
-    class OptionFormClass(ModelForm, StandardFormMixin):
+    class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
             model = L2ScreeningQuestionOption
             fields = ["option_text", "option_value"]
@@ -137,19 +136,19 @@ class L2FormsetAdapter(FormsetAdapter):
 
 
 class ParameterFormsetAdapter(FormsetAdapter):
-    model = ParameterQuestion
+    parent_model = ParameterCategory
+    child_model = Parameter
+    child_relation_name = "parameters"
 
     class FormClass(ModelForm, StandardFormMixin):
         class Meta:
-            model = ParameterQuestion
-            fields = ["question_text"]
+            model = ParameterCategory
+            fields = ["name"]
 
-    option_model = ParameterQuestionOption
-
-    class OptionFormClass(ModelForm, StandardFormMixin):
+    class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
-            model = ParameterQuestionOption
-            fields = ["param_name", "param_description"]
+            model = Parameter
+            fields = ["name", "description"]
 
     @staticmethod
     def get_new_url(review):
@@ -159,7 +158,9 @@ class ParameterFormsetAdapter(FormsetAdapter):
     def get_edit_url(obj):
         return reverse("edit_parameter_question", args=[obj.review_id, obj.pk])
 
-    add_button_text = tdt("Add Parameter")
+    add_button_text = tdt("Add Parameter Group")
+    add_child_button_text = tdt("Add parameter")
+    child_list_label = tdt("parameters")
 
 
 class ScreeningCriteriaPageContent(HtpyComponent):
@@ -228,43 +229,47 @@ class ScreeningCriteriaPageContent(HtpyComponent):
     def render_form_and_formset_section(self, adapter: type[FormsetAdapter]):
         review = self.review
         section_id = adapter.get_section_name()
-        child_records = adapter.model.objects.filter(review=review)
+        parent_records = adapter.parent_model.objects.filter(
+            review=review
+        ).prefetch_related(adapter.child_relation_name)
 
-        if child_records:
-            child_content = h.ul(".list-group")[
+        if parent_records:
+            parent_content = h.ul(".list-group")[
                 (
                     h.li(".list-group-item")[
                         h.div(".d-flex.justify-content-between.mb-1")[
-                            h.div[child.title],
+                            h.div[parent.title],
                             h.div[
                                 h.button(
                                     ".btn.btn-outline-primary.btn-sm",
-                                    hx_get=adapter.get_edit_url(child),
+                                    hx_get=adapter.get_edit_url(parent),
                                     hx_target="#modal-slot",
                                     # hx-preserve requires a stable ID
-                                    id=f"edit-{section_id}-{child.pk}-button",
+                                    id=f"edit-{section_id}-{parent.pk}-button",
                                     hx_preserve="true",
                                 )[tm("edit")]
                             ],
                         ],
-                        h.div[tdt("options")],
+                        h.div[adapter.child_list_label],
                         h.ul(".list-group")[
                             (
                                 h.li(".list-group-item")[
-                                    h.div[option.title],
+                                    h.div[child.title],
                                     h.div(".small.text-secondary")[
-                                        option.description
+                                        child.description
                                     ],
                                 ]
-                                for option in child.options.all()
+                                for child in getattr(
+                                    parent, adapter.child_relation_name
+                                ).all()
                             )
                         ],
                     ]
-                    for child in child_records
+                    for parent in parent_records
                 )
             ]
         else:
-            child_content = h.p[tdt("No questions/parameters added yet.")]
+            parent_content = h.p[tdt("No questions/parameters added yet.")]
 
         return h.fragment[
             h.div(
@@ -272,7 +277,7 @@ class ScreeningCriteriaPageContent(HtpyComponent):
                 tab_index=-1,
                 hx_swap_oob="true",
             )[
-                h.div[child_content],
+                h.div[parent_content],
             ],
             h.div(".mt-1.mb-3")[
                 h.button(
@@ -328,15 +333,15 @@ class ChildEditor:
     """
 
     adapter: FormsetAdapter
-    child: ChildType
+    parent: ParentType
     data: QueryDict | None = None
 
     @property
     def post_url(self):
-        if self.child.pk is None:
-            url = self.adapter.get_new_url(self.child.review)
+        if self.parent.pk is None:
+            url = self.adapter.get_new_url(self.parent.review)
         else:
-            url = self.adapter.get_edit_url(self.child)
+            url = self.adapter.get_edit_url(self.parent)
 
         return url
 
@@ -344,7 +349,7 @@ class ChildEditor:
     def child_form(self):
         return self.adapter.FormClass(
             self.data,
-            instance=self.child,
+            instance=self.parent,
         )
 
     @property
@@ -352,38 +357,39 @@ class ChildEditor:
         return self.adapter.__name__
 
     @cached_property
-    def option_formset(self):
+    def child_formset(self):
 
-        if self.child.pk and self.child.options.exists():
+        child_manager = getattr(self.parent, self.adapter.child_relation_name)
+        if self.parent.pk and child_manager.exists():
             extra = 0
         else:
             extra = 1
 
         FormSetCls = forms.models.inlineformset_factory(
-            parent_model=self.adapter.model,
-            model=self.adapter.option_model,
-            form=self.adapter.OptionFormClass,
+            parent_model=self.adapter.parent_model,
+            model=self.adapter.child_model,
+            form=self.adapter.ChildFormClass,
             extra=extra,
             can_delete=True,
         )
 
-        parent_instance = self.child
+        parent_instance = self.parent
         return FormSetCls(
             self.data, instance=parent_instance, prefix="options"
         )
 
     def is_valid(self):
-        return self.child_form.is_valid() and self.option_formset.is_valid()
+        return self.child_form.is_valid() and self.child_formset.is_valid()
 
     def save(self):
         self.is_valid()  # to populate cleaned_data and errors
         with transaction.atomic():
-            child = self.child_form.save()
-            formset = self.option_formset
+            parent = self.child_form.save()
+            formset = self.child_formset
 
             formset.save()
 
-        return child
+        return parent
 
     def render_form(self):
 
@@ -392,7 +398,7 @@ class ChildEditor:
         error_summary = None
         if self.data is not None:
             error_summary = ErrorSummary(
-                [self.child_form, *self.option_formset.forms]
+                [self.child_form, *self.child_formset.forms]
             )
 
         return h.form(
@@ -406,11 +412,11 @@ class ChildEditor:
             error_summary,
             self.adapter.form_renderer(self.child_form),
             InlineFormset(
-                self.option_formset,
-                add_button_text=tdt("Add option"),
-                form_renderer=self.adapter.option_form_renderer,
+                self.child_formset,
+                add_button_text=self.adapter.add_child_button_text,
+                form_renderer=self.adapter.child_form_renderer,
                 can_add=True,
-                aria_list_label=tdt("options"),
+                aria_list_label=self.adapter.child_list_label,
             ),
         ]
 
@@ -477,9 +483,9 @@ class ChildEditorCreateView(ChildEditorModalFormView):
 
     @cached_property
     def editor(self):
-        child = self.adapter.model(review=self.review)
+        parent = self.adapter.parent_model(review=self.review)
         editor = ChildEditor(
-            child=child,
+            parent=parent,
             data=self.request.POST or None,
             adapter=self.adapter,
         )
@@ -490,15 +496,15 @@ class ChildEditorEditView(ChildEditorModalFormView):
 
     @cached_property
     def editor(self):
-        question_id = self.kwargs["question_pk"]
+        parent_id = self.kwargs["parent_pk"]
 
         try:
-            question = self.adapter.model.objects.get(pk=question_id)
-        except self.adapter.model.DoesNotExist:
-            raise ValueError("Invalid question ID")
+            parent = self.adapter.parent_model.objects.get(pk=parent_id)
+        except self.adapter.parent_model.DoesNotExist:
+            raise ValueError("Invalid parent ID")
 
         editor = ChildEditor(
-            child=question,
+            parent=parent,
             adapter=self.adapter,
             data=self.request.POST or None,
         )
@@ -514,7 +520,7 @@ class AddL1ScreeningQuestionView(ChildEditorCreateView):
 
 
 @route(
-    "reviews/<int:review_id>/l1_screening_questions/<int:question_pk>/edit",
+    "reviews/<int:review_id>/l1_screening_questions/<int:parent_pk>/edit",
     name="edit_l1_question",
 )
 class EditL1ScreeningQuestionView(ChildEditorEditView):
@@ -530,7 +536,7 @@ class AddL2ScreeningQuestionView(ChildEditorCreateView):
 
 
 @route(
-    "reviews/<int:review_id>/l2_screening_questions/<int:question_pk>/edit",
+    "reviews/<int:review_id>/l2_screening_questions/<int:parent_pk>/edit",
     name="edit_l2_question",
 )
 class EditL2ScreeningQuestionView(ChildEditorEditView):
@@ -541,15 +547,15 @@ class EditL2ScreeningQuestionView(ChildEditorEditView):
     "reviews/<int:review_id>/parameters/add/",
     name="add_parameter_question",
 )
-class AddParameterQuestionView(ChildEditorCreateView):
+class AddParameterCategoryView(ChildEditorCreateView):
     adapter = ParameterFormsetAdapter
 
 
 @route(
-    "reviews/<int:review_id>/parameters/<int:question_pk>/edit",
+    "reviews/<int:review_id>/parameters/<int:parent_pk>/edit",
     name="edit_parameter_question",
 )
-class EditParameterQuestionView(ChildEditorEditView):
+class EditParameterCategoryView(ChildEditorEditView):
     adapter = ParameterFormsetAdapter
 
 

@@ -14,9 +14,9 @@ from my_app.models import (
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     L2ScreeningResult,
+    Parameter,
+    ParameterCategory,
     ParameterExtractionResult,
-    ParameterQuestion,
-    ParameterQuestionOption,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
@@ -139,21 +139,21 @@ class L2ScreeningQuestionOptionFactory(factory.django.DjangoModelFactory):
     option_value = factory.Faker("sentence")
 
 
-class ParameterQuestionFactory(factory.django.DjangoModelFactory):
+class ParameterCategoryFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = ParameterQuestion
+        model = ParameterCategory
 
     review = factory.SubFactory(ReviewFactory)
-    question_text = factory.Sequence(lambda n: f"Parameter question {n + 1}")
+    name = factory.Sequence(lambda n: f"Parameter category {n + 1}")
 
 
-class ParameterQuestionOptionFactory(factory.django.DjangoModelFactory):
+class ParameterFactory(factory.django.DjangoModelFactory):
     class Meta:
-        model = ParameterQuestionOption
+        model = Parameter
 
-    question = factory.SubFactory(ParameterQuestionFactory)
-    param_name = factory.Sequence(lambda n: f"Parameter {n + 1}")
-    param_description = factory.Faker("sentence")
+    category = factory.SubFactory(ParameterCategoryFactory)
+    name = factory.Sequence(lambda n: f"Parameter {n + 1}")
+    description = factory.Faker("sentence")
 
 
 class L1ScreeningResultFactory(factory.django.DjangoModelFactory):
@@ -188,8 +188,7 @@ class ParameterExtractionResultFactory(factory.django.DjangoModelFactory):
 
     citation = factory.SubFactory(CitationFactory)
     question = factory.SubFactory(
-        ParameterQuestionFactory,
-        review=factory.SelfAttribute("..citation.dataset.review"),
+        ParameterFactory,
+        category__review=factory.SelfAttribute("..citation.dataset.review"),
     )
-    selected_option = None
     status = ScreeningResultStatus.PENDING

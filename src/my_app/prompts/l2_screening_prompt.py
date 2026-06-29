@@ -22,7 +22,12 @@ from my_app.models import (
 from my_app.queries import options_for_question
 from shortcuts import List, dataclass, logger
 
-from .prompt_util import build_option_definition_string, build_option_string
+from .prompt_util import (
+    build_figure_substring,
+    build_option_definition_string,
+    build_option_string,
+    build_table_substring,
+)
 
 PROMPT_JSON_TEMPLATE = """
 You are assisting with a scientific full-text screening task. Evaluate the question "{question}" against the paper content provided as numbered sentences (e.g., "[0] ...", "[1] ...").
@@ -98,8 +103,8 @@ class L2ScreeningPromptBuilder:
         option_info_string = build_option_definition_string(self.options)
         option_string = build_option_string(self.options)
 
-        table_str = self._build_table_substring()
-        figure_str = self._build_figure_substring()
+        table_str = build_table_substring(self.tables)
+        figure_str = build_figure_substring(self.figures)
 
         return self.ScreeningPromptArgs(
             question=self.question.question_text,
@@ -121,45 +126,6 @@ class L2ScreeningPromptBuilder:
             tables=prompt_args.tables,
             figures=prompt_args.figures,
         )
-
-    def _build_table_substring(self) -> str:
-
-        if not self.tables:
-            return "(none)"
-
-        entries = [self._table_entry(table) for table in self.tables]
-        return "\n\n".join(entries)
-
-    @staticmethod
-    def _table_entry(table: DocumentTable) -> str:
-
-        result = ""
-
-        if table.caption:
-            caption = f" caption: {table.caption}"
-        else:
-            caption = ""
-        header = f"Table {table.index} {caption}"
-
-        result = header + "\n" + table.table_markdown
-        return result
-
-    def _build_figure_substring(self) -> str:
-
-        if not self.figures:
-            return "(none)"
-
-        figure_lines = []
-        for fig in self.figures:
-            if fig.caption:
-                caption = fig.caption
-            else:
-                caption = "(no caption)"
-            figure_lines.append(
-                f"Figure [F{fig.index}] caption: {caption} (see attached image F{fig.index})"
-            )
-
-        return "\n".join(figure_lines)
 
 
 class RawL2ScreeningPromptResult(pydantic.BaseModel):

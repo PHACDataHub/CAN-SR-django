@@ -7,6 +7,9 @@ from my_app.model_factories import (
     L1ScreeningQuestionFactory,
     L1ScreeningQuestionOptionFactory,
     L1ScreeningResultFactory,
+    ParameterCategoryFactory,
+    ParameterExtractionResultFactory,
+    ParameterFactory,
     ReviewFactory,
     UserFactory,
 )
@@ -15,6 +18,7 @@ from my_app.queries import (
     L1ScreeningStatusFetcher,
     get_adjacent_citation_ids,
     get_l1_screening_progress_stats,
+    get_parameter_extraction_progress_stats,
 )
 
 pytestmark = [pytest.mark.backend, pytest.mark.l1_screening]
@@ -180,3 +184,40 @@ def test_l1_screening_progress_stats_counts_review_citations_by_human_review_sta
     assert stats.completed_not_human_reviewed_citations == 1
     assert stats.human_reviewed_citations == 2
     assert stats.human_reviewed_percent == 50
+
+
+def test_parameter_extraction_progress_stats_counts_human_reviewed_citations():
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    category = ParameterCategoryFactory(review=review)
+    parameter = ParameterFactory(category=category)
+
+    incomplete_row = CitationFactory(dataset=dataset, order=1)
+    completed_row = CitationFactory(dataset=dataset, order=2)
+    human_reviewed_row = CitationFactory(dataset=dataset, order=3)
+
+    ParameterExtractionResultFactory(
+        citation=incomplete_row,
+        question=parameter,
+        status=ScreeningResultStatus.PENDING,
+    )
+    ParameterExtractionResultFactory(
+        citation=completed_row,
+        question=parameter,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    ParameterExtractionResultFactory(
+        citation=human_reviewed_row,
+        question=parameter,
+        status=ScreeningResultStatus.COMPLETED,
+        human_found=False,
+        human_value=None,
+    )
+
+    stats = get_parameter_extraction_progress_stats(review.id)
+
+    assert stats.total_citations == 3
+    assert stats.incomplete_citations == 1
+    assert stats.completed_not_human_reviewed_citations == 1
+    assert stats.human_reviewed_citations == 1
+    assert stats.human_reviewed_percent == 33

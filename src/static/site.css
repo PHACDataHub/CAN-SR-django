@@ -65,3 +65,12 @@ dl.custom-dl {
         margin: 0;
     }
 }
+
+.badge {
+    /* 
+        fixes a11y/x-overflow issue
+        may want to make this opt-in via an extra class, 
+        e.g. .badge.badge--wrapable
+    */
+    white-space: normal;
+}

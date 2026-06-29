@@ -10,7 +10,7 @@ from .review import Review
 from .screening_criteria import (
     L1ScreeningQuestion,
     L2ScreeningQuestion,
-    ParameterQuestion,
+    ParameterCategory,
 )
 
 
@@ -137,11 +137,30 @@ class L2ScreeningResult(HumanValidatedScreeningResult):
 
 
 class ParameterExtractionResult(CitationQueryResult):
-    question = models.ForeignKey("ParameterQuestion", on_delete=models.CASCADE)
-    selected_option = models.ForeignKey(
-        "ParameterQuestionOption",
-        on_delete=models.CASCADE,
+    question = models.ForeignKey("Parameter", on_delete=models.CASCADE)
+    found = models.BooleanField(default=False)
+    value = models.TextField(null=True, blank=True)
+    human_found = models.BooleanField(
         null=True,
+        blank=True,
+        verbose_name=tdt("Human found"),
+    )
+    human_value = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name=tdt("Human value"),
+    )
+    explanation = models.TextField(null=True, blank=True)
+    evidence_sentences = models.JSONField(
+        default=list,
+        blank=True,
+    )
+    evidence_tables = models.JSONField(
+        default=list,
+        blank=True,
+    )
+    evidence_figures = models.JSONField(
+        default=list,
         blank=True,
     )
 

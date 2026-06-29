@@ -82,45 +82,39 @@ class L2ScreeningQuestionOption(AbstractScreeningQuestionOption):
 
 
 @add_to_admin
-class ParameterQuestion(models.Model):
+class ParameterCategory(models.Model):
     review = fields.ForeignKey(
         Review,
-        related_name="parameter_questions",
+        related_name="parameter_categories",
         on_delete=models.CASCADE,
         verbose_name=tdt("Systematic review"),
     )
-    question_text = fields.TextField(verbose_name=tdt("Parameter question"))
+    name = fields.CharField(
+        max_length=255, verbose_name=tdt("Parameter category name")
+    )
 
     def __str__(self):
-        return f"{self.review_id} parameter question"
+        return self.name
 
     @property
     def title(self):
-        return self.question_text
+        return self.name
 
 
 @add_to_admin
-class ParameterQuestionOption(models.Model):
-    question = fields.ForeignKey(
-        ParameterQuestion,
-        related_name="options",
+class Parameter(models.Model):
+    category = fields.ForeignKey(
+        ParameterCategory,
+        related_name="parameters",
         on_delete=models.CASCADE,
-        verbose_name=tdt("Question"),
+        verbose_name=tdt("Parameter category"),
     )
-    param_name = fields.CharField(
-        max_length=255, verbose_name=tdt("Parameter name")
-    )
-    param_description = fields.TextField(
-        verbose_name=tdt("Parameter description")
-    )
+    name = fields.CharField(max_length=255, verbose_name=tdt("Parameter name"))
+    description = fields.TextField(verbose_name=tdt("Parameter description"))
 
     def __str__(self):
-        return self.param_name
+        return self.name
 
     @property
     def title(self):
-        return self.param_name
-
-    @property
-    def description(self):
-        return self.param_description
+        return self.name

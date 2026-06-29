@@ -2,10 +2,11 @@ const PDFJS_VERSION = '4.10.38';
 const PDFJS_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.mjs`;
 const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.mjs`;
 
-const args = document.getElementById('l2-citation-data').dataset;
-const pagesElement = document.getElementById('l2-pdf-pages');
-const scrollElement = document.getElementById('l2-pdf-scroll');
-const statusElement = document.getElementById('l2-pdf-status');
+const dataElement = document.querySelector('[data-pdf-url], [data-metadata-url]');
+const args = dataElement ? dataElement.dataset : {};
+const pagesElement = document.getElementById('citation-pdf-pages');
+const scrollElement = document.getElementById('citation-pdf-scroll');
+const statusElement = document.getElementById('citation-pdf-status');
 
 let pdfDocument = null;
 let metadata = null;
@@ -31,7 +32,7 @@ function pageHighlights(pageNumber) {
 }
 
 function evidenceSelector(evidenceType, evidenceIndex) {
-    return `.l2-pdf-highlight[data-evidence-type="${evidenceType}"][data-evidence-index="${evidenceIndex}"]`;
+    return `.citation-pdf-highlight[data-evidence-type="${evidenceType}"][data-evidence-index="${evidenceIndex}"]`;
 }
 
 function evidenceLabel(evidenceType) {
@@ -57,7 +58,7 @@ function updateEvidenceHighlightState(evidenceType, evidenceIndex) {
     const isActive = highlights.some((highlight) => highlight.matches(':hover, :focus'));
 
     highlights.forEach((highlight) => {
-        highlight.classList.toggle('l2-pdf-highlight-active', isActive);
+        highlight.classList.toggle('citation-pdf-highlight-active', isActive);
     });
 }
 
@@ -73,7 +74,7 @@ function renderHighlight(highlight, pageInfo, viewport) {
     const label = evidenceLabel(evidenceType);
 
     box.type = 'button';
-    box.className = `l2-pdf-highlight l2-pdf-highlight-${evidenceType}`;
+    box.className = `citation-pdf-highlight citation-pdf-highlight-${evidenceType}`;
     box.dataset.evidenceType = evidenceType;
     box.dataset.evidenceIndex = String(evidenceIndex);
     box.title = `${label} ${evidenceIndex}`;
@@ -107,7 +108,7 @@ async function renderPage(pageNumber, version) {
     const pageElement = document.createElement('div');
     const overlayElement = document.createElement('div');
 
-    pageElement.className = 'l2-pdf-page';
+    pageElement.className = 'citation-pdf-page';
     pageElement.dataset.pageNumber = String(pageNumber);
     pageElement.style.width = `${viewport.width}px`;
     pageElement.style.height = `${viewport.height}px`;
@@ -115,7 +116,7 @@ async function renderPage(pageNumber, version) {
     canvas.height = Math.floor(viewport.height * outputScale);
     canvas.style.width = `${viewport.width}px`;
     canvas.style.height = `${viewport.height}px`;
-    overlayElement.className = 'l2-pdf-overlay';
+    overlayElement.className = 'citation-pdf-overlay';
     overlayElement.style.width = `${viewport.width}px`;
     overlayElement.style.height = `${viewport.height}px`;
 
@@ -174,7 +175,7 @@ function scrollToEvidence(evidenceType, evidenceIndex) {
 }
 
 function bindEvidenceChips() {
-    document.querySelectorAll('.l2-evidence-chip').forEach((chip) => {
+    document.querySelectorAll('.evidence-chip').forEach((chip) => {
         chip.addEventListener('click', () => {
             const evidenceType = chip.dataset.evidenceType || 'sentence';
             const evidenceIndex = chip.dataset.evidenceIndex ?? chip.dataset.sentenceIndex;
@@ -220,4 +221,6 @@ async function initializePdfViewer() {
     }
 }
 
-initializePdfViewer();
+if (pagesElement && scrollElement && statusElement) {
+    initializePdfViewer();
+}

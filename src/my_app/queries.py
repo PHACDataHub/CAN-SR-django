@@ -14,6 +14,8 @@ from my_app.models import (
     L2ScreeningQuestion,
     L2ScreeningResult,
     LanguageModel,
+    Parameter,
+    ParameterExtractionResult,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
@@ -76,7 +78,7 @@ class ScreeningStatusFetcher(DataFetcher):
             .first()
             .dataset.review
         )
-        all_questions = cls.QuestionModel.objects.filter(review=review)
+        all_questions = cls.get_questions(review)
 
         results = cls.ResultModel.objects.filter(citation_id__in=keys)
 
@@ -90,6 +92,10 @@ class ScreeningStatusFetcher(DataFetcher):
             )
 
         return final_results
+
+    @classmethod
+    def get_questions(cls, review):
+        return cls.QuestionModel.objects.filter(review=review)
 
     @staticmethod
     def status_for_results(results, questions):
@@ -126,6 +132,15 @@ class L1ScreeningStatusFetcher(ScreeningStatusFetcher):
 class L2ScreeningStatusFetcher(ScreeningStatusFetcher):
     QuestionModel = L2ScreeningQuestion
     ResultModel = L2ScreeningResult
+
+
+class ParameterExtractionStatusFetcher(ScreeningStatusFetcher):
+    QuestionModel = Parameter
+    ResultModel = ParameterExtractionResult
+
+    @classmethod
+    def get_questions(cls, review):
+        return cls.QuestionModel.objects.filter(category__review=review)
 
 
 @dataclass(frozen=True)
@@ -256,6 +271,103 @@ def get_l2_screening_progress_stats(review_id: int):
         review_id,
         L2ScreeningQuestion,
         "l2screeningresult",
+    )
+
+
+@dataclass(frozen=True)
+class CitationParameterExtractionProgressStats:
+    total_citations: int
+    incomplete_citations: int
+    completed_not_human_reviewed_citations: int
+    human_reviewed_citations: int
+
+    @property
+    def completed_citations(self):
+        return (
+            self.completed_not_human_reviewed_citations
+            + self.human_reviewed_citations
+        )
+
+    @property
+    def completed_percent(self):
+        if self.total_citations == 0:
+            return 0
+
+        return int((self.completed_citations / self.total_citations) * 100)
+
+    @property
+    def human_reviewed_percent(self):
+        if self.total_citations == 0:
+            return 0
+
+        return int(
+            (self.human_reviewed_citations / self.total_citations) * 100
+        )
+
+
+@cached_within_request
+def get_parameter_extraction_progress_stats(review_id: int):
+    parameter_count = Parameter.objects.filter(
+        category__review_id=review_id
+    ).count()
+    citations = Citation.objects.filter(dataset__review_id=review_id)
+    total_citations = citations.count()
+
+    if parameter_count == 0:
+        return CitationParameterExtractionProgressStats(
+            total_citations=total_citations,
+            incomplete_citations=total_citations,
+            completed_not_human_reviewed_citations=0,
+            human_reviewed_citations=0,
+        )
+
+    rows = citations.annotate(
+        result_count=Count("parameterextractionresult", distinct=True),
+        completed_count=Count(
+            "parameterextractionresult",
+            filter=Q(
+                parameterextractionresult__status=ScreeningResultStatus.COMPLETED
+            ),
+            distinct=True,
+        ),
+        human_reviewed_count=Count(
+            "parameterextractionresult",
+            filter=(
+                Q(
+                    parameterextractionresult__status=ScreeningResultStatus.COMPLETED
+                )
+                & Q(parameterextractionresult__human_found__isnull=False)
+            ),
+            distinct=True,
+        ),
+    ).values("result_count", "completed_count", "human_reviewed_count")
+
+    completed_not_human_reviewed_citations = 0
+    human_reviewed_citations = 0
+    for row in rows:
+        is_complete = (
+            row["result_count"] >= parameter_count
+            and row["completed_count"] >= parameter_count
+        )
+        if not is_complete:
+            continue
+
+        if row["human_reviewed_count"] >= parameter_count:
+            human_reviewed_citations += 1
+        else:
+            completed_not_human_reviewed_citations += 1
+
+    incomplete_citations = (
+        total_citations
+        - completed_not_human_reviewed_citations
+        - human_reviewed_citations
+    )
+
+    return CitationParameterExtractionProgressStats(
+        total_citations=total_citations,
+        incomplete_citations=incomplete_citations,
+        completed_not_human_reviewed_citations=completed_not_human_reviewed_citations,
+        human_reviewed_citations=human_reviewed_citations,
     )
 
 
