@@ -151,7 +151,7 @@ def test_signals_and_contextvars_are_set_in_task_execution(backend):
 
     fake_id_gen = make_fake_id_generator()
 
-    def fake_uuid4():
+    def fake_generate_context_id():
         return next(fake_id_gen)
 
     spy = MagicMock()
@@ -160,7 +160,7 @@ def test_signals_and_contextvars_are_set_in_task_execution(backend):
 
     with (
         override_settings(TASKS=get_task_backend(backend)),
-        patch("proj.signals.uuid4", fake_uuid4),
+        patch("proj.signals.generate_context_id", fake_generate_context_id),
         patch("proj.tasks.func_to_spy", spy),
     ):
         task_result = example_task_for_testing.enqueue(42)

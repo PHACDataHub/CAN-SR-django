@@ -161,7 +161,7 @@ MIDDLEWARE = configure_middleware(
         "django.contrib.auth.middleware.AuthenticationMiddleware",
         "django.contrib.messages.middleware.MessageMiddleware",
         "django.middleware.clickjacking.XFrameOptionsMiddleware",
-        "data_fetcher.middleware.GlobalRequestMiddleware",
+        "proj.middleware.CustomGlobalRequestMiddleware",
         "proj.middleware.MustBeLoggedInMiddleware",
         "versionator.middleware.WhodidMiddleware",
         "django_htmx.middleware.HtmxMiddleware",
