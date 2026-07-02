@@ -47,5 +47,5 @@ def test_request_logs_include_context_id(
 
     assert response.status_code == 200
     assert output.getvalue() == (
-        f"INFO:app:[context_id={context_id}] Test log message\n"
+        f"INFO:app:[context_id=r-{context_id}] Test log message\n"
     )

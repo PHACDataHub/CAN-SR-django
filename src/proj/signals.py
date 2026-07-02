@@ -37,7 +37,7 @@ def on_task_started(sender, task_result, **kwargs):
     stack_storage.set(current_stack)
 
     task_name = task_result.task.func.__name__
-    context_id = generate_context_id()
+    context_id = "t-" + generate_context_id()
     new_request = SimpleNamespace(
         context_id=context_id, task_id=task_result.id
     )

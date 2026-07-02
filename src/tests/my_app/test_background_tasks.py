@@ -188,9 +188,9 @@ def test_signals_and_contextvars_are_set_in_task_execution(backend):
         inner_request_ctx1 = spy.call_args_list[3][0][0]
         inner_request_ctx_id = spy.call_args_list[4][0][0]
         assert task_arg1 == 42
-        assert context_id1 == fake_id1
-        assert request_ctx1.context_id == fake_id1
-        assert inner_request_ctx_id == fake_id1
+        assert context_id1 == "t-" + fake_id1
+        assert request_ctx1.context_id == "t-" + fake_id1
+        assert inner_request_ctx_id == "t-" + fake_id1
         assert inner_request_ctx1 is request_ctx1
 
         request_ctx2 = spy.call_args_list[5][0][0]
@@ -199,9 +199,9 @@ def test_signals_and_contextvars_are_set_in_task_execution(backend):
         inner_request_ctx2 = spy.call_args_list[8][0][0]
         inner_request_ctx_id2 = spy.call_args_list[9][0][0]
         assert task_arg2 == 43
-        assert context_id2 == fake_id2
-        assert request_ctx2.context_id == fake_id2
-        assert inner_request_ctx_id2 == fake_id2
+        assert context_id2 == "t-" + fake_id2
+        assert request_ctx2.context_id == "t-" + fake_id2
+        assert inner_request_ctx_id2 == "t-" + fake_id2
         assert inner_request_ctx2 is request_ctx2
 
     if backend == "database":

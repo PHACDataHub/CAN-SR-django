@@ -44,5 +44,5 @@ class AllowUnauthenticatedMixin(View):
 
 class CustomGlobalRequestMiddleware(GlobalRequestMiddleware):
     def __call__(self, request):
-        request.context_id = generate_context_id()
+        request.context_id = "r-" + generate_context_id()
         return super().__call__(request)
