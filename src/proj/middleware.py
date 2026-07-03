@@ -1,8 +1,13 @@
 import urllib
+from uuid import uuid4
 
 from django.conf import settings
 from django.http.response import HttpResponseRedirect
 from django.views import View
+
+from data_fetcher.middleware import GlobalRequestMiddleware
+
+from proj.logging import generate_context_id
 
 
 class MustBeLoggedInMiddleware:
@@ -35,3 +40,9 @@ class AllowUnauthenticatedMixin(View):
         view = super().as_view(*args, **kwargs)
         view.allow_unauthenticated = True
         return view
+
+
+class CustomGlobalRequestMiddleware(GlobalRequestMiddleware):
+    def __call__(self, request):
+        request.context_id = "r-" + generate_context_id()
+        return super().__call__(request)

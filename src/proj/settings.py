@@ -23,6 +23,8 @@ from phac_aspc.django.settings.utils import (
     configure_middleware,
 )
 
+from .logging import configure_project_logging
+
 GROBID_URL = config("GROBID_URL", default="")
 
 # During tests, modify settings or monkeypatch things
@@ -48,6 +50,9 @@ ENABLE_DEBUG_TOOLBAR = DEBUG and config(
 )
 INTERNAL_IPS = config("INTERNAL_IPS", default="")
 IS_LOCAL_DEV = config("IS_LOCAL_DEV", cast=bool, default=False)
+
+LOGGING_CONFIG = None
+configure_project_logging(is_local_dev=IS_LOCAL_DEV)
 if IS_LOCAL_DEV:
     SESSION_COOKIE_SECURE = False
 
@@ -161,7 +166,7 @@ MIDDLEWARE = configure_middleware(
         "django.contrib.auth.middleware.AuthenticationMiddleware",
         "django.contrib.messages.middleware.MessageMiddleware",
         "django.middleware.clickjacking.XFrameOptionsMiddleware",
-        "data_fetcher.middleware.GlobalRequestMiddleware",
+        "proj.middleware.CustomGlobalRequestMiddleware",
         "proj.middleware.MustBeLoggedInMiddleware",
         "versionator.middleware.WhodidMiddleware",
         "django_htmx.middleware.HtmxMiddleware",
