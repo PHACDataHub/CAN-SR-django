@@ -23,6 +23,7 @@ notes.md
 src/media/
 
 src/.env
+.env
 
 .coverage
 .coverage.*
