@@ -9,6 +9,7 @@ staticfiles
 
 # Secrets
 .env*.*
+!.env.example
 
 # user preferred files
 runserver.sh
@@ -26,3 +27,6 @@ src/.env
 .coverage
 .coverage.*
 coverage.xml
+
+# Local container overrides
+compose.override.yaml

@@ -2,6 +2,5 @@
 azure-cli~=2.87
 coverage==7.14.0
 pytest==9.0.2
-pytest==9.0.2
 pytest-django==4.11.1
 factory-boy===3.3.0
