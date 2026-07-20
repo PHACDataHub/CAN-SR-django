@@ -64,6 +64,12 @@ dl.custom-dl {
         padding-left: 1rem;
         margin: 0;
     }
+
+    /* last row should not have the border-bottom */
+    dt:last-of-type,
+    dd:last-of-type {
+        border-bottom: none;
+    }
 }
 
 .badge {
