@@ -62,9 +62,9 @@ ENV SECRET_KEY=test-only-secret \
     USE_SQLITE=1 \
     GROBID_URL=dev
 
-COPY requirements_test.txt /app/
+COPY requirements_dev.txt requirements_formatting.txt /app/
 RUN python -m pip install --no-cache-dir \
-        -r /app/requirements_test.txt
+        -r /app/requirements_dev.txt
 
 COPY --chown=app:app src/tests /app/src/tests
 

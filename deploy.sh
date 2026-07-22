@@ -169,8 +169,8 @@ compose run --rm --no-deps web \
 
 if [[ "$DEMO" == true ]]; then
     info 'Creating demo data when it is not already present'
-    compose run --rm --no-deps web python manage.py shell -c \
-        "from django.contrib.auth.models import Group; from proj.models import User; from my_app.constants import ADMIN_USER_GROUP; from my_app.models import LanguageModel, Review; admin, created = User.objects.get_or_create(username='admin', defaults={'is_staff': True, 'is_superuser': True}); admin.set_password('admin') if created else None; admin.save() if created else None; admin.groups.add(Group.objects.get_or_create(name=ADMIN_USER_GROUP)[0]); model = LanguageModel.get_default_model(); [Review.objects.create(title=f'Demo systematic review {number}', description='Example review created by the local Docker demo.', language_model=model).user_links.create(user=admin) for number in range(1, 11)] if not Review.objects.exists() else print('Demo reviews already exist; skipping review seed.')"
+    compose run --rm --no-deps web \
+        python manage.py runscript my_app.scripts.dev
 fi
 
 info 'Starting the web application and background worker'
