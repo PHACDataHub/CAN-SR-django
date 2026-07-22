@@ -1,24 +1,15 @@
 from django import forms
-from django.core.validators import FileExtensionValidator
 from django.http import HttpResponse
 
 import htpy as h
 
 from proj.htpy.modal_component import ModalComponent
 
-from my_app.models import (
-    Citation,
-    Document,
-    L1ScreeningResult,
-    L2ScreeningResult,
-    Parameter,
-    ParameterExtractionResult,
-)
+from my_app.models import Citation, Parameter, ParameterExtractionResult
 from my_app.router import route
 from my_app.services.parameter_extraction import (
     DeferredParameterExtractionService,
 )
-from my_app.services.process_document import QueueProcessDocumentService
 from my_app.views.parameter_extraction_templating import (
     ParameterExtractionComponent,
     ParameterExtractionPageTemplate,
@@ -26,7 +17,6 @@ from my_app.views.parameter_extraction_templating import (
     parameter_extraction_human_review_control_id,
     render_parameter_extraction_control,
 )
-from my_app.views.pdf_components import DocumentUploadModal
 from my_app.views.pdf_views import PdfCitationFileView, PdfCitationMetadataView
 from my_app.views.screening.util import can_start_parameter_extraction
 from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
@@ -41,7 +31,6 @@ from shortcuts import (
     get_object_or_404,
     reverse,
     tdt,
-    transaction,
 )
 
 
@@ -66,27 +55,6 @@ class ParameterExtractionHumanAnswerForm(
 
     def clean_human_value(self):
         return self.cleaned_data["human_value"] or None
-
-
-class ParameterExtractionDocumentUploadForm(StandardFormMixin):
-    document_file = forms.FileField(
-        label=tdt("PDF document"),
-        validators=[FileExtensionValidator(["pdf"])],
-        widget=forms.FileInput(attrs={"accept": ".pdf,application/pdf"}),
-    )
-    confirm_replace = forms.BooleanField(
-        label=tdt(
-            "I understand this will delete the existing document, text extraction result, and screening results before uploading the replacement."
-        ),
-        required=True,
-    )
-
-    def __init__(self, *args, existing_document=False, **kwargs):
-        self.existing_document = existing_document
-        super().__init__(*args, **kwargs)
-
-        if not self.existing_document:
-            self.fields.pop("confirm_replace", None)
 
 
 class ParameterExtractionBaseView(MustAccessReviewMixin, ListView):
@@ -138,95 +106,6 @@ class ParameterExtractionComponentView(ParameterExtractionBaseView):
             headers=response_headers,
             **response_kwargs,
         )
-
-
-class ParameterExtractionDocumentUploadViewMixin(MustAccessReviewMixin):
-    @cached_property
-    def citation_row(self):
-        return get_object_or_404(
-            Citation,
-            pk=self.kwargs["row_pk"],
-            dataset__review=self.review,
-        )
-
-    @cached_property
-    def existing_document(self):
-        return self.citation_row.document
-
-    @cached_property
-    def form(self):
-        return ParameterExtractionDocumentUploadForm(
-            self.request.POST or None,
-            self.request.FILES or None,
-            existing_document=self.existing_document is not None,
-        )
-
-    @cached_property
-    def modal(self):
-        return DocumentUploadModal(
-            form=self.form,
-            review=self.review,
-            citation_row=self.citation_row,
-            existing_document=self.existing_document,
-            route_name="parameter_extraction_row_upload",
-            prefix="parameter-extraction",
-        )
-
-    def render_modal(self):
-        return self.modal.render()
-
-    def delete_existing_content(self):
-        L1ScreeningResult.objects.filter(citation=self.citation_row).delete()
-        L2ScreeningResult.objects.filter(citation=self.citation_row).delete()
-        ParameterExtractionResult.objects.filter(
-            citation=self.citation_row
-        ).delete()
-
-        existing_document = self.existing_document
-        if existing_document is not None:
-            existing_document.delete()
-
-    def attach_new_document(self):
-        document = Document.objects.create(
-            file=self.form.cleaned_data["document_file"]
-        )
-        self.citation_row.document = document
-        self.citation_row.save(update_fields=["document"])
-        QueueProcessDocumentService(document=document).perform()
-
-    def form_valid(self):
-        with transaction.atomic():
-            self.delete_existing_content()
-            self.attach_new_document()
-
-        response = HttpResponse("")
-        response["HX-Trigger"] = "citations-update"
-        response["HX-Trigger-After-Settle"] = "modal-close"
-        response["HX-Reswap"] = "none"
-        return response
-
-    def form_invalid(self):
-        response = HttpResponse(self.render_modal())
-        response["HX-Refocus"] = "#form-error-summary"
-        return response
-
-    def post(self, *args, **kwargs):
-        if self.form.is_valid():
-            return self.form_valid()
-
-        return self.form_invalid()
-
-
-@route(
-    "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/upload/",
-    name="parameter_extraction_row_upload",
-)
-class ParameterExtractionRowUploadView(
-    ParameterExtractionDocumentUploadViewMixin,
-    View,
-):
-    def get(self, *args, **kwargs):
-        return HttpResponse(self.render_modal())
 
 
 @route(

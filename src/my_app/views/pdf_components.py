@@ -1,20 +1,15 @@
-from dataclasses import dataclass
-
 import htpy as h
 
-from proj.htpy.form_components import ErrorSummary
-from proj.htpy.modal_component import ModalComponent
 from proj.htpy.util import static_no_cache
 
 from my_app.models import (
     Citation,
-    Document,
     FigureExtractionResult,
     Review,
     ScreeningResultStatus,
     TextExtractionResult,
 )
-from shortcuts import GenericForm, reverse, tdt
+from shortcuts import reverse, tdt
 
 BADGE_CLASSES = {
     # warning: redundant keys are intentionally here
@@ -105,7 +100,6 @@ def render_pdf_detail_link(citation_row: Citation, review: Review, route_name):
 def render_pdf_modal_button(
     citation_row: Citation,
     review: Review,
-    route_name,
 ):
     if citation_row.document is None:
         btn_text = tdt("Upload")
@@ -115,82 +109,12 @@ def render_pdf_modal_button(
         ".btn.btn-outline-primary.btn-sm",
         id=f"upload-btn-{citation_row.id}",
         type="button",
-        hx_get=reverse(route_name, args=[review.id, citation_row.id]),
+        hx_get=reverse(
+            "citation_document_upload", args=[review.id, citation_row.id]
+        ),
         hx_target="#modal-slot",
         hx_swap="innerHTML",
     )[btn_text]
-
-
-@dataclass
-class DocumentUploadModal:
-    form: object
-    review: Review
-    citation_row: Citation
-    existing_document: Document | None
-    route_name: str
-    prefix: str
-
-    @property
-    def modal_id(self):
-        return f"{self.prefix}-upload-modal-{self.citation_row.id}"
-
-    @property
-    def form_id(self):
-        return f"{self.prefix}-upload-form-{self.citation_row.id}"
-
-    def render(self):
-        title = (
-            tdt("Replace document")
-            if self.existing_document is not None
-            else tdt("Upload document")
-        )
-
-        footer = h.fragment[
-            h.button(
-                {
-                    "type": "button",
-                    "class": "btn btn-secondary",
-                    "data-modal-close": True,
-                }
-            )[tdt("Cancel")],
-        ]
-
-        return ModalComponent(
-            title=title,
-            modal_id=self.modal_id,
-            footer=footer,
-        )[self.render_form_body()]
-
-    def render_form_body(self):
-        return h.form(
-            id=self.form_id,
-            method="post",
-            enctype="multipart/form-data",
-            novalidate=True,
-            hx_post=reverse(
-                self.route_name,
-                args=[self.review.id, self.citation_row.id],
-            ),
-            hx_target="#modal-slot",
-            hx_swap="innerHTML",
-            hx_encoding="multipart/form-data",
-        )[
-            ErrorSummary([self.form]),
-            GenericForm(self.form),
-            h.div(".mt-3.text-end")[
-                h.button(
-                    ".btn.btn-primary",
-                    type="submit",
-                    **{"hx-disabled-elt": "this"},
-                )[
-                    (
-                        tdt("Replace document")
-                        if self.existing_document is not None
-                        else tdt("Upload document")
-                    )
-                ]
-            ],
-        ]
 
 
 def PdfViewerAssets(

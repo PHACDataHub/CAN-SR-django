@@ -1,11 +1,8 @@
-from dataclasses import dataclass
-
 import htpy as h
 
-from my_app.models import Citation, Document, L2ScreeningResult, Review
+from my_app.models import Citation, L2ScreeningResult, Review
 from my_app.views.pdf_components import (
     DocumentUploadBadge,
-    DocumentUploadModal,
     FigureExtractionBadge,
     TextExtractionBadge,
     render_pdf_detail_link,
@@ -35,7 +32,9 @@ def get_l2_pdf_detail_url(review: Review, citation_row: Citation):
 
 
 def get_l2_pdf_upload_url(review: Review, citation_row: Citation):
-    return reverse("screen_l2_row_upload", args=[review.id, citation_row.id])
+    return reverse(
+        "citation_document_upload", args=[review.id, citation_row.id]
+    )
 
 
 def render_l2_pdf_modal_button(
@@ -45,7 +44,6 @@ def render_l2_pdf_modal_button(
     return render_pdf_modal_button(
         citation_row,
         review,
-        "screen_l2_row_upload",
     )
 
 
@@ -79,33 +77,3 @@ def render_l2_human_review_control(result: L2ScreeningResult, review: Review):
             "screen_l2_undo_validation", args=[review.id, result.id]
         ),
     )
-
-
-@dataclass
-class L2DocumentUploadModal:
-    form: object
-    review: Review
-    citation_row: Citation
-    existing_document: Document | None
-
-    @property
-    def modal_id(self):
-        return self.generic_modal.modal_id
-
-    @property
-    def form_id(self):
-        return self.generic_modal.form_id
-
-    @property
-    def generic_modal(self):
-        return DocumentUploadModal(
-            form=self.form,
-            review=self.review,
-            citation_row=self.citation_row,
-            existing_document=self.existing_document,
-            route_name="screen_l2_row_upload",
-            prefix="l2-screening",
-        )
-
-    def render(self):
-        return self.generic_modal.render()

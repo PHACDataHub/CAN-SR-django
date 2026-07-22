@@ -161,7 +161,6 @@ def ParameterCitationRowDisplay(
                 render_pdf_modal_button(
                     citation_row,
                     review,
-                    "parameter_extraction_row_upload",
                 ),
             ],
         ],
@@ -516,7 +515,6 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                 render_pdf_modal_button(
                     citation_row,
                     self.review,
-                    "parameter_extraction_row_upload",
                 )
                 if citation_row.document is None
                 else None
@@ -542,7 +540,6 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                 render_pdf_modal_button(
                     citation_row,
                     self.review,
-                    "parameter_extraction_row_upload",
                 )
                 if citation_row.document is not None
                 and not can_start_parameter_extraction(citation_row)
@@ -574,7 +571,6 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                     render_pdf_modal_button(
                         self.citation_row,
                         self.review,
-                        "parameter_extraction_row_upload",
                     ),
                     (
                         self.render_reextract_button()
