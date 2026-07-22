@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from proj.htpy import definition_list as DefList
+from proj.htpy.components import PercentFormatter
 from proj.htpy.util import polling_attrs
 
 from my_app.models import (
@@ -543,10 +544,6 @@ class L1CitationScreeningPage(BasePageTemplate):
         ]
 
     def render_result(self, result: L1ScreeningResult):
-        if result.confidence is None:
-            confidence_value = tdt("None")
-        else:
-            confidence_value = str(result.confidence)
 
         return DefList.DL(
             [
@@ -559,7 +556,7 @@ class L1CitationScreeningPage(BasePageTemplate):
                     tdt("Selected option"),
                     render_l1_human_review_control(result, self.review),
                 ),
-                (tdt("Confidence"), confidence_value),
+                (tdt("Confidence"), PercentFormatter(result.confidence)),
                 (tdt("Notes"), result.explanation or tdt("None")),
             ]
         )

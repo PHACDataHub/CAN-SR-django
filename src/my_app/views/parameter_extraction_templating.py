@@ -5,6 +5,7 @@ from django.utils.text import Truncator
 import htpy as h
 
 from proj.htpy import definition_list as DefList
+from proj.htpy.components import PercentFormatter
 from proj.htpy.util import polling_attrs
 
 from my_app.models import (
@@ -628,11 +629,6 @@ class ParameterExtractionPdfPage(BasePageTemplate):
         )
 
     def render_result(self, result: ParameterExtractionResult):
-        if result.confidence is None:
-            confidence_value = tdt("None")
-        else:
-            confidence_value = str(result.confidence)
-
         if result.found:
             found_value = tdt("Yes")
         else:
@@ -649,7 +645,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                     ),
                     (tdt("Found"), found_value),
                     (tdt("Value"), result.value or tdt("None")),
-                    (tdt("Confidence"), confidence_value),
+                    (tdt("Confidence"), PercentFormatter(result.confidence)),
                     (tdt("Notes"), result.explanation or tdt("None")),
                     (
                         tdt("Evidence sentences"),

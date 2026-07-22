@@ -3,6 +3,7 @@ from django.utils.text import Truncator
 import htpy as h
 
 from proj.htpy import definition_list as DefList
+from proj.htpy.components import PercentFormatter
 
 from my_app.models import (
     Citation,
@@ -288,10 +289,6 @@ class L2PdfScreeningPage(BasePageTemplate):
         )
 
     def render_result(self, result: L2ScreeningResult):
-        if result.confidence is None:
-            confidence_value = tdt("None")
-        else:
-            confidence_value = str(result.confidence)
 
         return DefList.DL(
             [
@@ -304,7 +301,7 @@ class L2PdfScreeningPage(BasePageTemplate):
                     tdt("Selected option"),
                     render_l2_human_review_control(result, self.review),
                 ),
-                (tdt("Confidence"), confidence_value),
+                (tdt("Confidence"), PercentFormatter(result.confidence)),
                 (tdt("Notes"), result.explanation or tdt("None")),
                 (
                     tdt("Evidence sentences"),
