@@ -118,3 +118,10 @@ def static_no_cache(path):
     if settings.DEBUG:
         return static(path)
     return static(path) + f"?v={settings.STATIC_BUST_TOKEN}"
+
+
+def polling_attrs(hx_trigger, interval="5s"):
+    if settings.ENABLE_HTMX_POLLING:
+        hx_trigger = f"{hx_trigger}, every {interval}"
+
+    return {"hx_trigger": hx_trigger}

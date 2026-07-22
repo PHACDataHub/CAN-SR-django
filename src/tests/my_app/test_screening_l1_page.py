@@ -1,3 +1,4 @@
+from django.test import override_settings
 from django.urls import reverse
 
 import pytest
@@ -42,7 +43,26 @@ def test_screening_l1_shell_renders_component_and_refresh_button(
     assert reverse("screening_l1_component", args=[review.id]) in body
     assert 'hx-target="#l1-screening-component"' in body
     assert 'hx-swap="outerHTML"' in body
+    assert 'hx-trigger="click from:#refresh-button, every 5s"' in body
     assert "Completed" in body
+
+
+@override_settings(ENABLE_HTMX_POLLING=False)
+def test_screening_l1_shell_can_disable_polling(vanilla_client):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    CitationFactory(dataset=dataset, order=1)
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("screening_l1", args=[review.id]), {"page": 1}
+        )
+
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'hx-trigger="click from:#refresh-button"' in body
+    assert "every 5s" not in body
 
 
 def test_screening_l1_component_view_renders(vanilla_client):

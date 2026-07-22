@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from proj.htpy import definition_list as DefList
+from proj.htpy.util import polling_attrs
 
 from my_app.models import (
     Citation,
@@ -96,6 +97,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
         h.a(
             ".btn.btn-outline-secondary.btn-sm.position-absolute.bottom-0.end-0.me-3.mb-2",
             href=details_url,
+            id=f"l1-screening-row-details-btn-{citation_row.id}",
         )[tdt("View more")],
     ]
 
@@ -215,9 +217,10 @@ class L1ScreeningComponent:
             id="l1-screening-component",
             hx_target="this",
             hx_get=self.page_url(self.page_number, self.component_url),
-            hx_trigger="click from:#refresh-button",
             hx_swap="outerHTML",
             hx_disabled_elt="#refresh-button",
+            hx_sync="this:replace",
+            **polling_attrs("click from:#refresh-button"),
         )[
             h.div(".row.g-4")[
                 h.div(".col-lg-5")[self.render_progress_panel()],
