@@ -61,6 +61,7 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=Csv())
 CORS_ALLOWED_ORIGINS = ["*"]
 
 FEATURE_FLAG = config("FEATURE_FLAG", default=False, cast=bool)
+ENABLE_HTMX_POLLING = config("ENABLE_HTMX_POLLING", default=True, cast=bool)
 
 
 # Application definition

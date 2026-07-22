@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from proj.htpy import definition_list as DefList
+from proj.htpy.util import polling_attrs
 
 from my_app.models import (
     Citation,
@@ -36,6 +37,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
     fetcher = L1ScreeningStatusFetcher.get_instance()
     status = fetcher.get(citation_row.id)
 
+    btn_id = f"l1-screening-row-screen-btn-{citation_row.id}"
     if status is ScreeningResultStatus.NOT_STARTED:
         screen_action_url = url_with_same_params(
             request,
@@ -45,22 +47,31 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
             ),
             page=get_page_number(),
         )
-        button_markup = (
-            h.button(
-                ".btn.btn-outline-primary.btn-sm",
-                type="button",
-                hx_post=screen_action_url,
-                hx_target="closest .citation-item",
-                hx_swap="innerHTML",
-                hx_disabled_elt="this",
-            )[tdt("Screen this row")],
-        )
+        button_markup = h.button(
+            ".btn.btn-outline-primary.btn-sm",
+            type="button",
+            hx_post=screen_action_url,
+            hx_target="closest .citation-item",
+            hx_swap="innerHTML",
+            hx_disabled_elt="this",
+            id=btn_id,
+        )[tdt("Screen this row")]
+    elif status is ScreeningResultStatus.PENDING:
+        button_markup = h.button(
+            ".btn.btn-outline-secondary.btn-sm.btn-disabled.disabled",
+            type="button",
+            aria_disabled=True,
+            tabindex="-1",
+            id=btn_id,
+        )[tdt("Screening...")]
     else:
         button_markup = h.button(
             ".btn.btn-outline-secondary.btn-sm.btn-disabled.disabled",
             type="button",
-            disabled=True,
-        )[tdt("Screening")]
+            aria_disabled=True,
+            tabindex="-1",
+            id=btn_id,
+        )[ScreeningResultStatus(status).label]
 
     row_id = f"l1-screening-row-{citation_row.id}"
 
@@ -86,6 +97,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
         h.a(
             ".btn.btn-outline-secondary.btn-sm.position-absolute.bottom-0.end-0.me-3.mb-2",
             href=details_url,
+            id=f"l1-screening-row-details-btn-{citation_row.id}",
         )[tdt("View more")],
     ]
 
@@ -205,9 +217,10 @@ class L1ScreeningComponent:
             id="l1-screening-component",
             hx_target="this",
             hx_get=self.page_url(self.page_number, self.component_url),
-            hx_trigger="click from:#refresh-button",
             hx_swap="outerHTML",
             hx_disabled_elt="#refresh-button",
+            hx_sync="this:replace",
+            **polling_attrs("click from:#refresh-button"),
         )[
             h.div(".row.g-4")[
                 h.div(".col-lg-5")[self.render_progress_panel()],

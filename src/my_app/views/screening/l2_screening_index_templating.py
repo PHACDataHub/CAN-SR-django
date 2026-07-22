@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 import htpy as h
 
+from proj.htpy.util import polling_attrs
+
 from my_app.models import (
     Citation,
     L2ScreeningQuestion,
@@ -169,9 +171,11 @@ class L2ScreeningComponent:
             id="l2-screening-component",
             hx_target="this",
             hx_get=self.page_url(self.page_number, self.component_url),
-            hx_trigger="click from:#refresh-button, citations-update from:body",
-            hx_swap="outerHTML",
+            hx_swap="morph:outerHTML",
             hx_disabled_elt="#refresh-button",
+            **polling_attrs(
+                "click from:#refresh-button, citations-update from:body"
+            ),
         )[
             h.div(".row.g-4")[
                 h.div(".col-lg-5")[self.render_progress_panel()],
