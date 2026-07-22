@@ -5,6 +5,7 @@ from django.utils.text import Truncator
 import htpy as h
 
 from proj.htpy import definition_list as DefList
+from proj.htpy.components import PercentFormatter
 from proj.htpy.util import polling_attrs
 
 from my_app.models import (
@@ -160,7 +161,6 @@ def ParameterCitationRowDisplay(
                 render_pdf_modal_button(
                     citation_row,
                     review,
-                    "parameter_extraction_row_upload",
                 ),
             ],
         ],
@@ -515,7 +515,6 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                 render_pdf_modal_button(
                     citation_row,
                     self.review,
-                    "parameter_extraction_row_upload",
                 )
                 if citation_row.document is None
                 else None
@@ -541,7 +540,6 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                 render_pdf_modal_button(
                     citation_row,
                     self.review,
-                    "parameter_extraction_row_upload",
                 )
                 if citation_row.document is not None
                 and not can_start_parameter_extraction(citation_row)
@@ -573,7 +571,6 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                     render_pdf_modal_button(
                         self.citation_row,
                         self.review,
-                        "parameter_extraction_row_upload",
                     ),
                     (
                         self.render_reextract_button()
@@ -628,11 +625,6 @@ class ParameterExtractionPdfPage(BasePageTemplate):
         )
 
     def render_result(self, result: ParameterExtractionResult):
-        if result.confidence is None:
-            confidence_value = tdt("None")
-        else:
-            confidence_value = str(result.confidence)
-
         if result.found:
             found_value = tdt("Yes")
         else:
@@ -649,7 +641,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                     ),
                     (tdt("Found"), found_value),
                     (tdt("Value"), result.value or tdt("None")),
-                    (tdt("Confidence"), confidence_value),
+                    (tdt("Confidence"), PercentFormatter(result.confidence)),
                     (tdt("Notes"), result.explanation or tdt("None")),
                     (
                         tdt("Evidence sentences"),

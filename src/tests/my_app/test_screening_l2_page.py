@@ -168,7 +168,7 @@ def test_screening_l2_component_view_renders_row_view_link(vanilla_client):
 
     body = response.content.decode()
     details_url = reverse("screen_l2_row_details", args=[review.id, row.id])
-    upload_url = reverse("screen_l2_row_upload", args=[review.id, row.id])
+    upload_url = reverse("citation_document_upload", args=[review.id, row.id])
 
     assert response.status_code == 200
     assert details_url in body
@@ -277,7 +277,9 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
         'data-evidence-type="figure" data-evidence-index="4">Figure 4</button>'
         in body
     )
-    assert reverse("screen_l2_row_upload", args=[review.id, row.id]) in body
+    assert (
+        reverse("citation_document_upload", args=[review.id, row.id]) in body
+    )
     assert "More" in body
     assert "Re-upload" in body
     assert "Re-screen" in body
@@ -859,7 +861,7 @@ def test_screening_l2_component_view_renders_upload_and_screening_statuses(
     assert "Pending" in body
 
 
-def test_screen_l2_row_upload_view_renders_plain_upload_form(
+def test_citation_document_upload_view_renders_plain_upload_form(
     vanilla_client,
 ):
     review = ReviewFactory()
@@ -868,7 +870,7 @@ def test_screen_l2_row_upload_view_renders_plain_upload_form(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l2_row_upload", args=[review.id, row.id])
+            reverse("citation_document_upload", args=[review.id, row.id])
         )
 
     body = response.content.decode()
@@ -879,7 +881,7 @@ def test_screen_l2_row_upload_view_renders_plain_upload_form(
     assert "confirm_replace" not in body
 
 
-def test_screen_l2_row_upload_view_renders_replace_form_for_existing_document(
+def test_citation_document_upload_view_renders_replace_form_for_existing_document(
     vanilla_client,
 ):
     review = ReviewFactory()
@@ -890,7 +892,7 @@ def test_screen_l2_row_upload_view_renders_replace_form_for_existing_document(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l2_row_upload", args=[review.id, row.id])
+            reverse("citation_document_upload", args=[review.id, row.id])
         )
 
     body = response.content.decode()
@@ -901,7 +903,7 @@ def test_screen_l2_row_upload_view_renders_replace_form_for_existing_document(
     assert "I understand this will delete the existing document" in body
 
 
-def test_screen_l2_row_upload_view_uploads_document_and_triggers_refresh(
+def test_citation_document_upload_view_uploads_document_and_triggers_refresh(
     vanilla_client,
 ):
     review = ReviewFactory()
@@ -910,10 +912,10 @@ def test_screen_l2_row_upload_view_uploads_document_and_triggers_refresh(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.screening.l2_screening_views.QueueProcessDocumentService.perform"
+            "my_app.views.citation_document_upload.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
-                reverse("screen_l2_row_upload", args=[review.id, row.id]),
+                reverse("citation_document_upload", args=[review.id, row.id]),
                 {
                     "document_file": _build_pdf_file(),
                 },
@@ -929,7 +931,7 @@ def test_screen_l2_row_upload_view_uploads_document_and_triggers_refresh(
     assert Document.objects.filter(pk=row.document_id).exists()
 
 
-def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
+def test_citation_document_upload_view_replaces_document_and_deletes_old_data(
     vanilla_client,
 ):
     review = ReviewFactory()
@@ -965,10 +967,10 @@ def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.screening.l2_screening_views.QueueProcessDocumentService.perform"
+            "my_app.views.citation_document_upload.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
-                reverse("screen_l2_row_upload", args=[review.id, row.id]),
+                reverse("citation_document_upload", args=[review.id, row.id]),
                 {
                     "document_file": new_file,
                     "confirm_replace": "on",
@@ -988,7 +990,7 @@ def test_screen_l2_row_upload_view_replaces_document_and_deletes_old_data(
     assert ParameterExtractionResult.objects.filter(citation=row).count() == 0
 
 
-def test_screen_l2_row_upload_view_rejects_replace_without_confirmation(
+def test_citation_document_upload_view_rejects_replace_without_confirmation(
     vanilla_client,
 ):
     review = ReviewFactory()
@@ -999,7 +1001,7 @@ def test_screen_l2_row_upload_view_rejects_replace_without_confirmation(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
-            reverse("screen_l2_row_upload", args=[review.id, row.id]),
+            reverse("citation_document_upload", args=[review.id, row.id]),
             {
                 "document_file": _build_pdf_file(),
             },

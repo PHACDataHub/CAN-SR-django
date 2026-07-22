@@ -53,3 +53,12 @@ def _render_json_value(value):
         return str(value)
 
     return value
+
+
+def PercentFormatter(value, places=0):
+    if value is None:
+        return h.span(".text-muted")[tdt("null")]
+
+    pct = value * 100
+
+    return f"{pct:.{places}f}%"
