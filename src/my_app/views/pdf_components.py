@@ -107,13 +107,18 @@ def render_pdf_modal_button(
     review: Review,
     route_name,
 ):
+    if citation_row.document is None:
+        btn_text = tdt("Upload")
+    else:
+        btn_text = tdt("Re-upload")
     return h.button(
         ".btn.btn-outline-primary.btn-sm",
+        id=f"upload-btn-{citation_row.id}",
         type="button",
         hx_get=reverse(route_name, args=[review.id, citation_row.id]),
         hx_target="#modal-slot",
         hx_swap="innerHTML",
-    )[tdt("Re-upload") if citation_row.document is not None else tdt("Upload")]
+    )[btn_text]
 
 
 @dataclass
