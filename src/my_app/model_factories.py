@@ -8,6 +8,8 @@ from my_app.models import (
     CitationDatasetColumn,
     DemoTaskRun,
     Document,
+    DocumentProcessingRequest,
+    FigureExtractionResult,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L1ScreeningResult,
@@ -66,6 +68,20 @@ class TextExtractionResultFactory(factory.django.DjangoModelFactory):
         model = TextExtractionResult
 
     document = factory.SubFactory(DocumentFactory)
+
+
+class FigureExtractionResultFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = FigureExtractionResult
+
+    document = factory.SubFactory(DocumentFactory)
+
+
+class DocumentProcessingRequestFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = DocumentProcessingRequest
+
+    citation = factory.SubFactory("my_app.model_factories.CitationFactory")
 
 
 class ReviewUserLinkFactory(factory.django.DjangoModelFactory):

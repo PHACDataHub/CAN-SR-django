@@ -62,7 +62,10 @@ def test_process_text_extraction_result_task_populates_result_and_marks_complete
         queued_task = DatabaseTask.objects.get()
         assert queued_task.kwargs_json["document_id"] == document.id
 
-        call_command("run_database_tasks", verbosity=0)
+        with patch(
+            "my_app.services.text_extraction.enqueue_requested_post_processing"
+        ) as post_processing:
+            call_command("run_database_tasks", verbosity=0)
 
     queued_task.refresh_from_db()
     assert queued_task.status == "SUCCESSFUL"
@@ -77,6 +80,7 @@ def test_process_text_extraction_result_task_populates_result_and_marks_complete
     assert text_extraction_result.pages
     assert text_extraction_result.coordinates
     assert text_extraction_result.raw_xml
+    post_processing.assert_called_once_with(document.id)
 
 
 def test_text_extraction_service_marks_failed_when_processing_raises(
