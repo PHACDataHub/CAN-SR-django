@@ -33,6 +33,7 @@ from my_app.models import (
     ScreeningResultStatus,
     TextExtractionResult,
 )
+from tests.utils_for_testing import soup_from_str
 
 pytestmark = [pytest.mark.view, pytest.mark.l2_screening]
 
@@ -881,6 +882,63 @@ def test_citation_document_upload_view_renders_plain_upload_form(
     assert "confirm_replace" not in body
 
 
+def test_citation_document_upload_view_disables_unconfigured_processing_options(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset, order=1)
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("citation_document_upload", args=[review.id, row.id])
+        )
+
+    soup = soup_from_str(response.content)
+    l2_checkbox = soup.find("input", {"name": "should_run_l2_screening"})
+    parameter_checkbox = soup.find(
+        "input", {"name": "should_run_parameter_extraction"}
+    )
+
+    assert response.status_code == 200
+    assert l2_checkbox.has_attr("disabled")
+    assert parameter_checkbox.has_attr("disabled")
+    assert (
+        "L2 screening criteria have not been configured for this review."
+        in response.content.decode()
+    )
+    assert (
+        "Parameters have not been configured for this review."
+        in response.content.decode()
+    )
+
+
+def test_citation_document_upload_view_enables_configured_processing_options(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset, order=1)
+    l2_question = L2ScreeningQuestionFactory(review=review)
+    L2ScreeningQuestionOptionFactory(question=l2_question)
+    ParameterFactory(category=ParameterCategoryFactory(review=review))
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("citation_document_upload", args=[review.id, row.id])
+        )
+
+    soup = soup_from_str(response.content)
+    l2_checkbox = soup.find("input", {"name": "should_run_l2_screening"})
+    parameter_checkbox = soup.find(
+        "input", {"name": "should_run_parameter_extraction"}
+    )
+
+    assert response.status_code == 200
+    assert not l2_checkbox.has_attr("disabled")
+    assert not parameter_checkbox.has_attr("disabled")
+
+
 def test_citation_document_upload_view_renders_replace_form_for_existing_document(
     vanilla_client,
 ):
@@ -929,6 +987,40 @@ def test_citation_document_upload_view_uploads_document_and_triggers_refresh(
     row.refresh_from_db()
     assert row.document is not None
     assert Document.objects.filter(pk=row.document_id).exists()
+
+
+def test_citation_document_upload_view_passes_processing_options_to_service(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset, order=1)
+    l2_question = L2ScreeningQuestionFactory(review=review)
+    L2ScreeningQuestionOptionFactory(question=l2_question)
+    ParameterFactory(category=ParameterCategoryFactory(review=review))
+
+    with patch_rules(can_access_review=True):
+        with patch(
+            "my_app.views.citation_document_upload.QueueProcessDocumentService"
+        ) as service_mock:
+            response = vanilla_client.post(
+                reverse("citation_document_upload", args=[review.id, row.id]),
+                {
+                    "document_file": _build_pdf_file(),
+                    "should_run_l2_screening": "on",
+                    "should_run_parameter_extraction": "on",
+                },
+            )
+
+    row.refresh_from_db()
+
+    assert response.status_code == 200
+    service_mock.assert_called_once_with(
+        document=row.document,
+        should_run_l2_screening=True,
+        should_run_parameter_extraction=True,
+    )
+    service_mock.return_value.perform.assert_called_once_with()
 
 
 def test_citation_document_upload_view_replaces_document_and_deletes_old_data(
