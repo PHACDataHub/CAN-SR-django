@@ -150,9 +150,14 @@ def test_figure_extraction_service_saves_result_to_database(tmp_path):
         client = MagicMock()
         client.extract_figures.return_value = result
 
-        with patch(
-            "my_app.services.figure_extraction_service.get_figure_extraction_client",
-            return_value=client,
+        with (
+            patch(
+                "my_app.services.figure_extraction_service.get_figure_extraction_client",
+                return_value=client,
+            ),
+            patch(
+                "my_app.services.figure_extraction_service.enqueue_requested_post_processing"
+            ) as post_processing,
         ):
             FigureExtractionService(document=document).perform()
 
@@ -174,6 +179,7 @@ def test_figure_extraction_service_saves_result_to_database(tmp_path):
         f"documents/{document.id}/figures/example_figure_1.png"
     )
     assert figure_bytes == b"png bytes"
+    post_processing.assert_called_once_with(document.id)
 
 
 def test_figure_extraction_service_replaces_existing_artifacts(tmp_path):

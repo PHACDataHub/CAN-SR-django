@@ -9,18 +9,66 @@ from phac_aspc.vanilla import group_by
 
 from my_app.models import (
     Citation,
+    FigureExtractionResult,
     L1ScreeningQuestion,
     L1ScreeningResult,
     L2ScreeningQuestion,
+    L2ScreeningQuestionOption,
     L2ScreeningResult,
     LanguageModel,
     Parameter,
+    ParameterCategory,
     ParameterExtractionResult,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
+    TextExtractionResult,
 )
 from shortcuts import logger
+
+
+def is_l2_screening_defined(citation_id: int) -> bool:
+    review_filter = {"review__citation_dataset__rows__id": citation_id}
+    has_questions = L2ScreeningQuestion.objects.filter(
+        **review_filter
+    ).exists()
+    has_options = L2ScreeningQuestionOption.objects.filter(
+        question__review__citation_dataset__rows__id=citation_id
+    ).exists()
+    return has_questions and has_options
+
+
+def is_parameter_extraction_defined(citation_id: int) -> bool:
+    review_filter = {"review__citation_dataset__rows__id": citation_id}
+    has_categories = ParameterCategory.objects.filter(**review_filter).exists()
+    has_parameters = Parameter.objects.filter(
+        category__review__citation_dataset__rows__id=citation_id
+    ).exists()
+    return has_categories and has_parameters
+
+
+def _has_completed_document_extraction(citation_id: int) -> bool:
+    return Citation.objects.filter(
+        id=citation_id,
+        document__text_extraction_result__status=(
+            TextExtractionResult.TextExtractionStatus.COMPLETED
+        ),
+        document__figure_extraction_result__status=(
+            FigureExtractionResult.Status.COMPLETED
+        ),
+    ).exists()
+
+
+def is_ready_for_l2_screening(citation_id: int) -> bool:
+    return is_l2_screening_defined(
+        citation_id
+    ) and _has_completed_document_extraction(citation_id)
+
+
+def is_ready_for_parameter_extraction(citation_id: int) -> bool:
+    return is_parameter_extraction_defined(
+        citation_id
+    ) and _has_completed_document_extraction(citation_id)
 
 
 @cached_within_request

@@ -4,24 +4,105 @@ from data_fetcher.middleware import GlobalRequest
 from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
+    DocumentFactory,
+    FigureExtractionResultFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningQuestionOptionFactory,
     L1ScreeningResultFactory,
+    L2ScreeningQuestionFactory,
+    L2ScreeningQuestionOptionFactory,
     ParameterCategoryFactory,
     ParameterExtractionResultFactory,
     ParameterFactory,
     ReviewFactory,
+    TextExtractionResultFactory,
     UserFactory,
 )
-from my_app.models import ScreeningResultStatus
+from my_app.models import (
+    FigureExtractionResult,
+    ScreeningResultStatus,
+    TextExtractionResult,
+)
 from my_app.queries import (
     L1ScreeningStatusFetcher,
     get_adjacent_citation_ids,
     get_l1_screening_progress_stats,
     get_parameter_extraction_progress_stats,
+    is_l2_screening_defined,
+    is_parameter_extraction_defined,
+    is_ready_for_l2_screening,
+    is_ready_for_parameter_extraction,
 )
 
 pytestmark = [pytest.mark.backend, pytest.mark.l1_screening]
+
+
+def test_is_l2_screening_defined_requires_a_question_and_option():
+    citation = CitationFactory()
+
+    assert is_l2_screening_defined(citation.id) is False
+
+    question = L2ScreeningQuestionFactory(review=citation.dataset.review)
+    assert is_l2_screening_defined(citation.id) is False
+
+    L2ScreeningQuestionOptionFactory(question=question)
+    assert is_l2_screening_defined(citation.id) is True
+
+
+def test_is_parameter_extraction_defined_requires_a_category_and_parameter():
+    citation = CitationFactory()
+
+    assert is_parameter_extraction_defined(citation.id) is False
+
+    category = ParameterCategoryFactory(review=citation.dataset.review)
+    assert is_parameter_extraction_defined(citation.id) is False
+
+    ParameterFactory(category=category)
+    assert is_parameter_extraction_defined(citation.id) is True
+
+
+def test_is_ready_for_l2_screening_requires_successful_document_extraction():
+    document = DocumentFactory()
+    citation = CitationFactory(document=document)
+    question = L2ScreeningQuestionFactory(review=citation.dataset.review)
+    L2ScreeningQuestionOptionFactory(question=question)
+
+    assert is_ready_for_l2_screening(citation.id) is False
+
+    TextExtractionResultFactory(
+        document=document,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
+    )
+    FigureExtractionResultFactory(
+        document=document,
+        status=FigureExtractionResult.Status.PENDING,
+    )
+    assert is_ready_for_l2_screening(citation.id) is False
+
+    document.figure_extraction_result.status = (
+        FigureExtractionResult.Status.COMPLETED
+    )
+    document.figure_extraction_result.save()
+    assert is_ready_for_l2_screening(citation.id) is True
+
+
+def test_is_ready_for_parameter_extraction_requires_defined_parameters():
+    document = DocumentFactory()
+    citation = CitationFactory(document=document)
+    TextExtractionResultFactory(
+        document=document,
+        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
+    )
+    FigureExtractionResultFactory(
+        document=document,
+        status=FigureExtractionResult.Status.COMPLETED,
+    )
+
+    assert is_ready_for_parameter_extraction(citation.id) is False
+
+    category = ParameterCategoryFactory(review=citation.dataset.review)
+    ParameterFactory(category=category)
+    assert is_ready_for_parameter_extraction(citation.id) is True
 
 
 def test_l1_screening_status_fetcher_returns_not_started_for_missing_results():

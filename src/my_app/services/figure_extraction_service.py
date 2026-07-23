@@ -11,6 +11,9 @@ from my_app.models import (
 )
 from my_app.pdf.figure_extraction.azure import FigureExtractionResultData
 from my_app.pdf.figure_extraction.client import get_figure_extraction_client
+from my_app.services.document_post_processing import (
+    enqueue_requested_post_processing,
+)
 from shortcuts import cached_property, logger
 
 
@@ -138,3 +141,4 @@ class FigureExtractionService:
             self.save_figures()
             self.save_tables()
             self.set_success()
+            enqueue_requested_post_processing(self.document.id)

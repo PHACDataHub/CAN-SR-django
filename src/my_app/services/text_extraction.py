@@ -1,6 +1,11 @@
+from django.db import transaction
+
 from my_app.models import Document, TextExtractionResult
 from my_app.pdf.text_extraction.processors import get_pdf_processor
 from my_app.pdf.text_extraction.tei import GrobidTeiParser
+from my_app.services.document_post_processing import (
+    enqueue_requested_post_processing,
+)
 from shortcuts import logger
 
 
@@ -64,23 +69,25 @@ class TextExtractionService:
 
         document = self.document
         text_extraction_result = document.text_extraction_result
-
         try:
             raw_xml = get_pdf_processor().process_pdf(document.file)
             parser = GrobidTeiParser(raw_xml)
             pages = parser.get_pages()
             coordinates = parser.get_coordinates()
         except Exception:
-            text_extraction_result.status = (
-                TextExtractionResult.TextExtractionStatus.FAILED
-            )
-            text_extraction_result.save(update_fields=["status"])
+            with transaction.atomic():
+                text_extraction_result.status = (
+                    TextExtractionResult.TextExtractionStatus.FAILED
+                )
+                text_extraction_result.save(update_fields=["status"])
             raise
 
-        text_extraction_result.raw_xml = raw_xml
-        text_extraction_result.pages = pages
-        text_extraction_result.coordinates = coordinates
-        text_extraction_result.status = (
-            TextExtractionResult.TextExtractionStatus.COMPLETED
-        )
-        text_extraction_result.save()
+        with transaction.atomic():
+            text_extraction_result.raw_xml = raw_xml
+            text_extraction_result.pages = pages
+            text_extraction_result.coordinates = coordinates
+            text_extraction_result.status = (
+                TextExtractionResult.TextExtractionStatus.COMPLETED
+            )
+            text_extraction_result.save()
+            enqueue_requested_post_processing(document.id)
