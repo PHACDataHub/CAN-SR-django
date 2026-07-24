@@ -250,7 +250,7 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert "Looks eligible." in body
     assert 'id="l2-citation-data"' in body
     assert (
-        f'data-pdf-url="{reverse("screen_l2_row_pdf", args=[review.id, row.id])}"'
+        f'data-pdf-url="{reverse("citation_document_pdf", args=[review.id, row.id])}"'
         in body
     )
     assert (
@@ -574,7 +574,7 @@ def test_screen_l2_row_pdf_view_streams_linked_document(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l2_row_pdf", args=[review.id, row.id])
+            reverse("citation_document_pdf", args=[review.id, row.id])
         )
 
     assert response.status_code == 200
@@ -724,7 +724,7 @@ def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
 @pytest.mark.parametrize(
     "url_name",
     [
-        "screen_l2_row_pdf",
+        "citation_document_pdf",
         "screen_l2_row_pdf_metadata",
     ],
 )
@@ -768,7 +768,7 @@ def test_screen_l2_row_pdf_metadata_view_returns_404_without_result(
     [
         "screen_l2_row_details",
         "screen_l2_row_process",
-        "screen_l2_row_pdf",
+        "citation_document_pdf",
         "screen_l2_row_pdf_metadata",
     ],
 )
@@ -797,7 +797,7 @@ def test_screen_l2_row_pdf_views_require_review_access(
     [
         "screen_l2_row_details",
         "screen_l2_row_process",
-        "screen_l2_row_pdf",
+        "citation_document_pdf",
         "screen_l2_row_pdf_metadata",
     ],
 )
@@ -970,7 +970,7 @@ def test_citation_document_upload_view_uploads_document_and_triggers_refresh(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.citation_document_upload.QueueProcessDocumentService.perform"
+            "my_app.views.pdf_views.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
                 reverse("citation_document_upload", args=[review.id, row.id]),
@@ -1001,7 +1001,7 @@ def test_citation_document_upload_view_passes_processing_options_to_service(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.citation_document_upload.QueueProcessDocumentService"
+            "my_app.views.pdf_views.QueueProcessDocumentService"
         ) as service_mock:
             response = vanilla_client.post(
                 reverse("citation_document_upload", args=[review.id, row.id]),
@@ -1059,7 +1059,7 @@ def test_citation_document_upload_view_replaces_document_and_deletes_old_data(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.citation_document_upload.QueueProcessDocumentService.perform"
+            "my_app.views.pdf_views.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
                 reverse("citation_document_upload", args=[review.id, row.id]),

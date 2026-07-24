@@ -25,7 +25,10 @@ from my_app.views.screening.l1_screening_templating import (
     render_l1_human_review_control,
     render_l1_screening_control,
 )
-from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
+from my_app.views.view_utils import (
+    MustAccessReviewMixin,
+    paginated_component_response,
+)
 from shortcuts import (
     DetailView,
     GenericForm,
@@ -85,18 +88,11 @@ class ScreeningL1ComponentView(L1ScreeningBaseView):
             request=self.request,
         )
 
-        new_page_url = reverse("screening_l1", args=[self.review.id])
-        response_headers = {
-            "HX-Push-Url": url_with_same_params(
-                self.request,
-                path=new_page_url,
-                page=page_obj.number,
-            )
-        }
-
-        return HttpResponse(
-            str(component.render()),
-            headers=response_headers,
+        return paginated_component_response(
+            self.request,
+            page_obj,
+            component.render(),
+            reverse("screening_l1", args=[self.review.id]),
             **response_kwargs,
         )
 

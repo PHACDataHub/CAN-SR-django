@@ -173,7 +173,7 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     assert "Modify human values" in body
     assert 'id="parameter-extraction-citation-data"' in body
     assert (
-        f'data-pdf-url="{reverse("parameter_extraction_row_pdf", args=[review.id, row.id])}"'
+        f'data-pdf-url="{reverse("citation_document_pdf", args=[review.id, row.id])}"'
         in body
     )
     assert (
@@ -471,7 +471,7 @@ def test_parameter_extraction_pdf_metadata_view_returns_evidence_highlights(
     [
         "parameter_extraction_row_details",
         "parameter_extraction_row_process",
-        "parameter_extraction_row_pdf",
+        "citation_document_pdf",
         "parameter_extraction_row_pdf_metadata",
         "parameter_extraction_validate_ai_answer",
         "parameter_extraction_human_answer",

@@ -5,6 +5,8 @@ import htpy as h
 from my_app.models import ScreeningResultStatus
 from my_app.queries import get_adjacent_citation_ids
 from my_app.views.screening.util import BADGE_CLASSES
+from my_app.views.view_utils import url_with_same_params
+from shortcuts import breadcrumbs as bc
 from shortcuts import reverse, tdt
 
 
@@ -27,6 +29,146 @@ def NotStartedBadge():
 
 def EmptyCitationPageMessage():
     return h.p(".text-muted.mb-0")[tdt("No citations on this page.")]
+
+
+def WorkflowListPageContent(review, title, component):
+    return [
+        bc.BreadcrumbTrailForReview(review)[bc.BreadcrumbItem(label=title),],
+        h.h1[title],
+        h.div(".mb-3")[
+            h.button(
+                "#refresh-button.btn.btn-outline-secondary",
+                type="button",
+            )[tdt("Refresh")],
+        ],
+        component,
+    ]
+
+
+def WorkflowProgressPanel(panel_id, metrics, completed, total):
+    if total > 0:
+        progress_percent = int((completed / total) * 100)
+    else:
+        progress_percent = 0
+
+    metric_rows = [
+        h.div(
+            class_=(
+                "d-flex justify-content-between align-items-center "
+                + ("mb-3" if index == len(metrics) - 1 else "mb-2")
+            )
+        )[
+            h.span[label],
+            h.span(".fw-semibold")[str(value)],
+        ]
+        for index, (label, value) in enumerate(metrics)
+    ]
+
+    return h.section(
+        id=panel_id,
+        class_="border rounded p-3 bg-body-tertiary",
+    )[
+        h.h2(".h5.mb-3")[tdt("Progress")],
+        metric_rows,
+        h.div(".progress", role="progressbar")[
+            h.div(
+                ".progress-bar",
+                style=f"width: {progress_percent}%",
+                aria_valuenow=str(progress_percent),
+                aria_valuemin="0",
+                aria_valuemax="100",
+            )[f"{progress_percent}%"],
+        ],
+    ]
+
+
+def PaginatedCitationPanel(
+    *,
+    component_id,
+    component_url,
+    page_obj,
+    request,
+    rows,
+):
+    if not rows:
+        rows = [EmptyCitationPageMessage()]
+
+    pagination = CitationPagination(
+        component_id=component_id,
+        component_url=component_url,
+        page_obj=page_obj,
+        request=request,
+    )
+
+    return h.section(".border.rounded.p-3")[
+        h.div(".d-flex.justify-content-between.align-items-center.mb-3")[
+            h.h2(".h5.mb-0")[tdt("Citations")],
+            h.div(".text-muted.small")[
+                tdt("Page"),
+                " ",
+                str(page_obj.number),
+            ],
+        ],
+        pagination,
+        h.div(".list-group")[rows],
+    ]
+
+
+def CitationPagination(
+    *,
+    component_id,
+    component_url,
+    page_obj,
+    request,
+):
+    def page_url(page_number):
+        return url_with_same_params(
+            request,
+            path=component_url,
+            page=page_number,
+        )
+
+    common_button_attrs = {
+        "hx_target": f"#{component_id}",
+        "hx_swap": "outerHTML",
+        "hx_disabled_elt": "this",
+        "type": "button",
+        "class": "btn btn-outline-primary btn-sm",
+    }
+    previous_button = h.button(
+        hx_get=(
+            page_url(page_obj.previous_page_number())
+            if page_obj.has_previous()
+            else None
+        ),
+        disabled=not page_obj.has_previous(),
+        **common_button_attrs,
+    )[tdt("Previous")]
+    next_button = h.button(
+        hx_get=(
+            page_url(page_obj.next_page_number())
+            if page_obj.has_next()
+            else None
+        ),
+        disabled=not page_obj.has_next(),
+        **common_button_attrs,
+    )[tdt("Next")]
+
+    return h.div(".d-flex.justify-content-between.align-items-center.mb-3")[
+        h.div(".small.text-muted")[
+            tdt("Page"),
+            " ",
+            str(page_obj.number),
+            " ",
+            tdt("of"),
+            " ",
+            str(page_obj.paginator.num_pages),
+        ],
+        h.div(".btn-group")[
+            previous_button,
+            next_button,
+        ],
+    ]
 
 
 def CitationScreeningProgressNav(

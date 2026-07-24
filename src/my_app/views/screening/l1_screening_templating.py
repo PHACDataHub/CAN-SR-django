@@ -17,6 +17,9 @@ from my_app.queries import (
 )
 from my_app.views.screening.components import (
     CitationScreeningProgressNav,
+    PaginatedCitationPanel,
+    WorkflowListPageContent,
+    WorkflowProgressPanel,
     human_review_control_id,
     render_human_review_control,
 )
@@ -163,10 +166,6 @@ class L1ScreeningComponent:
         return reverse("screening_l1_component", args=[self.review.id])
 
     @property
-    def shell_url(self):
-        return reverse("screening_l1", args=[self.review.id])
-
-    @property
     def page_number(self):
         return self.page_obj.number
 
@@ -230,111 +229,26 @@ class L1ScreeningComponent:
         ]
 
     def render_progress_panel(self):
-        if self.total_citations > 0:
-            progress_percent = int(
-                (self.screened_citations / self.total_citations) * 100
-            )
-        else:
-            progress_percent = 0
-
-        return h.section(
-            id="l1-screening-progress-panel",
-            class_="border rounded p-3 bg-body-tertiary",
-        )[
-            h.h2(".h5.mb-3")[tdt("Progress")],
-            h.div(".d-flex.justify-content-between.align-items-center.mb-2")[
-                h.span[tdt("Total citations")],
-                h.span(".fw-semibold")[str(self.total_citations)],
+        return WorkflowProgressPanel(
+            "l1-screening-progress-panel",
+            metrics=[
+                (tdt("Total citations"), self.total_citations),
+                (tdt("Screened so far"), self.screened_citations),
+                (tdt("Screening questions"), len(self.screening_questions)),
             ],
-            h.div(".d-flex.justify-content-between.align-items-center.mb-2")[
-                h.span[tdt("Screened so far")],
-                h.span(".fw-semibold")[str(self.screened_citations)],
-            ],
-            h.div(".d-flex.justify-content-between.align-items-center.mb-3")[
-                h.span[tdt("Screening questions")],
-                h.span(".fw-semibold")[str(len(self.screening_questions))],
-            ],
-            h.div(".progress", role="progressbar")[
-                h.div(
-                    ".progress-bar",
-                    style=f"width: {progress_percent}%",
-                    aria_valuenow=str(progress_percent),
-                    aria_valuemin="0",
-                    aria_valuemax="100",
-                )[f"{progress_percent}%"],
-            ],
-        ]
+            completed=self.screened_citations,
+            total=self.total_citations,
+        )
 
     def render_citations_panel(self):
-        if self.page_rows:
-            rows = [
-                CitationRowDisplay(row, self.review) for row in self.page_rows
-            ]
-        else:
-            rows = [h.p(".text-muted.mb-0")[tdt("No citations on this page.")]]
-
-        return h.section(".border.rounded.p-3")[
-            h.div(".d-flex.justify-content-between.align-items-center.mb-3")[
-                h.h2(".h5.mb-0")[tdt("Citations")],
-                h.div(".text-muted.small")[
-                    tdt("Page"),
-                    " ",
-                    str(self.page_number),
-                ],
-            ],
-            self.render_pagination_controls(),
-            h.div(".list-group")[rows],
-        ]
-
-    def render_pagination_controls(self):
-        common_button_attrs = {
-            "hx_target": "#l1-screening-component",
-            "hx_swap": "outerHTML",
-            "hx_disabled_elt": "this",
-            "type": "button",
-            "class": "btn btn-outline-primary btn-sm",
-        }
-        previous_button = h.button(
-            hx_get=(
-                self.page_url(
-                    self.page_obj.previous_page_number(), self.component_url
-                )
-                if self.page_obj.has_previous()
-                else None
-            ),
-            disabled=not self.page_obj.has_previous(),
-            **common_button_attrs,
-        )[tdt("Previous")]
-
-        next_button = h.button(
-            hx_get=(
-                self.page_url(
-                    self.page_obj.next_page_number(), self.component_url
-                )
-                if self.page_obj.has_next()
-                else None
-            ),
-            disabled=not self.page_obj.has_next(),
-            **common_button_attrs,
-        )[tdt("Next")]
-
-        return h.div(
-            ".d-flex.justify-content-between.align-items-center.mb-3"
-        )[
-            h.div(".small.text-muted")[
-                tdt("Page"),
-                " ",
-                str(self.page_number),
-                " ",
-                tdt("of"),
-                " ",
-                str(self.page_obj.paginator.num_pages),
-            ],
-            h.div(".btn-group")[
-                previous_button,
-                next_button,
-            ],
-        ]
+        rows = [CitationRowDisplay(row, self.review) for row in self.page_rows]
+        return PaginatedCitationPanel(
+            component_id="l1-screening-component",
+            component_url=self.component_url,
+            page_obj=self.page_obj,
+            request=self.request,
+            rows=rows,
+        )
 
     def page_url(self, page_number, path):
         return url_with_same_params(
@@ -354,19 +268,11 @@ class L1ScreeningPageTemplate(BasePageTemplate):
             request=self.request,
         )
 
-        return [
-            bc.BreadcrumbTrailForReview(review)[
-                bc.BreadcrumbItem(label=tdt("L1 Screening")),
-            ],
-            h.h1[tdt("L1 Screening")],
-            h.div(".mb-3")[
-                h.button(
-                    "#refresh-button.btn.btn-outline-secondary",
-                    type="button",
-                )[tdt("Refresh")],
-            ],
+        return WorkflowListPageContent(
+            review,
+            tdt("L1 Screening"),
             component.render(),
-        ]
+        )
 
 
 class L1CitationScreeningPage(BasePageTemplate):

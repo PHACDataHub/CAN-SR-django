@@ -7,18 +7,13 @@ import htpy as h
 from proj.htpy.modal_component import ModalComponent
 
 from my_app.models import (
-    Citation,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     L2ScreeningResult,
 )
 from my_app.router import route
 from my_app.services.l2_screening import DeferredL2ScreeningService
-from my_app.views.pdf_views import (
-    PdfCitationFileView,
-    PdfCitationMetadataView,
-    PdfCitationMixin,
-)
+from my_app.views.pdf_views import PdfCitationMetadataView
 from my_app.views.screening.l2_common_components import (
     l2_human_review_control_id,
     render_l2_human_review_control,
@@ -31,12 +26,18 @@ from my_app.views.screening.l2_screening_pdf_templating import (
     L2PdfScreeningPage,
     render_l2_screening_control,
 )
-from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
+from my_app.views.screening.view_utils import (
+    DocumentCitationDetailView,
+    DocumentCitationListView,
+    DocumentCitationMixin,
+)
+from my_app.views.view_utils import (
+    MustAccessReviewMixin,
+    paginated_component_response,
+)
 from shortcuts import (
-    DetailView,
     GenericForm,
     HtpyTemplateMixin,
-    ListView,
     StandardFormMixin,
     View,
     cached_property,
@@ -67,15 +68,8 @@ class L2HumanAnswerForm(forms.ModelForm, StandardFormMixin):
         self.fields["human_selected_answer"].required = True
 
 
-class L2ScreeningBaseView(MustAccessReviewMixin, ListView):
-    paginate_by = 10
-
-    def get_queryset(self):
-        return (
-            Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__text_extraction_result")
-            .order_by("order")
-        )
+class L2ScreeningBaseView(DocumentCitationListView):
+    pass
 
 
 @route("/reviews/<int:review_id>/screening_l2/", name="screening_l2")
@@ -96,18 +90,11 @@ class ScreeningL2ComponentView(L2ScreeningBaseView):
             request=self.request,
         )
 
-        new_page_url = reverse("screening_l2", args=[self.review.id])
-        response_headers = {
-            "HX-Push-Url": url_with_same_params(
-                self.request,
-                path=new_page_url,
-                page=page_obj.number,
-            )
-        }
-
-        return HttpResponse(
-            str(component.render()),
-            headers=response_headers,
+        return paginated_component_response(
+            self.request,
+            page_obj,
+            component.render(),
+            reverse("screening_l2", args=[self.review.id]),
             **response_kwargs,
         )
 
@@ -116,17 +103,8 @@ class ScreeningL2ComponentView(L2ScreeningBaseView):
     "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/details/",
     name="screen_l2_row_details",
 )
-class L2PdfScreeningView(MustAccessReviewMixin, DetailView, HtpyTemplateMixin):
-    model = Citation
-    pk_url_kwarg = "row_pk"
+class L2PdfScreeningView(DocumentCitationDetailView):
     template_component = L2PdfScreeningPage
-
-    def get_queryset(self):
-        return (
-            Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__text_extraction_result")
-            .order_by("order")
-        )
 
 
 class L2HumanReviewMixin(MustAccessReviewMixin, View):
@@ -252,7 +230,7 @@ class L2HumanAnswerView(L2HumanReviewMixin):
     "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/process/",
     name="screen_l2_row_process",
 )
-class L2PdfScreeningProcessView(PdfCitationMixin):
+class L2PdfScreeningProcessView(DocumentCitationMixin):
     @cached_property
     def screening_questions(self):
         return list(L2ScreeningQuestion.objects.filter(review=self.review))
@@ -278,14 +256,6 @@ class L2PdfScreeningProcessView(PdfCitationMixin):
         return HttpResponse(
             str(render_l2_screening_control(self.citation_row, self.review))
         )
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/pdf/",
-    name="screen_l2_row_pdf",
-)
-class L2PdfCitationView(PdfCitationFileView):
-    pass
 
 
 @route(
