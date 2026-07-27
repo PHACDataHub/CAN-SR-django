@@ -130,10 +130,11 @@ def CitationPagination(
 
     common_button_attrs = {
         "hx_target": f"#{component_id}",
-        "hx_swap": "outerHTML",
+        "hx_swap": "morph:outerHTML",
         "hx_disabled_elt": "this",
         "type": "button",
         "class": "btn btn-outline-primary btn-sm",
+        "data_focus_after": "#page_x_of_y",
     }
     previous_button = h.button(
         hx_get=(
@@ -155,7 +156,7 @@ def CitationPagination(
     )[tdt("Next")]
 
     return h.div(".d-flex.justify-content-between.align-items-center.mb-3")[
-        h.div(".small.text-muted")[
+        h.div(".small.text-muted", tabindex="-1", id="page_x_of_y")[
             tdt("Page"),
             " ",
             str(page_obj.number),

@@ -214,7 +214,7 @@ class L1ScreeningComponent:
             id="l1-screening-component",
             hx_target="this",
             hx_get=self.page_url(self.page_number, self.component_url),
-            hx_swap="outerHTML",
+            hx_swap="morph:outerHTML",
             hx_disabled_elt="#refresh-button",
             hx_sync="this:replace",
             **polling_attrs("click from:#refresh-button"),
