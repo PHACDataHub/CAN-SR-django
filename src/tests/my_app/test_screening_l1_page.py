@@ -250,7 +250,7 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
     assert selected_option.option_value in body
     assert "Looks good." in body
     assert f'id="l1-citation-screening-control-{row.id}"' in body
-    assert reverse("screen_l1_row_process", args=[review.id, row.id]) in body
+    assert reverse("screen_l1_row", args=[review.id, row.id]) in body
     assert "Re-screen" in body
     assert "Validate correct" in body
     assert "Manually answer screening" in body
@@ -269,7 +269,7 @@ def test_screen_l1_row_details_view_renders_screening_process_button(
         )
 
     body = response.content.decode()
-    process_url = reverse("screen_l1_row_process", args=[review.id, row.id])
+    process_url = reverse("screen_l1_row", args=[review.id, row.id])
 
     assert response.status_code == 200
     assert f'id="l1-citation-screening-control-{row.id}"' in body
@@ -279,7 +279,7 @@ def test_screen_l1_row_details_view_renders_screening_process_button(
     assert "Screen this citation" in body
 
 
-def test_screen_l1_row_process_view_replaces_existing_screening_results(
+def test_screen_l1_row_view_replaces_existing_screening_results(
     vanilla_client,
 ):
     review = ReviewFactory()
@@ -294,7 +294,7 @@ def test_screen_l1_row_process_view_replaces_existing_screening_results(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
-            reverse("screen_l1_row_process", args=[review.id, row.id])
+            reverse("screen_l1_row", args=[review.id, row.id])
         )
 
     body = response.content.decode()

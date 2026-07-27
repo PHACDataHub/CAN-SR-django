@@ -25,6 +25,26 @@ document.addEventListener("DOMContentLoaded", function (event) {
 
 
 
+function getFocusSelector(evt) {
+    // checks data-focus-after and HX-Refocus response header for a selector
+    // data-focus-after takes precedence
+    const trigger = evt.detail.requestConfig?.elt;
+    const triggerSelector = trigger?.dataset.focusAfter;
+
+    if (triggerSelector) {
+        return triggerSelector;
+    }
+
+    const xhr = evt.detail.xhr;
+    const responseSelector = xhr.getResponseHeader('HX-Refocus');
+    if (responseSelector) {
+        return responseSelector;
+    }
+
+    return null;
+
+}
+
 function configureHtmx() {
 
     document.body.addEventListener('htmx:configRequest', (event) => {
@@ -38,16 +58,15 @@ function configureHtmx() {
     };
 
     document.addEventListener("htmx:afterSettle", function (evt) {
-        const xhr = evt.detail.xhr;
-        const refocusSelector = xhr.getResponseHeader('HX-Refocus');
-        if (refocusSelector) {
-            const element = document.querySelector(refocusSelector);
+        const focusSelector = getFocusSelector(evt);
+        if (focusSelector) {
+            const element = document.querySelector(focusSelector);
             if (element) {
                 setTimeout(() => {
                     element.focus();
                 }, 50);
             } else {
-                console.warn(`Hx-refocus: element with selector ${refocusSelector} not found.`);
+                console.warn(`Hx-refocus: element with selector ${focusSelector} not found.`);
             }
         }
     });

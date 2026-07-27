@@ -33,29 +33,27 @@ from shortcuts import reverse, tdt
 
 
 def CitationRowDisplay(citation_row: Citation, review: Review):
-    request = get_request()
     details_url = reverse(
         "screen_l1_row_details", args=[review.id, citation_row.id]
     )
 
     fetcher = L1ScreeningStatusFetcher.get_instance()
     status = fetcher.get(citation_row.id)
+    row_id = f"l1-screening-row-{citation_row.id}"
 
     btn_id = f"l1-screening-row-screen-btn-{citation_row.id}"
     if status is ScreeningResultStatus.NOT_STARTED:
-        screen_action_url = url_with_same_params(
-            request,
-            path=reverse(
-                "screen_l1_row",
-                args=[review.id, citation_row.id],
-            ),
-            page=get_page_number(),
+        screen_action_url = reverse(
+            "screen_l1_row",
+            args=[review.id, citation_row.id],
         )
         button_markup = h.button(
             ".btn.btn-outline-primary.btn-sm",
             type="button",
             hx_post=screen_action_url,
+            data_focus_after=f"#{badge_id(citation_row)}",
             hx_target="closest .citation-item",
+            hx_select=f"#{row_id}",
             hx_swap="innerHTML",
             hx_disabled_elt="this",
             id=btn_id,
@@ -76,8 +74,6 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
             tabindex="-1",
             id=btn_id,
         )[ScreeningResultStatus(status).label]
-
-    row_id = f"l1-screening-row-{citation_row.id}"
 
     return h.div(
         ".list-group-item.citation-item.position-relative.pb-4",
@@ -135,10 +131,11 @@ def render_l1_screening_control(citation_row, review, status_fetcher=None):
             ".btn.btn-outline-primary.btn-sm",
             type="button",
             hx_post=reverse(
-                "screen_l1_row_process",
+                "screen_l1_row",
                 args=[review.id, citation_row.id],
             ),
             hx_target="closest .l1-citation-screening-control",
+            hx_select=f"#{l1_screening_control_id(citation_row)}",
             hx_swap="outerHTML",
             hx_disabled_elt="this",
         )[tdt("Screen this citation")]
@@ -419,7 +416,7 @@ class L1CitationScreeningPage(BasePageTemplate):
                 ".btn.btn-outline-primary.btn-sm",
                 type="button",
                 hx_post=reverse(
-                    "screen_l1_row_process",
+                    "screen_l1_row",
                     args=[self.review.id, self.citation_row.id],
                 ),
                 hx_target=f"#{l1_screening_control_id(self.citation_row)}",

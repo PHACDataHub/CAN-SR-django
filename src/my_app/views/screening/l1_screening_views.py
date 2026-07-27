@@ -121,16 +121,18 @@ class ScreenL1RowView(MustAccessReviewMixin, View):
         DeferredL1ScreeningService(
             rows=[self.citation_row],
             questions=self.screening_questions,
+            overwrite_existing=True,
         ).perform()
 
-        headers = {
-            "HX-Refocus": "#" + badge_id(self.citation_row),
-        }
+        # render multiple components at top level,
+        # client uses this view in two context
+        # it will select applicable markup with hx-select
+        resp_content = h.fragment[
+            CitationRowDisplay(self.citation_row, self.review),
+            render_l1_screening_control(self.citation_row, self.review),
+        ]
 
-        return HttpResponse(
-            str(CitationRowDisplay(self.citation_row, self.review)),
-            headers=headers,
-        )
+        return HttpResponse(str(resp_content))
 
 
 @route(
@@ -165,23 +167,6 @@ class L1CitationMixin(MustAccessReviewMixin, View):
     @cached_property
     def screening_questions(self):
         return list(L1ScreeningQuestion.objects.filter(review=self.review))
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/process/",
-    name="screen_l1_row_process",
-)
-class L1CitationScreeningProcessView(L1CitationMixin):
-    def post(self, request, *args, **kwargs):
-        DeferredL1ScreeningService(
-            rows=[self.citation_row],
-            questions=self.screening_questions,
-            overwrite_existing=True,
-        ).perform()
-
-        return HttpResponse(
-            str(render_l1_screening_control(self.citation_row, self.review))
-        )
 
 
 class L1HumanReviewMixin(MustAccessReviewMixin, View):
