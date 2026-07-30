@@ -1,10 +1,20 @@
 from django.contrib.auth.views import LoginView as BaseLoginView
 from django.contrib.auth.views import LogoutView as BaseLogoutView
-from django.http.response import HttpResponseRedirect
+from django.http.response import HttpResponse, HttpResponseRedirect
 from django.urls import reverse
+from django.views import View
 from django.views.generic import RedirectView
 
 from proj.middleware import AllowUnauthenticatedMixin
+
+
+class LivenessView(AllowUnauthenticatedMixin, View):
+    """Return process liveness without checking optional dependencies."""
+
+    http_method_names = ["get", "head", "options"]
+
+    def get(self, request, *args, **kwargs):
+        return HttpResponse("ok", content_type="text/plain")
 
 
 class LogoutView(BaseLogoutView):

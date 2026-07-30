@@ -4,7 +4,6 @@ azure-ai-documentintelligence==1.0.2
 azure-core~=1.39.0
 
 beautifulsoup4==4.14.3
-azure-identity==1.23.0
 django-debug-toolbar==4.4.6
 django-extensions==4.1
 django-htmx==1.21.0

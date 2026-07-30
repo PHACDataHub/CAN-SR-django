@@ -1,0 +1,11 @@
+services:
+  web:
+    image: ${REPOSITORY}
+    build:
+      context: .
+      dockerfile: src/Dockerfile.prod
+    environment:
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-web}
+      DEBUG: ${DEBUG:-False}
+      IS_LOCAL_DEV: ${IS_LOCAL_DEV:-False}
+      PHAC_ASPC_SESSION_COOKIE_SECURE: ${PHAC_ASPC_SESSION_COOKIE_SECURE:-1}

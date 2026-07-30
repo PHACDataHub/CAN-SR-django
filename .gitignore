@@ -9,6 +9,7 @@ staticfiles
 
 # Secrets
 .env*.*
+!.env.example
 
 # user preferred files
 runserver.sh
@@ -22,7 +23,11 @@ notes.md
 src/media/
 
 src/.env
+.env
 
 .coverage
 .coverage.*
 coverage.xml
+
+# Local container overrides
+compose.override.yaml

@@ -1,0 +1,110 @@
+name: can-sr-django
+
+x-app: &app
+  build:
+    context: .
+    target: runtime
+  image: can-sr-django:local
+  init: true
+  environment: &app-environment
+    SECRET_KEY: ${SECRET_KEY:-local-development-only-change-me}
+    DEBUG: ${DEBUG:-True}
+    ENABLE_DEBUG_TOOLBAR: ${ENABLE_DEBUG_TOOLBAR:-False}
+    ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,[::1]}
+    INTERNAL_IPS: ${INTERNAL_IPS:-127.0.0.1}
+    IS_LOCAL_DEV: ${IS_LOCAL_DEV:-True}
+    USE_SQLITE: "False"
+    DB_NAME: ${POSTGRES_DB:-hail_django_db}
+    DB_USER: ${POSTGRES_USER:-hail_django_db_user}
+    DB_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only-change-me}
+    DB_HOST: postgres
+    DB_PORT: "5432"
+    TEST_DB_NAME: ${TEST_DB_NAME:-hail_django_db_test}
+    USE_IMMEDIATE_TASKS: ${USE_IMMEDIATE_TASKS:-0}
+    LLM_MODE: ${LLM_MODE:-local}
+    GROBID_URL: ${GROBID_URL:-dev}
+    AZURE_OPENAI_MODE: ${AZURE_OPENAI_MODE:-}
+    AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+    AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+    FIGURE_EXTRACTION_MODE: ${FIGURE_EXTRACTION_MODE:-}
+    AZURE_DOC_INT_MODE: ${AZURE_DOC_INT_MODE:-}
+    AZURE_DOC_INT_ENDPOINT: ${AZURE_DOC_INT_ENDPOINT:-}
+    AZURE_DOC_INT_API_KEY: ${AZURE_DOC_INT_API_KEY:-}
+  depends_on:
+    postgres:
+      condition: service_healthy
+  volumes:
+    - media:/app/src/media
+
+services:
+  web:
+    <<: *app
+    command:
+      - gunicorn
+      - proj.wsgi:application
+      - --bind=0.0.0.0:8000
+      - --access-logfile=-
+      - --error-logfile=-
+      - --capture-output
+      - --timeout=120
+      - --graceful-timeout=30
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://localhost:8000/health/live', timeout=5)
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *app
+    command:
+      - python
+      - manage.py
+      - run_database_tasks
+      - --continuous
+      - --interval=1
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16.9-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hail_django_db}
+      POSTGRES_USER: ${POSTGRES_USER:-hail_django_db_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only-change-me}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  grobid:
+    image: grobid/grobid:0.9.0-crf
+    profiles: ["grobid"]
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl --fail --silent http://localhost:8070/api/isalive >/dev/null
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+volumes:
+  media:
+  postgres_data:

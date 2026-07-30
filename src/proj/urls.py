@@ -7,7 +7,7 @@ from phac_aspc.django.helpers.urls import urlpatterns as phac_aspc_helper_urls
 
 from my_app.urls import urlpatterns as my_app_urls
 
-from .views import LoginView, LogoutView, RootView
+from .views import LivenessView, LoginView, LogoutView, RootView
 
 dev_routes = []
 if settings.DEBUG and settings.ENABLE_DEBUG_TOOLBAR:
@@ -23,6 +23,7 @@ urlpatterns = i18n_patterns(
     path("", include(my_app_urls)),
     prefix_default_language=False,
 ) + [
+    path("health/live", LivenessView.as_view(), name="health_live"),
     re_path("^$", RootView.as_view(), name="root"),
     *phac_aspc_helper_urls,
     *dev_routes,

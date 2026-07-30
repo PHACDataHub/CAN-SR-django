@@ -1,0 +1,63 @@
+# Troubleshooting variant of Dockerfile.prod with PostgreSQL tools and AzCopy.
+FROM python:3.13.5-slim-bookworm AS builder
+
+WORKDIR /build
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+COPY requirements.txt ./
+RUN python -m pip wheel --wheel-dir /wheels -r requirements.txt
+
+
+FROM python:3.13.5-slim-bookworm AS runtime
+
+ENV HOME=/can-sr \
+    APP_HOME=/can-sr/web \
+    VIRTUAL_ENV=/can-sr/env \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/can-sr/env/bin:/opt/azcopy:${PATH}"
+
+EXPOSE 8000 2222
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y \
+        ca-certificates \
+        curl \
+        gosu \
+        netcat-openbsd \
+        openssh-server \
+        postgresql-client \
+    && mkdir -p /opt/azcopy \
+    && curl -fsSL https://aka.ms/downloadazcopy-v10-linux \
+        | tar -xz --strip-components=1 -C /opt/azcopy \
+    && rm -rf /var/lib/apt/lists/* \
+    && addgroup --system app \
+    && adduser --disabled-password --shell /bin/bash --system \
+        --uid 567 --ingroup app --home "$HOME" app567 \
+    && mkdir -p "$APP_HOME" "$VIRTUAL_ENV" /run/sshd \
+    && chown -R app567:app "$HOME" \
+    && echo 'root:Docker!' | chpasswd
+
+WORKDIR $APP_HOME
+
+COPY --from=builder /wheels /wheels
+RUN python -m venv "$VIRTUAL_ENV" \
+    && python -m pip install --no-index /wheels/* \
+    && rm -rf /wheels
+
+COPY --chown=app567:app src/ $APP_HOME
+COPY src/sshd_config /etc/ssh/sshd_config
+
+RUN chmod 0755 entrypoint.prod.sh \
+    && mkdir -p staticfiles media \
+    && chown -R app567:app staticfiles media \
+    && SECRET_KEY=build-only-secret \
+       ALLOWED_HOSTS=localhost \
+       USE_SQLITE=1 \
+       GROBID_URL=dev \
+       python manage.py collectstatic --noinput
+
+ENTRYPOINT ["/can-sr/web/entrypoint.prod.sh"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "proj.wsgi:application", "--timeout", "1000"]

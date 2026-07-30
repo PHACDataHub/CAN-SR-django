@@ -1,5 +1,10 @@
 # Django CAN-SR
 
+## Docker
+
+For the local Docker quick start, detailed commands, and production-container
+layout, see [docker.md](docker.md).
+
 ## Configuring dev environment
 
 1. install python3.13
