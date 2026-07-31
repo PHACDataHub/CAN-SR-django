@@ -35,11 +35,11 @@ Localization
 Rendering or "templates"
 
 - we use htpy to render, rather plain strings or string-based templates
-- this is react-like, but server-side
-- sometimes these are formal "templates", that receive a request and context object (and plug into django's template API), other times it's a simple function return htpy nodes
+- this is react-like, but without reactivity, entirely server-side
+- sometimes these are formal "templates", that receive a request and context object (and plug into django's template API), other times it's a simple function returning htpy nodes
 - to DRY-out (dont repeat yourself) presentational code, prefer composition over inheritance
-- generally, htpy components should be PascalCase, and not \_private
-- For complex presentation components, you can use class-based HtpyComponents, this unlocks inheritance and single-responsibility methods
+- generally, htpy components should be PascalCase, and not \_private_case
+- For complex presentation components, you can use class-based HtpyComponents, to leverage inheritance and single-responsibility methods
 - Feel free to use data_fetcher's get_request() and derivative context-based approaches to get data into components, rather than passing everything through multiple layers of composition
 
 CSS
@@ -59,6 +59,13 @@ Views:
 - Use HtpyTemplateMixin when building views that need a traditional template_name, e.g. to interop with generic views
   - if a view has a template, that template should take care of all presentational concerns, including even querying additional data used by render logic
 - For smaller views with small responses (e.g. htmx endpoints) return htpy nodes directly from the view
+
+Views, Templates and module structure:
+
+- a lot of complexity lives in /<app>/views/
+- views, form and rendering logic are grouped by domain, not by type:
+  - rendering logic should live alongside views in the same module, unless extracted out for complexity or reusability
+- complicated querying can be extracted to /<app>/queries/ and updating logic can be extracted to /<app>/services/
 
 Forms
 
