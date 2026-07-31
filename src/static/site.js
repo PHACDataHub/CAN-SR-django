@@ -26,9 +26,8 @@ document.addEventListener("DOMContentLoaded", function (event) {
 
 
 function configureHtmx() {
-
-    document.body.addEventListener('htmx:configRequest', (event) => {
-        event.detail.headers['X-CSRFToken'] = csrfToken;
+    document.body.addEventListener('htmx:config:request', (event) => {
+        event.detail.ctx.request.headers['X-CSRFToken'] = csrfToken;
     });
 
     htmx.logger = function (elt, event, data) {
@@ -37,18 +36,28 @@ function configureHtmx() {
         }
     };
 
-    document.addEventListener("htmx:afterSettle", function (evt) {
-        const xhr = evt.detail.xhr;
-        const refocusSelector = xhr.getResponseHeader('HX-Refocus');
-        if (refocusSelector) {
-            const element = document.querySelector(refocusSelector);
-            if (element) {
-                setTimeout(() => {
-                    element.focus();
-                }, 50);
-            } else {
-                console.warn(`Hx-refocus: element with selector ${refocusSelector} not found.`);
-            }
+
+
+    // hx-refocus response headers are custom behavior 
+    let pendingRefocus = null;
+    htmx.on("htmx:after:request", (event) => {
+        pendingRefocus = event.detail.ctx.response.headers.get("HX-Refocus");
+    });
+
+    htmx.on("htmx:after:settle", () => {
+        if (!pendingRefocus) {
+            return;
+        }
+
+        const elt = document.querySelector(pendingRefocus);
+        pendingRefocus = null;
+
+        if (elt) {
+            setTimeout(() => {
+                elt.focus();
+            }, 50);
+        } else {
+            console.warn(`Hx-refocus: element with selector ${pendingRefocus} not found.`);
         }
     });
 
