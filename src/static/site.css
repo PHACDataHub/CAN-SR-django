@@ -80,3 +80,10 @@ dl.custom-dl {
     */
     white-space: normal;
 }
+
+
+.screening-progress-panel {
+    position: sticky;
+    top: 1rem;
+    z-index: 1;
+}

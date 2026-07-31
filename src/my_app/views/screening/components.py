@@ -66,7 +66,7 @@ def WorkflowProgressPanel(panel_id, metrics, completed, total):
 
     return h.section(
         id=panel_id,
-        class_="border rounded p-3 bg-body-tertiary",
+        class_="border rounded p-3 bg-body-tertiary screening-progress-panel",
     )[
         h.h2(".h5.mb-3")[tdt("Progress")],
         metric_rows,
