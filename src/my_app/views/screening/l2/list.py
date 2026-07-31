@@ -12,6 +12,7 @@ from my_app.models import (
     TextExtractionResult,
 )
 from my_app.queries import L2ScreeningStatusFetcher
+from my_app.router import route
 from my_app.views.pdf_components import (
     DocumentWorkflowCitationRow,
     render_pdf_detail_link,
@@ -22,9 +23,21 @@ from my_app.views.screening.components import (
     WorkflowListPageContent,
     WorkflowProgressPanel,
 )
-from my_app.views.screening.l2_common_components import L2ScreeningBadge
-from my_app.views.view_utils import url_with_same_params
-from shortcuts import BasePageTemplate, cached_property, reverse, tdt
+from my_app.views.screening.document_util_components import (
+    DocumentCitationListView,
+)
+from my_app.views.screening.l2.components import L2ScreeningBadge
+from my_app.views.view_utils import (
+    paginated_component_response,
+    url_with_same_params,
+)
+from shortcuts import (
+    BasePageTemplate,
+    HtpyTemplateMixin,
+    cached_property,
+    reverse,
+    tdt,
+)
 
 
 def CitationRowDisplay(citation_row: Citation, review: Review, status_fetcher):
@@ -191,4 +204,35 @@ class L2ScreeningPageTemplate(BasePageTemplate):
             review,
             tdt("L2 Screening"),
             component.render(),
+        )
+
+
+class L2ScreeningBaseView(DocumentCitationListView):
+    pass
+
+
+@route("/reviews/<int:review_id>/screening_l2/", name="l2_citations_list")
+class ScreeningL2PageView(L2ScreeningBaseView, HtpyTemplateMixin):
+    template_component = L2ScreeningPageTemplate
+
+
+@route(
+    "/reviews/<int:review_id>/screening_l2/component/",
+    name="l2_citations_list_partial",
+)
+class ScreeningL2ComponentView(L2ScreeningBaseView):
+    def render_to_response(self, context, **response_kwargs):
+        page_obj = context["page_obj"]
+        component = L2ScreeningComponent(
+            review=self.review,
+            page_obj=page_obj,
+            request=self.request,
+        )
+
+        return paginated_component_response(
+            self.request,
+            page_obj,
+            component.render(),
+            reverse("l2_citations_list", args=[self.review.id]),
+            **response_kwargs,
         )

@@ -8,6 +8,7 @@ from my_app.queries import (
     L2ScreeningStatusFetcher,
     get_l2_screening_progress_stats,
 )
+from my_app.router import route
 from my_app.views.pdf_components import (
     DocumentWorkflowCitationPanel,
     EvidenceDefinitionItems,
@@ -17,15 +18,17 @@ from my_app.views.pdf_components import (
     WorkflowResultsPanel,
 )
 from my_app.views.screening.components import CitationScreeningProgressNav
-from my_app.views.screening.l2_common_components import (
+from my_app.views.screening.document_util_components import (
+    DocumentCitationDetailView,
+)
+from my_app.views.screening.l2.components import (
     L2ScreeningBadge,
     render_l2_human_review_control,
 )
+from my_app.views.screening.util import can_start_l2_screening
 from shortcuts import BasePageTemplate
 from shortcuts import breadcrumbs as bc
 from shortcuts import reverse, tdt
-
-from .util import can_start_l2_screening
 
 
 def l2_screening_control_id(citation_row):
@@ -178,3 +181,11 @@ class L2PdfScreeningPage(BasePageTemplate):
                 *EvidenceDefinitionItems(result),
             ]
         )
+
+
+@route(
+    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/details/",
+    name="l2_citation_detail",
+)
+class L2PdfScreeningView(DocumentCitationDetailView):
+    template_component = L2PdfScreeningPage

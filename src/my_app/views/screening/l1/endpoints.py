@@ -15,25 +15,15 @@ from my_app.models import (
 )
 from my_app.router import route
 from my_app.services.l1_screening import DeferredL1ScreeningService
-from my_app.views.screening.l1_screening_templating import (
-    CitationRowDisplay,
-    L1CitationScreeningPage,
-    L1ScreeningComponent,
-    L1ScreeningPageTemplate,
-    badge_id,
+from my_app.views.screening.l1.detail import (
     l1_human_review_control_id,
     render_l1_human_review_control,
     render_l1_screening_control,
 )
-from my_app.views.view_utils import (
-    MustAccessReviewMixin,
-    paginated_component_response,
-)
+from my_app.views.screening.l1.list import CitationRowDisplay
+from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
-    DetailView,
     GenericForm,
-    HtpyTemplateMixin,
-    ListView,
     StandardFormMixin,
     cached_property,
     get_object_or_404,
@@ -59,42 +49,6 @@ class L1HumanAnswerForm(forms.ModelForm, StandardFormMixin):
             )
         )
         self.fields["human_selected_answer"].required = True
-
-
-class L1ScreeningBaseView(MustAccessReviewMixin, ListView):
-    paginate_by = 10
-
-    def get_queryset(self):
-        return Citation.objects.filter(dataset__review=self.review).order_by(
-            "order"
-        )
-
-
-@route("/reviews/<int:review_id>/screening_l1/", name="l1_citations_list")
-class ScreeningL1PageView(L1ScreeningBaseView, HtpyTemplateMixin):
-    template_component = L1ScreeningPageTemplate
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l1/component/",
-    name="l1_citations_list_partial",
-)
-class ScreeningL1ComponentView(L1ScreeningBaseView):
-    def render_to_response(self, context, **response_kwargs):
-        page_obj = context["page_obj"]
-        component = L1ScreeningComponent(
-            review=self.review,
-            page_obj=page_obj,
-            request=self.request,
-        )
-
-        return paginated_component_response(
-            self.request,
-            page_obj,
-            component.render(),
-            reverse("l1_citations_list", args=[self.review.id]),
-            **response_kwargs,
-        )
 
 
 @route(
@@ -133,26 +87,6 @@ class ScreenL1RowView(MustAccessReviewMixin, View):
         ]
 
         return HttpResponse(str(resp_content))
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/details/",
-    name="l1_citation_detail",
-)
-class L1CitationScreeningView(
-    MustAccessReviewMixin, DetailView, HtpyTemplateMixin
-):
-    model = Citation
-    pk_url_kwarg = "row_pk"
-    template_component = L1CitationScreeningPage
-
-    def get_queryset(self):
-        return (
-            Citation.objects.filter(dataset__review=self.review)
-            .select_related("dataset")
-            .prefetch_related("dataset__screening_columns")
-            .order_by("order")
-        )
 
 
 class L1CitationMixin(MustAccessReviewMixin, View):

@@ -18,6 +18,7 @@ from my_app.queries import (
     ParameterExtractionStatusFetcher,
     get_parameter_extraction_progress_stats,
 )
+from my_app.router import route
 from my_app.views.pdf_components import (
     DocumentWorkflowCitationPanel,
     DocumentWorkflowCitationRow,
@@ -37,12 +38,18 @@ from my_app.views.screening.components import (
     WorkflowProgressPanel,
     human_review_control_id,
 )
+from my_app.views.screening.document_util_components import (
+    DocumentCitationListView,
+)
 from my_app.views.screening.util import (
     BADGE_CLASSES,
     can_start_parameter_extraction,
 )
-from my_app.views.view_utils import url_with_same_params
-from shortcuts import BasePageTemplate
+from my_app.views.view_utils import (
+    paginated_component_response,
+    url_with_same_params,
+)
+from shortcuts import BasePageTemplate, HtpyTemplateMixin
 from shortcuts import breadcrumbs as bc
 from shortcuts import cached_property, reverse, tdt
 
@@ -452,3 +459,42 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                 ]
             ),
         ]
+
+
+class ParameterExtractionBaseView(DocumentCitationListView):
+    pass
+
+
+@route(
+    "/reviews/<int:review_id>/parameter_extraction/",
+    name="parameter_extraction_citations_list",
+)
+class ParameterExtractionPageView(
+    ParameterExtractionBaseView,
+    HtpyTemplateMixin,
+):
+    template_component = ParameterExtractionPageTemplate
+
+
+@route(
+    "/reviews/<int:review_id>/parameter_extraction/component/",
+    name="parameter_extraction_citations_list_partial",
+)
+class ParameterExtractionComponentView(ParameterExtractionBaseView):
+    def render_to_response(self, context, **response_kwargs):
+        page_obj = context["page_obj"]
+        component = ParameterExtractionComponent(
+            review=self.review,
+            page_obj=page_obj,
+            request=self.request,
+        )
+
+        return paginated_component_response(
+            self.request,
+            page_obj,
+            component.render(),
+            reverse(
+                "parameter_extraction_citations_list", args=[self.review.id]
+            ),
+            **response_kwargs,
+        )

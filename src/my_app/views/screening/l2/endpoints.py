@@ -13,31 +13,19 @@ from my_app.models import (
 )
 from my_app.router import route
 from my_app.services.l2_screening import DeferredL2ScreeningService
-from my_app.views.pdf_views import PdfCitationMetadataView
-from my_app.views.screening.l2_common_components import (
+from my_app.views.screening.document_util_components import (
+    DocumentCitationMixin,
+    PdfCitationMetadataView,
+)
+from my_app.views.screening.l2.components import (
     l2_human_review_control_id,
     render_l2_human_review_control,
 )
-from my_app.views.screening.l2_screening_index_templating import (
-    L2ScreeningComponent,
-    L2ScreeningPageTemplate,
-)
-from my_app.views.screening.l2_screening_pdf_templating import (
-    L2PdfScreeningPage,
-    render_l2_screening_control,
-)
-from my_app.views.screening.view_utils import (
-    DocumentCitationDetailView,
-    DocumentCitationListView,
-    DocumentCitationMixin,
-)
-from my_app.views.view_utils import (
-    MustAccessReviewMixin,
-    paginated_component_response,
-)
+from my_app.views.screening.l2.detail import render_l2_screening_control
+from my_app.views.screening.util import can_start_l2_screening
+from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
     GenericForm,
-    HtpyTemplateMixin,
     StandardFormMixin,
     View,
     cached_property,
@@ -45,8 +33,6 @@ from shortcuts import (
     reverse,
     tdt,
 )
-
-from .util import can_start_l2_screening
 
 
 class L2HumanAnswerForm(forms.ModelForm, StandardFormMixin):
@@ -66,45 +52,6 @@ class L2HumanAnswerForm(forms.ModelForm, StandardFormMixin):
             )
         )
         self.fields["human_selected_answer"].required = True
-
-
-class L2ScreeningBaseView(DocumentCitationListView):
-    pass
-
-
-@route("/reviews/<int:review_id>/screening_l2/", name="l2_citations_list")
-class ScreeningL2PageView(L2ScreeningBaseView, HtpyTemplateMixin):
-    template_component = L2ScreeningPageTemplate
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/component/",
-    name="l2_citations_list_partial",
-)
-class ScreeningL2ComponentView(L2ScreeningBaseView):
-    def render_to_response(self, context, **response_kwargs):
-        page_obj = context["page_obj"]
-        component = L2ScreeningComponent(
-            review=self.review,
-            page_obj=page_obj,
-            request=self.request,
-        )
-
-        return paginated_component_response(
-            self.request,
-            page_obj,
-            component.render(),
-            reverse("l2_citations_list", args=[self.review.id]),
-            **response_kwargs,
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/details/",
-    name="l2_citation_detail",
-)
-class L2PdfScreeningView(DocumentCitationDetailView):
-    template_component = L2PdfScreeningPage
 
 
 class L2HumanReviewMixin(MustAccessReviewMixin, View):
