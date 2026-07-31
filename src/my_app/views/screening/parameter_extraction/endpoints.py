@@ -5,26 +5,26 @@ import htpy as h
 
 from proj.htpy.modal_component import ModalComponent
 
-from my_app.models import Citation, Parameter, ParameterExtractionResult
+from my_app.models import Parameter, ParameterExtractionResult
 from my_app.router import route
 from my_app.services.parameter_extraction import (
     DeferredParameterExtractionService,
 )
-from my_app.views.parameter_extraction_templating import (
-    ParameterExtractionComponent,
-    ParameterExtractionPageTemplate,
+from my_app.views.screening.document_util_components import (
+    DocumentCitationMixin,
+    PdfCitationMetadataView,
+)
+from my_app.views.screening.parameter_extraction.detail import (
     ParameterExtractionPdfPage,
-    parameter_extraction_human_review_control_id,
     render_parameter_extraction_control,
 )
-from my_app.views.pdf_views import PdfCitationFileView, PdfCitationMetadataView
+from my_app.views.screening.parameter_extraction.list import (
+    parameter_extraction_human_review_control_id,
+)
 from my_app.views.screening.util import can_start_parameter_extraction
-from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
+from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
-    DetailView,
     GenericForm,
-    HtpyTemplateMixin,
-    ListView,
     StandardFormMixin,
     View,
     cached_property,
@@ -57,95 +57,11 @@ class ParameterExtractionHumanAnswerForm(
         return self.cleaned_data["human_value"] or None
 
 
-class ParameterExtractionBaseView(MustAccessReviewMixin, ListView):
-    paginate_by = 10
-
-    def get_queryset(self):
-        return (
-            Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__text_extraction_result")
-            .order_by("order")
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/parameter_extraction/",
-    name="parameter_extraction",
-)
-class ParameterExtractionPageView(
-    ParameterExtractionBaseView,
-    HtpyTemplateMixin,
-):
-    template_component = ParameterExtractionPageTemplate
-
-
-@route(
-    "/reviews/<int:review_id>/parameter_extraction/component/",
-    name="parameter_extraction_component",
-)
-class ParameterExtractionComponentView(ParameterExtractionBaseView):
-    def render_to_response(self, context, **response_kwargs):
-        page_obj = context["page_obj"]
-        component = ParameterExtractionComponent(
-            review=self.review,
-            page_obj=page_obj,
-            request=self.request,
-        )
-
-        new_page_url = reverse("parameter_extraction", args=[self.review.id])
-        response_headers = {
-            "HX-Push-Url": url_with_same_params(
-                self.request,
-                path=new_page_url,
-                page=page_obj.number,
-            )
-        }
-
-        return HttpResponse(
-            str(component.render()),
-            headers=response_headers,
-            **response_kwargs,
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/details/",
-    name="parameter_extraction_row_details",
-)
-class ParameterExtractionPdfView(
-    MustAccessReviewMixin,
-    DetailView,
-    HtpyTemplateMixin,
-):
-    model = Citation
-    pk_url_kwarg = "row_pk"
-    template_component = ParameterExtractionPdfPage
-
-    def get_queryset(self):
-        return (
-            Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__text_extraction_result")
-            .order_by("order")
-        )
-
-
 @route(
     "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/process/",
-    name="parameter_extraction_row_process",
+    name="parameter_extraction_citation_process_extraction",
 )
-class ParameterExtractionProcessView(MustAccessReviewMixin, View):
-    @cached_property
-    def citation_row(self):
-        return get_object_or_404(
-            Citation.objects.select_related(
-                "document",
-                "document__text_extraction_result",
-                "document__figure_extraction_result",
-            ),
-            pk=self.kwargs["row_pk"],
-            dataset__review=self.review,
-        )
-
+class ParameterExtractionProcessView(DocumentCitationMixin):
     @cached_property
     def parameters(self):
         return list(Parameter.objects.filter(category__review=self.review))
@@ -201,7 +117,7 @@ class ParameterExtractionHumanReviewMixin(MustAccessReviewMixin, View):
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/results/<int:result_pk>/validate-ai-answer/",
-    name="parameter_extraction_validate_ai_answer",
+    name="parameter_extraction_citation_validate_ai_answer",
 )
 class ParameterExtractionValidateAiAnswerView(
     ParameterExtractionHumanReviewMixin
@@ -215,7 +131,7 @@ class ParameterExtractionValidateAiAnswerView(
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/results/<int:result_pk>/human-answer/",
-    name="parameter_extraction_human_answer",
+    name="parameter_extraction_citation_human_answer",
 )
 class ParameterExtractionHumanAnswerView(ParameterExtractionHumanReviewMixin):
     @cached_property
@@ -249,7 +165,7 @@ class ParameterExtractionHumanAnswerView(ParameterExtractionHumanReviewMixin):
                 h.form(
                     id=form_id,
                     hx_post=reverse(
-                        "parameter_extraction_human_answer",
+                        "parameter_extraction_citation_human_answer",
                         args=[self.review.id, self.result.id],
                     ),
                     hx_target="#modal-slot",
@@ -277,16 +193,8 @@ class ParameterExtractionHumanAnswerView(ParameterExtractionHumanReviewMixin):
 
 
 @route(
-    "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/pdf/",
-    name="parameter_extraction_row_pdf",
-)
-class ParameterExtractionPdfCitationView(PdfCitationFileView):
-    pass
-
-
-@route(
     "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/pdf-metadata/",
-    name="parameter_extraction_row_pdf_metadata",
+    name="parameter_extraction_citation_pdf_metadata",
 )
 class ParameterExtractionPdfCitationMetadataView(PdfCitationMetadataView):
     result_model = ParameterExtractionResult

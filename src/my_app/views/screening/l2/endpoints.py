@@ -7,36 +7,25 @@ import htpy as h
 from proj.htpy.modal_component import ModalComponent
 
 from my_app.models import (
-    Citation,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     L2ScreeningResult,
 )
 from my_app.router import route
 from my_app.services.l2_screening import DeferredL2ScreeningService
-from my_app.views.pdf_views import (
-    PdfCitationFileView,
+from my_app.views.screening.document_util_components import (
+    DocumentCitationMixin,
     PdfCitationMetadataView,
-    PdfCitationMixin,
 )
-from my_app.views.screening.l2_common_components import (
+from my_app.views.screening.l2.components import (
     l2_human_review_control_id,
     render_l2_human_review_control,
 )
-from my_app.views.screening.l2_screening_index_templating import (
-    L2ScreeningComponent,
-    L2ScreeningPageTemplate,
-)
-from my_app.views.screening.l2_screening_pdf_templating import (
-    L2PdfScreeningPage,
-    render_l2_screening_control,
-)
-from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
+from my_app.views.screening.l2.detail import render_l2_screening_control
+from my_app.views.screening.util import can_start_l2_screening
+from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
-    DetailView,
     GenericForm,
-    HtpyTemplateMixin,
-    ListView,
     StandardFormMixin,
     View,
     cached_property,
@@ -44,8 +33,6 @@ from shortcuts import (
     reverse,
     tdt,
 )
-
-from .util import can_start_l2_screening
 
 
 class L2HumanAnswerForm(forms.ModelForm, StandardFormMixin):
@@ -67,68 +54,6 @@ class L2HumanAnswerForm(forms.ModelForm, StandardFormMixin):
         self.fields["human_selected_answer"].required = True
 
 
-class L2ScreeningBaseView(MustAccessReviewMixin, ListView):
-    paginate_by = 10
-
-    def get_queryset(self):
-        return (
-            Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__text_extraction_result")
-            .order_by("order")
-        )
-
-
-@route("/reviews/<int:review_id>/screening_l2/", name="screening_l2")
-class ScreeningL2PageView(L2ScreeningBaseView, HtpyTemplateMixin):
-    template_component = L2ScreeningPageTemplate
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/component/",
-    name="screening_l2_component",
-)
-class ScreeningL2ComponentView(L2ScreeningBaseView):
-    def render_to_response(self, context, **response_kwargs):
-        page_obj = context["page_obj"]
-        component = L2ScreeningComponent(
-            review=self.review,
-            page_obj=page_obj,
-            request=self.request,
-        )
-
-        new_page_url = reverse("screening_l2", args=[self.review.id])
-        response_headers = {
-            "HX-Push-Url": url_with_same_params(
-                self.request,
-                path=new_page_url,
-                page=page_obj.number,
-            )
-        }
-
-        return HttpResponse(
-            str(component.render()),
-            headers=response_headers,
-            **response_kwargs,
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/details/",
-    name="screen_l2_row_details",
-)
-class L2PdfScreeningView(MustAccessReviewMixin, DetailView, HtpyTemplateMixin):
-    model = Citation
-    pk_url_kwarg = "row_pk"
-    template_component = L2PdfScreeningPage
-
-    def get_queryset(self):
-        return (
-            Citation.objects.filter(dataset__review=self.review)
-            .select_related("document", "document__text_extraction_result")
-            .order_by("order")
-        )
-
-
 class L2HumanReviewMixin(MustAccessReviewMixin, View):
     @cached_property
     def result(self):
@@ -148,7 +73,7 @@ class L2HumanReviewMixin(MustAccessReviewMixin, View):
 
 @route(
     "/reviews/<int:review_id>/screening_l2/results/<int:result_pk>/validate/",
-    name="screen_l2_validate_correct",
+    name="l2_citation_validate_correct",
 )
 class L2ValidateCorrectView(L2HumanReviewMixin):
     def post(self, request, *args, **kwargs):
@@ -169,7 +94,7 @@ class L2ValidateCorrectView(L2HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l2/results/<int:result_pk>/undo-validation/",
-    name="screen_l2_undo_validation",
+    name="l2_citation_undo_validation",
 )
 class L2UndoValidationView(L2HumanReviewMixin):
     def post(self, request, *args, **kwargs):
@@ -186,7 +111,7 @@ class L2UndoValidationView(L2HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l2/results/<int:result_pk>/human-answer/",
-    name="screen_l2_human_answer",
+    name="l2_citation_human_answer",
 )
 class L2HumanAnswerView(L2HumanReviewMixin):
     @cached_property
@@ -220,7 +145,7 @@ class L2HumanAnswerView(L2HumanReviewMixin):
                 h.form(
                     id=form_id,
                     hx_post=reverse(
-                        "screen_l2_human_answer",
+                        "l2_citation_human_answer",
                         args=[self.review.id, self.result.id],
                     ),
                     hx_target="#modal-slot",
@@ -250,9 +175,9 @@ class L2HumanAnswerView(L2HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/process/",
-    name="screen_l2_row_process",
+    name="l2_citation_process_screening",
 )
-class L2PdfScreeningProcessView(PdfCitationMixin):
+class L2PdfScreeningProcessView(DocumentCitationMixin):
     @cached_property
     def screening_questions(self):
         return list(L2ScreeningQuestion.objects.filter(review=self.review))
@@ -281,16 +206,8 @@ class L2PdfScreeningProcessView(PdfCitationMixin):
 
 
 @route(
-    "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/pdf/",
-    name="screen_l2_row_pdf",
-)
-class L2PdfCitationView(PdfCitationFileView):
-    pass
-
-
-@route(
     "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/pdf-metadata/",
-    name="screen_l2_row_pdf_metadata",
+    name="l2_citation_pdf_metadata",
 )
 class L2PdfCitationMetadataView(PdfCitationMetadataView):
     result_model = L2ScreeningResult

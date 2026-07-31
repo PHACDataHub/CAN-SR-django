@@ -33,16 +33,16 @@ def test_screening_l1_shell_renders_component_and_refresh_button(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l1", args=[review.id]), {"page": 1}
+            reverse("l1_citations_list", args=[review.id]), {"page": 1}
         )
 
     body = response.content.decode()
 
     assert response.status_code == 200
     assert "L1 Screening" in body
-    assert reverse("screening_l1_component", args=[review.id]) in body
+    assert reverse("l1_citations_list_partial", args=[review.id]) in body
     assert 'hx-target="#l1-screening-component"' in body
-    assert 'hx-swap="outerHTML"' in body
+    assert 'hx-swap="morph:outerHTML"' in body
     assert 'hx-trigger="click from:#refresh-button, every 5s"' in body
     assert "Completed" in body
 
@@ -55,7 +55,7 @@ def test_screening_l1_shell_can_disable_polling(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l1", args=[review.id]), {"page": 1}
+            reverse("l1_citations_list", args=[review.id]), {"page": 1}
         )
 
     body = response.content.decode()
@@ -78,7 +78,7 @@ def test_screening_l1_component_view_renders(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l1_component", args=[review.id]),
+            reverse("l1_citations_list_partial", args=[review.id]),
             {"page": 1},
         )
 
@@ -107,12 +107,12 @@ def test_screening_l1_component_view_renders_pagination_buttons(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l1_component", args=[review.id]),
+            reverse("l1_citations_list_partial", args=[review.id]),
             {"page": 1},
         )
 
     body = response.content.decode()
-    component_url = reverse("screening_l1_component", args=[review.id])
+    component_url = reverse("l1_citations_list_partial", args=[review.id])
 
     assert response.status_code == 200
     assert f"{component_url}?page=2" in body
@@ -129,12 +129,12 @@ def test_screening_l1_component_view_renders_row_details_link(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l1_component", args=[review.id]),
+            reverse("l1_citations_list_partial", args=[review.id]),
             {"page": 1},
         )
 
     body = response.content.decode()
-    details_url = reverse("screen_l1_row_details", args=[review.id, row.id])
+    details_url = reverse("l1_citation_detail", args=[review.id, row.id])
 
     assert response.status_code == 200
     assert details_url in body
@@ -152,7 +152,7 @@ def test_screen_l1_row_view_starts_screening_and_returns_status(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
-            reverse("screen_l1_row", args=[review.id, row.id]),
+            reverse("l1_citation_process_screening", args=[review.id, row.id]),
             {"page": 1},
         )
 
@@ -218,21 +218,19 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l1_row_details", args=[review.id, row.id])
+            reverse("l1_citation_detail", args=[review.id, row.id])
         )
 
     body = response.content.decode()
 
     assert response.status_code == 200
     assert "L1 citation screening" in body
-    assert reverse("screening_l1", args=[review.id]) in body
+    assert reverse("l1_citations_list", args=[review.id]) in body
     assert (
-        reverse("screen_l1_row_details", args=[review.id, previous_row.id])
+        reverse("l1_citation_detail", args=[review.id, previous_row.id])
         in body
     )
-    assert (
-        reverse("screen_l1_row_details", args=[review.id, next_row.id]) in body
-    )
+    assert reverse("l1_citation_detail", args=[review.id, next_row.id]) in body
     assert "Viewing 1 of 3" in body
     assert "Human reviewed" in body
     assert "0 / 3" in body
@@ -250,7 +248,10 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
     assert selected_option.option_value in body
     assert "Looks good." in body
     assert f'id="l1-citation-screening-control-{row.id}"' in body
-    assert reverse("screen_l1_row_process", args=[review.id, row.id]) in body
+    assert (
+        reverse("l1_citation_process_screening", args=[review.id, row.id])
+        in body
+    )
     assert "Re-screen" in body
     assert "Validate correct" in body
     assert "Manually answer screening" in body
@@ -265,11 +266,13 @@ def test_screen_l1_row_details_view_renders_screening_process_button(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l1_row_details", args=[review.id, row.id])
+            reverse("l1_citation_detail", args=[review.id, row.id])
         )
 
     body = response.content.decode()
-    process_url = reverse("screen_l1_row_process", args=[review.id, row.id])
+    process_url = reverse(
+        "l1_citation_process_screening", args=[review.id, row.id]
+    )
 
     assert response.status_code == 200
     assert f'id="l1-citation-screening-control-{row.id}"' in body
@@ -279,7 +282,7 @@ def test_screen_l1_row_details_view_renders_screening_process_button(
     assert "Screen this citation" in body
 
 
-def test_screen_l1_row_process_view_replaces_existing_screening_results(
+def test_screen_l1_row_view_replaces_existing_screening_results(
     vanilla_client,
 ):
     review = ReviewFactory()
@@ -294,7 +297,7 @@ def test_screen_l1_row_process_view_replaces_existing_screening_results(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
-            reverse("screen_l1_row_process", args=[review.id, row.id])
+            reverse("l1_citation_process_screening", args=[review.id, row.id])
         )
 
     body = response.content.decode()
@@ -323,7 +326,9 @@ def test_l1_human_validation_can_be_set_and_undone(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
-            reverse("screen_l1_validate_correct", args=[review.id, result.id])
+            reverse(
+                "l1_citation_validate_correct", args=[review.id, result.id]
+            )
         )
 
     result.refresh_from_db()
@@ -337,7 +342,7 @@ def test_l1_human_validation_can_be_set_and_undone(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
-            reverse("screen_l1_undo_validation", args=[review.id, result.id])
+            reverse("l1_citation_undo_validation", args=[review.id, result.id])
         )
 
     result.refresh_from_db()
@@ -359,7 +364,7 @@ def test_l1_human_answer_modal_saves_question_option_and_notes(
     answer = L1ScreeningQuestionOptionFactory(question=question)
     other_answer = L1ScreeningQuestionOptionFactory()
     result = L1ScreeningResultFactory(citation=row, question=question)
-    url = reverse("screen_l1_human_answer", args=[review.id, result.id])
+    url = reverse("l1_citation_human_answer", args=[review.id, result.id])
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(url)

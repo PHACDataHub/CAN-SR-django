@@ -1,107 +1,26 @@
-from dataclasses import dataclass
-
 from django import forms
 from django.core.validators import FileExtensionValidator
-from django.http import HttpResponse
-
-import htpy as h
-
-from proj.htpy.form_components import ErrorSummary
-from proj.htpy.modal_component import ModalComponent
+from django.http import FileResponse, HttpResponse
 
 from my_app.models import (
-    Citation,
     Document,
     L1ScreeningResult,
     L2ScreeningResult,
     ParameterExtractionResult,
-    Review,
 )
 from my_app.router import route
 from my_app.services.process_document import QueueProcessDocumentService
-from my_app.views.view_utils import MustAccessReviewMixin
-from shortcuts import (
-    GenericForm,
-    StandardFormMixin,
-    View,
-    cached_property,
-    get_object_or_404,
-    reverse,
-    tdt,
-    transaction,
+from my_app.views.pdf_components import (
+    CitationDocumentUploadModal as BaseCitationDocumentUploadModal,
 )
+from my_app.views.screening.document_util_components import (
+    DocumentCitationMixin,
+)
+from shortcuts import StandardFormMixin, cached_property, tdt, transaction
 
 
-@dataclass
-class DocumentUploadModal:
-    form: object
-    review: Review
-    citation_row: Citation
-    existing_document: Document | None
-    route_name: str
-    prefix: str
-
-    @property
-    def modal_id(self):
-        return f"{self.prefix}-upload-modal-{self.citation_row.id}"
-
-    @property
-    def form_id(self):
-        return f"{self.prefix}-upload-form-{self.citation_row.id}"
-
-    def render(self):
-        title = (
-            tdt("Replace document")
-            if self.existing_document is not None
-            else tdt("Upload document")
-        )
-
-        footer = h.fragment[
-            h.button(
-                {
-                    "type": "button",
-                    "class": "btn btn-secondary",
-                    "data-modal-close": True,
-                }
-            )[tdt("Cancel")],
-        ]
-
-        return ModalComponent(
-            title=title,
-            modal_id=self.modal_id,
-            footer=footer,
-        )[self.render_form_body()]
-
-    def render_form_body(self):
-        return h.form(
-            id=self.form_id,
-            method="post",
-            enctype="multipart/form-data",
-            novalidate=True,
-            hx_post=reverse(
-                self.route_name,
-                args=[self.review.id, self.citation_row.id],
-            ),
-            hx_target="#modal-slot",
-            hx_swap="innerHTML",
-            hx_encoding="multipart/form-data",
-        )[
-            ErrorSummary([self.form]),
-            GenericForm(self.form),
-            h.div(".mt-3.text-end")[
-                h.button(
-                    ".btn.btn-primary",
-                    type="submit",
-                    **{"hx-disabled-elt": "this"},
-                )[
-                    (
-                        tdt("Replace document")
-                        if self.existing_document is not None
-                        else tdt("Upload document")
-                    )
-                ]
-            ],
-        ]
+class CitationDocumentUploadModal(BaseCitationDocumentUploadModal):
+    pass
 
 
 class CitationDocumentUploadForm(StandardFormMixin):
@@ -155,18 +74,25 @@ class CitationDocumentUploadForm(StandardFormMixin):
 
 
 @route(
-    "/reviews/<int:review_id>/citations/<int:row_pk>/document/upload/",
-    name="citation_document_upload",
+    "/reviews/<int:review_id>/citations/<int:row_pk>/document/pdf/",
+    name="citation_download_pdf_document",
 )
-class CitationDocumentUploadView(MustAccessReviewMixin, View):
-    @cached_property
-    def citation_row(self):
-        return get_object_or_404(
-            Citation,
-            pk=self.kwargs["row_pk"],
-            dataset__review=self.review,
+class CitationDocumentPdfView(DocumentCitationMixin):
+    def get(self, request, *args, **kwargs):
+        document_file = self.document.file
+        return FileResponse(
+            document_file.open("rb"),
+            content_type="application/pdf",
+            as_attachment=False,
+            filename=document_file.name,
         )
 
+
+@route(
+    "/reviews/<int:review_id>/citations/<int:row_pk>/document/upload/",
+    name="citation_upload_pdf_document_modal",
+)
+class CitationDocumentUploadView(DocumentCitationMixin):
     @cached_property
     def existing_document(self):
         return self.citation_row.document
@@ -197,13 +123,11 @@ class CitationDocumentUploadView(MustAccessReviewMixin, View):
 
     @cached_property
     def modal(self):
-        return DocumentUploadModal(
+        return CitationDocumentUploadModal(
             form=self.form,
             review=self.review,
             citation_row=self.citation_row,
             existing_document=self.existing_document,
-            route_name="citation_document_upload",
-            prefix="citation-document",
         )
 
     def get(self, *args, **kwargs):

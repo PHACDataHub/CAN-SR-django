@@ -1,5 +1,7 @@
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from django.http import HttpResponse
+
 from my_app.models import Review
 from shortcuts import MustPassRuleMixin, View, cached_property, test_rule
 
@@ -30,6 +32,27 @@ def url_with_same_params(request, path=None, **new_params):
         path = request.path
 
     return _url_with_params(path, request.GET, **new_params)
+
+
+def paginated_component_response(
+    request,
+    page_obj,
+    component,
+    shell_url,
+    **response_kwargs,
+):
+    response_headers = {
+        "HX-Push-Url": url_with_same_params(
+            request,
+            path=shell_url,
+            page=page_obj.number,
+        )
+    }
+    return HttpResponse(
+        str(component),
+        headers=response_headers,
+        **response_kwargs,
+    )
 
 
 def _url_with_params(path, current_params, **new_params):

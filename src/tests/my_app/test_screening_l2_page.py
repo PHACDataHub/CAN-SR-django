@@ -62,16 +62,16 @@ def test_screening_l2_shell_renders_component_and_refresh_button(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l2", args=[review.id]), {"page": 1}
+            reverse("l2_citations_list", args=[review.id]), {"page": 1}
         )
 
     body = response.content.decode()
 
     assert response.status_code == 200
     assert "L2 Screening" in body
-    assert reverse("screening_l2_component", args=[review.id]) in body
+    assert reverse("l2_citations_list_partial", args=[review.id]) in body
     assert 'hx-target="#l2-screening-component"' in body
-    assert 'hx-swap="outerHTML"' in body
+    assert 'hx-swap="morph:outerHTML"' in body
     assert (
         'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s"'
         in body
@@ -87,7 +87,7 @@ def test_screening_l2_shell_can_disable_polling(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l2", args=[review.id]), {"page": 1}
+            reverse("l2_citations_list", args=[review.id]), {"page": 1}
         )
 
     body = response.content.decode()
@@ -114,7 +114,7 @@ def test_screening_l2_component_view_renders(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l2_component", args=[review.id]),
+            reverse("l2_citations_list_partial", args=[review.id]),
             {"page": 1},
         )
 
@@ -144,12 +144,12 @@ def test_screening_l2_component_view_renders_pagination_buttons(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l2_component", args=[review.id]),
+            reverse("l2_citations_list_partial", args=[review.id]),
             {"page": 1},
         )
 
     body = response.content.decode()
-    component_url = reverse("screening_l2_component", args=[review.id])
+    component_url = reverse("l2_citations_list_partial", args=[review.id])
 
     assert response.status_code == 200
     assert f"{component_url}?page=2" in body
@@ -163,13 +163,15 @@ def test_screening_l2_component_view_renders_row_view_link(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l2_component", args=[review.id]),
+            reverse("l2_citations_list_partial", args=[review.id]),
             {"page": 1},
         )
 
     body = response.content.decode()
-    details_url = reverse("screen_l2_row_details", args=[review.id, row.id])
-    upload_url = reverse("citation_document_upload", args=[review.id, row.id])
+    details_url = reverse("l2_citation_detail", args=[review.id, row.id])
+    upload_url = reverse(
+        "citation_upload_pdf_document_modal", args=[review.id, row.id]
+    )
 
     assert response.status_code == 200
     assert details_url in body
@@ -222,21 +224,19 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l2_row_details", args=[review.id, row.id])
+            reverse("l2_citation_detail", args=[review.id, row.id])
         )
 
     body = response.content.decode()
 
     assert response.status_code == 200
     assert "L2 PDF screening" in body
-    assert reverse("screening_l2", args=[review.id]) in body
+    assert reverse("l2_citations_list", args=[review.id]) in body
     assert (
-        reverse("screen_l2_row_details", args=[review.id, previous_row.id])
+        reverse("l2_citation_detail", args=[review.id, previous_row.id])
         in body
     )
-    assert (
-        reverse("screen_l2_row_details", args=[review.id, next_row.id]) in body
-    )
+    assert reverse("l2_citation_detail", args=[review.id, next_row.id]) in body
     assert "Viewing 1 of 3" in body
     assert "Human reviewed" in body
     assert "0 / 3" in body
@@ -250,11 +250,11 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert "Looks eligible." in body
     assert 'id="l2-citation-data"' in body
     assert (
-        f'data-pdf-url="{reverse("screen_l2_row_pdf", args=[review.id, row.id])}"'
+        f'data-pdf-url="{reverse("citation_download_pdf_document", args=[review.id, row.id])}"'
         in body
     )
     assert (
-        f'data-metadata-url="{reverse("screen_l2_row_pdf_metadata", args=[review.id, row.id])}"'
+        f'data-metadata-url="{reverse("l2_citation_pdf_metadata", args=[review.id, row.id])}"'
         in body
     )
     assert 'id="citation-pdf-scroll"' in body
@@ -279,7 +279,8 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
         in body
     )
     assert (
-        reverse("citation_document_upload", args=[review.id, row.id]) in body
+        reverse("citation_upload_pdf_document_modal", args=[review.id, row.id])
+        in body
     )
     assert "More" in body
     assert "Re-upload" in body
@@ -300,11 +301,13 @@ def test_screen_l2_row_details_view_renders_screening_process_button(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l2_row_details", args=[review.id, row.id])
+            reverse("l2_citation_detail", args=[review.id, row.id])
         )
 
     body = response.content.decode()
-    process_url = reverse("screen_l2_row_process", args=[review.id, row.id])
+    process_url = reverse(
+        "l2_citation_process_screening", args=[review.id, row.id]
+    )
 
     assert response.status_code == 200
     assert f'id="l2-pdf-screening-control-{row.id}"' in body
@@ -337,7 +340,9 @@ def test_screen_l2_row_process_view_enqueues_screening_and_returns_control(
             "my_app.tasks.l2_screening.process_l2_screening_task"
         ) as task_mock:
             response = vanilla_client.post(
-                reverse("screen_l2_row_process", args=[review.id, row.id])
+                reverse(
+                    "l2_citation_process_screening", args=[review.id, row.id]
+                )
             )
 
     body = response.content.decode()
@@ -388,7 +393,9 @@ def test_screen_l2_row_process_view_replaces_existing_screening_results(
             "my_app.tasks.l2_screening.process_l2_screening_task"
         ) as task_mock:
             response = vanilla_client.post(
-                reverse("screen_l2_row_process", args=[review.id, row.id])
+                reverse(
+                    "l2_citation_process_screening", args=[review.id, row.id]
+                )
             )
 
     result = L2ScreeningResult.objects.get(citation=row, question=question)
@@ -417,7 +424,9 @@ def test_screen_l2_row_process_view_rejects_unprocessed_document(
             "my_app.tasks.l2_screening.process_l2_screening_task"
         ) as task_mock:
             response = vanilla_client.post(
-                reverse("screen_l2_row_process", args=[review.id, row.id])
+                reverse(
+                    "l2_citation_process_screening", args=[review.id, row.id]
+                )
             )
 
     body = response.content.decode()
@@ -445,7 +454,9 @@ def test_l2_human_validation_can_be_set_and_undone(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
-            reverse("screen_l2_validate_correct", args=[review.id, result.id])
+            reverse(
+                "l2_citation_validate_correct", args=[review.id, result.id]
+            )
         )
 
     result.refresh_from_db()
@@ -459,7 +470,7 @@ def test_l2_human_validation_can_be_set_and_undone(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
-            reverse("screen_l2_undo_validation", args=[review.id, result.id])
+            reverse("l2_citation_undo_validation", args=[review.id, result.id])
         )
 
     result.refresh_from_db()
@@ -481,7 +492,7 @@ def test_l2_human_answer_modal_saves_question_option_and_notes(
     answer = L2ScreeningQuestionOptionFactory(question=question)
     other_answer = L2ScreeningQuestionOptionFactory()
     result = L2ScreeningResultFactory(citation=row, question=question)
-    url = reverse("screen_l2_human_answer", args=[review.id, result.id])
+    url = reverse("l2_citation_human_answer", args=[review.id, result.id])
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(url)
@@ -524,9 +535,9 @@ def test_l2_human_review_views_require_access_and_matching_review(
     result = L2ScreeningResultFactory()
     other_review = ReviewFactory()
     endpoints = [
-        "screen_l2_validate_correct",
-        "screen_l2_undo_validation",
-        "screen_l2_human_answer",
+        "l2_citation_validate_correct",
+        "l2_citation_undo_validation",
+        "l2_citation_human_answer",
     ]
 
     with patch_rules(can_access_review=False):
@@ -553,7 +564,7 @@ def test_screen_l2_row_details_view_renders_empty_pdf_viewer_without_document(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l2_row_details", args=[review.id, row.id])
+            reverse("l2_citation_detail", args=[review.id, row.id])
         )
 
     body = response.content.decode()
@@ -574,7 +585,7 @@ def test_screen_l2_row_pdf_view_streams_linked_document(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l2_row_pdf", args=[review.id, row.id])
+            reverse("citation_download_pdf_document", args=[review.id, row.id])
         )
 
     assert response.status_code == 200
@@ -682,7 +693,7 @@ def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l2_row_pdf_metadata", args=[review.id, row.id])
+            reverse("l2_citation_pdf_metadata", args=[review.id, row.id])
         )
 
     assert response.status_code == 200
@@ -724,8 +735,8 @@ def test_screen_l2_row_pdf_metadata_view_returns_evidence_highlights(
 @pytest.mark.parametrize(
     "url_name",
     [
-        "screen_l2_row_pdf",
-        "screen_l2_row_pdf_metadata",
+        "citation_download_pdf_document",
+        "l2_citation_pdf_metadata",
     ],
 )
 def test_screen_l2_row_pdf_views_return_404_without_document(
@@ -757,7 +768,7 @@ def test_screen_l2_row_pdf_metadata_view_returns_404_without_result(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screen_l2_row_pdf_metadata", args=[review.id, row.id])
+            reverse("l2_citation_pdf_metadata", args=[review.id, row.id])
         )
 
     assert response.status_code == 404
@@ -766,10 +777,10 @@ def test_screen_l2_row_pdf_metadata_view_returns_404_without_result(
 @pytest.mark.parametrize(
     "url_name",
     [
-        "screen_l2_row_details",
-        "screen_l2_row_process",
-        "screen_l2_row_pdf",
-        "screen_l2_row_pdf_metadata",
+        "l2_citation_detail",
+        "l2_citation_process_screening",
+        "citation_download_pdf_document",
+        "l2_citation_pdf_metadata",
     ],
 )
 def test_screen_l2_row_pdf_views_require_review_access(
@@ -784,7 +795,7 @@ def test_screen_l2_row_pdf_views_require_review_access(
 
     with patch_rules(can_access_review=False):
         url = reverse(url_name, args=[review.id, row.id])
-        if url_name == "screen_l2_row_process":
+        if url_name == "l2_citation_process_screening":
             response = vanilla_client.post(url)
         else:
             response = vanilla_client.get(url)
@@ -795,10 +806,10 @@ def test_screen_l2_row_pdf_views_require_review_access(
 @pytest.mark.parametrize(
     "url_name",
     [
-        "screen_l2_row_details",
-        "screen_l2_row_process",
-        "screen_l2_row_pdf",
-        "screen_l2_row_pdf_metadata",
+        "l2_citation_detail",
+        "l2_citation_process_screening",
+        "citation_download_pdf_document",
+        "l2_citation_pdf_metadata",
     ],
 )
 def test_screen_l2_row_pdf_views_return_404_for_row_from_another_review(
@@ -814,7 +825,7 @@ def test_screen_l2_row_pdf_views_return_404_for_row_from_another_review(
 
     with patch_rules(can_access_review=True):
         url = reverse(url_name, args=[requested_review.id, row.id])
-        if url_name == "screen_l2_row_process":
+        if url_name == "l2_citation_process_screening":
             response = vanilla_client.post(url)
         else:
             response = vanilla_client.get(url)
@@ -848,7 +859,7 @@ def test_screening_l2_component_view_renders_upload_and_screening_statuses(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("screening_l2_component", args=[review.id]),
+            reverse("l2_citations_list_partial", args=[review.id]),
             {"page": 1},
         )
 
@@ -871,7 +882,9 @@ def test_citation_document_upload_view_renders_plain_upload_form(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("citation_document_upload", args=[review.id, row.id])
+            reverse(
+                "citation_upload_pdf_document_modal", args=[review.id, row.id]
+            )
         )
 
     body = response.content.decode()
@@ -891,7 +904,9 @@ def test_citation_document_upload_view_disables_unconfigured_processing_options(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("citation_document_upload", args=[review.id, row.id])
+            reverse(
+                "citation_upload_pdf_document_modal", args=[review.id, row.id]
+            )
         )
 
     soup = soup_from_str(response.content)
@@ -925,7 +940,9 @@ def test_citation_document_upload_view_enables_configured_processing_options(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("citation_document_upload", args=[review.id, row.id])
+            reverse(
+                "citation_upload_pdf_document_modal", args=[review.id, row.id]
+            )
         )
 
     soup = soup_from_str(response.content)
@@ -950,7 +967,9 @@ def test_citation_document_upload_view_renders_replace_form_for_existing_documen
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("citation_document_upload", args=[review.id, row.id])
+            reverse(
+                "citation_upload_pdf_document_modal", args=[review.id, row.id]
+            )
         )
 
     body = response.content.decode()
@@ -970,10 +989,13 @@ def test_citation_document_upload_view_uploads_document_and_triggers_refresh(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.citation_document_upload.QueueProcessDocumentService.perform"
+            "my_app.views.pdf_views.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
-                reverse("citation_document_upload", args=[review.id, row.id]),
+                reverse(
+                    "citation_upload_pdf_document_modal",
+                    args=[review.id, row.id],
+                ),
                 {
                     "document_file": _build_pdf_file(),
                 },
@@ -1001,10 +1023,13 @@ def test_citation_document_upload_view_passes_processing_options_to_service(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.citation_document_upload.QueueProcessDocumentService"
+            "my_app.views.pdf_views.QueueProcessDocumentService"
         ) as service_mock:
             response = vanilla_client.post(
-                reverse("citation_document_upload", args=[review.id, row.id]),
+                reverse(
+                    "citation_upload_pdf_document_modal",
+                    args=[review.id, row.id],
+                ),
                 {
                     "document_file": _build_pdf_file(),
                     "should_run_l2_screening": "on",
@@ -1059,10 +1084,13 @@ def test_citation_document_upload_view_replaces_document_and_deletes_old_data(
 
     with patch_rules(can_access_review=True):
         with patch(
-            "my_app.views.citation_document_upload.QueueProcessDocumentService.perform"
+            "my_app.views.pdf_views.QueueProcessDocumentService.perform"
         ) as perform_mock:
             response = vanilla_client.post(
-                reverse("citation_document_upload", args=[review.id, row.id]),
+                reverse(
+                    "citation_upload_pdf_document_modal",
+                    args=[review.id, row.id],
+                ),
                 {
                     "document_file": new_file,
                     "confirm_replace": "on",
@@ -1093,7 +1121,9 @@ def test_citation_document_upload_view_rejects_replace_without_confirmation(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
-            reverse("citation_document_upload", args=[review.id, row.id]),
+            reverse(
+                "citation_upload_pdf_document_modal", args=[review.id, row.id]
+            ),
             {
                 "document_file": _build_pdf_file(),
             },

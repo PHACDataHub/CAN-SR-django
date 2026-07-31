@@ -36,16 +36,22 @@ def test_parameter_extraction_shell_renders_component_and_refresh_button(
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("parameter_extraction", args=[review.id]), {"page": 1}
+            reverse("parameter_extraction_citations_list", args=[review.id]),
+            {"page": 1},
         )
 
     body = response.content.decode()
 
     assert response.status_code == 200
     assert "Parameter extraction" in body
-    assert reverse("parameter_extraction_component", args=[review.id]) in body
+    assert (
+        reverse(
+            "parameter_extraction_citations_list_partial", args=[review.id]
+        )
+        in body
+    )
     assert 'hx-target="#parameter-extraction-component"' in body
-    assert 'hx-swap="outerHTML"' in body
+    assert 'hx-swap="morph:outerHTML"' in body
     assert (
         'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s"'
         in body
@@ -60,7 +66,8 @@ def test_parameter_extraction_shell_can_disable_polling(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("parameter_extraction", args=[review.id]), {"page": 1}
+            reverse("parameter_extraction_citations_list", args=[review.id]),
+            {"page": 1},
         )
 
     body = response.content.decode()
@@ -87,7 +94,9 @@ def test_parameter_extraction_component_view_renders(vanilla_client):
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
-            reverse("parameter_extraction_component", args=[review.id]),
+            reverse(
+                "parameter_extraction_citations_list_partial", args=[review.id]
+            ),
             {"page": 1},
         )
 
@@ -139,7 +148,8 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
             reverse(
-                "parameter_extraction_row_details", args=[review.id, row.id]
+                "parameter_extraction_citation_detail",
+                args=[review.id, row.id],
             )
         )
 
@@ -147,17 +157,20 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
 
     assert response.status_code == 200
     assert "Parameter PDF extraction" in body
-    assert reverse("parameter_extraction", args=[review.id]) in body
+    assert (
+        reverse("parameter_extraction_citations_list", args=[review.id])
+        in body
+    )
     assert (
         reverse(
-            "parameter_extraction_row_details",
+            "parameter_extraction_citation_detail",
             args=[review.id, previous_row.id],
         )
         in body
     )
     assert (
         reverse(
-            "parameter_extraction_row_details",
+            "parameter_extraction_citation_detail",
             args=[review.id, next_row.id],
         )
         in body
@@ -173,11 +186,11 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     assert "Modify human values" in body
     assert 'id="parameter-extraction-citation-data"' in body
     assert (
-        f'data-pdf-url="{reverse("parameter_extraction_row_pdf", args=[review.id, row.id])}"'
+        f'data-pdf-url="{reverse("citation_download_pdf_document", args=[review.id, row.id])}"'
         in body
     )
     assert (
-        f'data-metadata-url="{reverse("parameter_extraction_row_pdf_metadata", args=[review.id, row.id])}"'
+        f'data-metadata-url="{reverse("parameter_extraction_citation_pdf_metadata", args=[review.id, row.id])}"'
         in body
     )
     assert 'id="citation-pdf-scroll"' in body
@@ -220,7 +233,7 @@ def test_parameter_extraction_validate_ai_answer_sets_human_values(
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
             reverse(
-                "parameter_extraction_validate_ai_answer",
+                "parameter_extraction_citation_validate_ai_answer",
                 args=[review.id, result.id],
             )
         )
@@ -251,7 +264,7 @@ def test_parameter_extraction_human_answer_modal_saves_values(vanilla_client):
         value="10 mg",
     )
     url = reverse(
-        "parameter_extraction_human_answer",
+        "parameter_extraction_citation_human_answer",
         args=[review.id, result.id],
     )
 
@@ -302,7 +315,7 @@ def test_parameter_extraction_process_view_enqueues_extraction_and_returns_contr
         ) as task_mock:
             response = vanilla_client.post(
                 reverse(
-                    "parameter_extraction_row_process",
+                    "parameter_extraction_citation_process_extraction",
                     args=[review.id, row.id],
                 )
             )
@@ -347,7 +360,7 @@ def test_parameter_extraction_process_view_rejects_unprocessed_document(
         ) as task_mock:
             response = vanilla_client.post(
                 reverse(
-                    "parameter_extraction_row_process",
+                    "parameter_extraction_citation_process_extraction",
                     args=[review.id, row.id],
                 )
             )
@@ -437,7 +450,7 @@ def test_parameter_extraction_pdf_metadata_view_returns_evidence_highlights(
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
             reverse(
-                "parameter_extraction_row_pdf_metadata",
+                "parameter_extraction_citation_pdf_metadata",
                 args=[review.id, row.id],
             )
         )
@@ -469,12 +482,12 @@ def test_parameter_extraction_pdf_metadata_view_returns_evidence_highlights(
 @pytest.mark.parametrize(
     "url_name",
     [
-        "parameter_extraction_row_details",
-        "parameter_extraction_row_process",
-        "parameter_extraction_row_pdf",
-        "parameter_extraction_row_pdf_metadata",
-        "parameter_extraction_validate_ai_answer",
-        "parameter_extraction_human_answer",
+        "parameter_extraction_citation_detail",
+        "parameter_extraction_citation_process_extraction",
+        "citation_download_pdf_document",
+        "parameter_extraction_citation_pdf_metadata",
+        "parameter_extraction_citation_validate_ai_answer",
+        "parameter_extraction_citation_human_answer",
     ],
 )
 def test_parameter_extraction_views_require_review_access(
@@ -496,16 +509,16 @@ def test_parameter_extraction_views_require_review_access(
 
     with patch_rules(can_access_review=False):
         if url_name in (
-            "parameter_extraction_validate_ai_answer",
-            "parameter_extraction_human_answer",
+            "parameter_extraction_citation_validate_ai_answer",
+            "parameter_extraction_citation_human_answer",
         ):
             url = reverse(url_name, args=[review.id, result.id])
         else:
             url = reverse(url_name, args=[review.id, row.id])
 
         if url_name in (
-            "parameter_extraction_row_process",
-            "parameter_extraction_validate_ai_answer",
+            "parameter_extraction_citation_process_extraction",
+            "parameter_extraction_citation_validate_ai_answer",
         ):
             response = vanilla_client.post(url)
         else:

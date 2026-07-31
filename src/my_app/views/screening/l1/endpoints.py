@@ -15,22 +15,15 @@ from my_app.models import (
 )
 from my_app.router import route
 from my_app.services.l1_screening import DeferredL1ScreeningService
-from my_app.views.screening.l1_screening_templating import (
-    CitationRowDisplay,
-    L1CitationScreeningPage,
-    L1ScreeningComponent,
-    L1ScreeningPageTemplate,
-    badge_id,
+from my_app.views.screening.l1.detail import (
     l1_human_review_control_id,
     render_l1_human_review_control,
     render_l1_screening_control,
 )
-from my_app.views.view_utils import MustAccessReviewMixin, url_with_same_params
+from my_app.views.screening.l1.list import CitationRowDisplay
+from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
-    DetailView,
     GenericForm,
-    HtpyTemplateMixin,
-    ListView,
     StandardFormMixin,
     cached_property,
     get_object_or_404,
@@ -58,52 +51,9 @@ class L1HumanAnswerForm(forms.ModelForm, StandardFormMixin):
         self.fields["human_selected_answer"].required = True
 
 
-class L1ScreeningBaseView(MustAccessReviewMixin, ListView):
-    paginate_by = 10
-
-    def get_queryset(self):
-        return Citation.objects.filter(dataset__review=self.review).order_by(
-            "order"
-        )
-
-
-@route("/reviews/<int:review_id>/screening_l1/", name="screening_l1")
-class ScreeningL1PageView(L1ScreeningBaseView, HtpyTemplateMixin):
-    template_component = L1ScreeningPageTemplate
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l1/component/",
-    name="screening_l1_component",
-)
-class ScreeningL1ComponentView(L1ScreeningBaseView):
-    def render_to_response(self, context, **response_kwargs):
-        page_obj = context["page_obj"]
-        component = L1ScreeningComponent(
-            review=self.review,
-            page_obj=page_obj,
-            request=self.request,
-        )
-
-        new_page_url = reverse("screening_l1", args=[self.review.id])
-        response_headers = {
-            "HX-Push-Url": url_with_same_params(
-                self.request,
-                path=new_page_url,
-                page=page_obj.number,
-            )
-        }
-
-        return HttpResponse(
-            str(component.render()),
-            headers=response_headers,
-            **response_kwargs,
-        )
-
-
 @route(
     "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/",
-    name="screen_l1_row",
+    name="l1_citation_process_screening",
 )
 class ScreenL1RowView(MustAccessReviewMixin, View):
     @cached_property
@@ -125,36 +75,18 @@ class ScreenL1RowView(MustAccessReviewMixin, View):
         DeferredL1ScreeningService(
             rows=[self.citation_row],
             questions=self.screening_questions,
+            overwrite_existing=True,
         ).perform()
 
-        headers = {
-            "HX-Refocus": "#" + badge_id(self.citation_row),
-        }
+        # render multiple components at top level,
+        # client uses this view in two context
+        # it will select applicable markup with hx-select
+        resp_content = h.fragment[
+            CitationRowDisplay(self.citation_row, self.review),
+            render_l1_screening_control(self.citation_row, self.review),
+        ]
 
-        return HttpResponse(
-            str(CitationRowDisplay(self.citation_row, self.review)),
-            headers=headers,
-        )
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/details/",
-    name="screen_l1_row_details",
-)
-class L1CitationScreeningView(
-    MustAccessReviewMixin, DetailView, HtpyTemplateMixin
-):
-    model = Citation
-    pk_url_kwarg = "row_pk"
-    template_component = L1CitationScreeningPage
-
-    def get_queryset(self):
-        return (
-            Citation.objects.filter(dataset__review=self.review)
-            .select_related("dataset")
-            .prefetch_related("dataset__screening_columns")
-            .order_by("order")
-        )
+        return HttpResponse(str(resp_content))
 
 
 class L1CitationMixin(MustAccessReviewMixin, View):
@@ -169,23 +101,6 @@ class L1CitationMixin(MustAccessReviewMixin, View):
     @cached_property
     def screening_questions(self):
         return list(L1ScreeningQuestion.objects.filter(review=self.review))
-
-
-@route(
-    "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/process/",
-    name="screen_l1_row_process",
-)
-class L1CitationScreeningProcessView(L1CitationMixin):
-    def post(self, request, *args, **kwargs):
-        DeferredL1ScreeningService(
-            rows=[self.citation_row],
-            questions=self.screening_questions,
-            overwrite_existing=True,
-        ).perform()
-
-        return HttpResponse(
-            str(render_l1_screening_control(self.citation_row, self.review))
-        )
 
 
 class L1HumanReviewMixin(MustAccessReviewMixin, View):
@@ -208,7 +123,7 @@ class L1HumanReviewMixin(MustAccessReviewMixin, View):
 
 @route(
     "/reviews/<int:review_id>/screening_l1/results/<int:result_pk>/validate/",
-    name="screen_l1_validate_correct",
+    name="l1_citation_validate_correct",
 )
 class L1ValidateCorrectView(L1HumanReviewMixin):
     def post(self, request, *args, **kwargs):
@@ -229,7 +144,7 @@ class L1ValidateCorrectView(L1HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l1/results/<int:result_pk>/undo-validation/",
-    name="screen_l1_undo_validation",
+    name="l1_citation_undo_validation",
 )
 class L1UndoValidationView(L1HumanReviewMixin):
     def post(self, request, *args, **kwargs):
@@ -246,7 +161,7 @@ class L1UndoValidationView(L1HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l1/results/<int:result_pk>/human-answer/",
-    name="screen_l1_human_answer",
+    name="l1_citation_human_answer",
 )
 class L1HumanAnswerView(L1HumanReviewMixin):
     @cached_property
@@ -280,7 +195,7 @@ class L1HumanAnswerView(L1HumanReviewMixin):
                 h.form(
                     id=form_id,
                     hx_post=reverse(
-                        "screen_l1_human_answer",
+                        "l1_citation_human_answer",
                         args=[self.review.id, self.result.id],
                     ),
                     hx_target="#modal-slot",
