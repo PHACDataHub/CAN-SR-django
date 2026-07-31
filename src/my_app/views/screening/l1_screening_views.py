@@ -70,14 +70,14 @@ class L1ScreeningBaseView(MustAccessReviewMixin, ListView):
         )
 
 
-@route("/reviews/<int:review_id>/screening_l1/", name="screening_l1")
+@route("/reviews/<int:review_id>/screening_l1/", name="l1_citations_list")
 class ScreeningL1PageView(L1ScreeningBaseView, HtpyTemplateMixin):
     template_component = L1ScreeningPageTemplate
 
 
 @route(
     "/reviews/<int:review_id>/screening_l1/component/",
-    name="screening_l1_component",
+    name="l1_citations_list_partial",
 )
 class ScreeningL1ComponentView(L1ScreeningBaseView):
     def render_to_response(self, context, **response_kwargs):
@@ -92,14 +92,14 @@ class ScreeningL1ComponentView(L1ScreeningBaseView):
             self.request,
             page_obj,
             component.render(),
-            reverse("screening_l1", args=[self.review.id]),
+            reverse("l1_citations_list", args=[self.review.id]),
             **response_kwargs,
         )
 
 
 @route(
     "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/",
-    name="screen_l1_row",
+    name="l1_citation_process_screening",
 )
 class ScreenL1RowView(MustAccessReviewMixin, View):
     @cached_property
@@ -137,7 +137,7 @@ class ScreenL1RowView(MustAccessReviewMixin, View):
 
 @route(
     "/reviews/<int:review_id>/screening_l1/rows/<int:row_pk>/details/",
-    name="screen_l1_row_details",
+    name="l1_citation_detail",
 )
 class L1CitationScreeningView(
     MustAccessReviewMixin, DetailView, HtpyTemplateMixin
@@ -189,7 +189,7 @@ class L1HumanReviewMixin(MustAccessReviewMixin, View):
 
 @route(
     "/reviews/<int:review_id>/screening_l1/results/<int:result_pk>/validate/",
-    name="screen_l1_validate_correct",
+    name="l1_citation_validate_correct",
 )
 class L1ValidateCorrectView(L1HumanReviewMixin):
     def post(self, request, *args, **kwargs):
@@ -210,7 +210,7 @@ class L1ValidateCorrectView(L1HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l1/results/<int:result_pk>/undo-validation/",
-    name="screen_l1_undo_validation",
+    name="l1_citation_undo_validation",
 )
 class L1UndoValidationView(L1HumanReviewMixin):
     def post(self, request, *args, **kwargs):
@@ -227,7 +227,7 @@ class L1UndoValidationView(L1HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l1/results/<int:result_pk>/human-answer/",
-    name="screen_l1_human_answer",
+    name="l1_citation_human_answer",
 )
 class L1HumanAnswerView(L1HumanReviewMixin):
     @cached_property
@@ -261,7 +261,7 @@ class L1HumanAnswerView(L1HumanReviewMixin):
                 h.form(
                     id=form_id,
                     hx_post=reverse(
-                        "screen_l1_human_answer",
+                        "l1_citation_human_answer",
                         args=[self.review.id, self.result.id],
                     ),
                     hx_target="#modal-slot",

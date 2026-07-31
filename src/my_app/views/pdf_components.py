@@ -124,7 +124,8 @@ def render_pdf_modal_button(
         id=f"upload-btn-{citation_row.id}",
         type="button",
         hx_get=reverse(
-            "citation_document_upload", args=[review.id, citation_row.id]
+            "citation_upload_pdf_document_modal",
+            args=[review.id, citation_row.id],
         ),
         hx_target="#modal-slot",
         hx_swap="innerHTML",
@@ -180,7 +181,7 @@ class CitationDocumentUploadModal:
             enctype="multipart/form-data",
             novalidate=True,
             hx_post=reverse(
-                "citation_document_upload",
+                "citation_upload_pdf_document_modal",
                 args=[self.review.id, self.citation_row.id],
             ),
             hx_target="#modal-slot",
@@ -264,7 +265,7 @@ def PdfViewerAssets(
     metadata_url = None
     if citation_row.document_id is not None:
         pdf_url = reverse(
-            "citation_document_pdf",
+            "citation_download_pdf_document",
             args=[review.id, citation_row.id],
         )
         metadata_url = reverse(

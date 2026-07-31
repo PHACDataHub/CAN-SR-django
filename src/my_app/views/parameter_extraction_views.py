@@ -69,7 +69,7 @@ class ParameterExtractionBaseView(DocumentCitationListView):
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/",
-    name="parameter_extraction",
+    name="parameter_extraction_citations_list",
 )
 class ParameterExtractionPageView(
     ParameterExtractionBaseView,
@@ -80,7 +80,7 @@ class ParameterExtractionPageView(
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/component/",
-    name="parameter_extraction_component",
+    name="parameter_extraction_citations_list_partial",
 )
 class ParameterExtractionComponentView(ParameterExtractionBaseView):
     def render_to_response(self, context, **response_kwargs):
@@ -95,14 +95,16 @@ class ParameterExtractionComponentView(ParameterExtractionBaseView):
             self.request,
             page_obj,
             component.render(),
-            reverse("parameter_extraction", args=[self.review.id]),
+            reverse(
+                "parameter_extraction_citations_list", args=[self.review.id]
+            ),
             **response_kwargs,
         )
 
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/details/",
-    name="parameter_extraction_row_details",
+    name="parameter_extraction_citation_detail",
 )
 class ParameterExtractionPdfView(DocumentCitationDetailView):
     template_component = ParameterExtractionPdfPage
@@ -110,7 +112,7 @@ class ParameterExtractionPdfView(DocumentCitationDetailView):
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/process/",
-    name="parameter_extraction_row_process",
+    name="parameter_extraction_citation_process_extraction",
 )
 class ParameterExtractionProcessView(DocumentCitationMixin):
     @cached_property
@@ -168,7 +170,7 @@ class ParameterExtractionHumanReviewMixin(MustAccessReviewMixin, View):
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/results/<int:result_pk>/validate-ai-answer/",
-    name="parameter_extraction_validate_ai_answer",
+    name="parameter_extraction_citation_validate_ai_answer",
 )
 class ParameterExtractionValidateAiAnswerView(
     ParameterExtractionHumanReviewMixin
@@ -182,7 +184,7 @@ class ParameterExtractionValidateAiAnswerView(
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/results/<int:result_pk>/human-answer/",
-    name="parameter_extraction_human_answer",
+    name="parameter_extraction_citation_human_answer",
 )
 class ParameterExtractionHumanAnswerView(ParameterExtractionHumanReviewMixin):
     @cached_property
@@ -216,7 +218,7 @@ class ParameterExtractionHumanAnswerView(ParameterExtractionHumanReviewMixin):
                 h.form(
                     id=form_id,
                     hx_post=reverse(
-                        "parameter_extraction_human_answer",
+                        "parameter_extraction_citation_human_answer",
                         args=[self.review.id, self.result.id],
                     ),
                     hx_target="#modal-slot",
@@ -245,7 +247,7 @@ class ParameterExtractionHumanAnswerView(ParameterExtractionHumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/rows/<int:row_pk>/pdf-metadata/",
-    name="parameter_extraction_row_pdf_metadata",
+    name="parameter_extraction_citation_pdf_metadata",
 )
 class ParameterExtractionPdfCitationMetadataView(PdfCitationMetadataView):
     result_model = ParameterExtractionResult

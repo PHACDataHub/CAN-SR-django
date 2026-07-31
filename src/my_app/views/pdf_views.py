@@ -69,7 +69,7 @@ class CitationDocumentUploadForm(StandardFormMixin):
 
 @route(
     "/reviews/<int:review_id>/citations/<int:row_pk>/document/pdf/",
-    name="citation_document_pdf",
+    name="citation_download_pdf_document",
 )
 class CitationDocumentPdfView(DocumentCitationMixin):
     def get(self, request, *args, **kwargs):
@@ -84,7 +84,7 @@ class CitationDocumentPdfView(DocumentCitationMixin):
 
 @route(
     "/reviews/<int:review_id>/citations/<int:row_pk>/document/upload/",
-    name="citation_document_upload",
+    name="citation_upload_pdf_document_modal",
 )
 class CitationDocumentUploadView(DocumentCitationMixin):
     @cached_property

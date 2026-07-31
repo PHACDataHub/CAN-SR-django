@@ -145,7 +145,9 @@ class ReviewDetailPage(BasePageTemplate):
                             "Screen titles and abstracts to identify potentially eligible studies"
                         ),
                         h.a(
-                            href=reverse("screening_l1", args=[review.id]),
+                            href=reverse(
+                                "l1_citations_list", args=[review.id]
+                            ),
                             class_="btn btn-primary",
                         )[tdt("L1 screening")],
                     )
@@ -157,7 +159,9 @@ class ReviewDetailPage(BasePageTemplate):
                             "Review full text articles and make inclusion/exclusion decisions"
                         ),
                         h.a(
-                            href=reverse("screening_l2", args=[review.id]),
+                            href=reverse(
+                                "l2_citations_list", args=[review.id]
+                            ),
                             class_="btn btn-primary",
                         )[tdt("L2 screening")],
                     )
@@ -170,7 +174,7 @@ class ReviewDetailPage(BasePageTemplate):
                         ),
                         h.a(
                             href=reverse(
-                                "parameter_extraction",
+                                "parameter_extraction_citations_list",
                                 args=[review.id],
                             ),
                             class_="btn btn-primary",

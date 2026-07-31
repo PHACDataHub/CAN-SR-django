@@ -44,7 +44,7 @@ def render_l2_screening_control(citation_row, review, status_fetcher=None):
             ".btn.btn-outline-primary.btn-sm",
             type="button",
             hx_post=reverse(
-                "screen_l2_row_process",
+                "l2_citation_process_screening",
                 args=[review.id, citation_row.id],
             ),
             hx_target="closest .l2-pdf-screening-control",
@@ -81,12 +81,12 @@ class L2PdfScreeningPage(BasePageTemplate):
                 citation_row,
                 review,
                 data_id="l2-citation-data",
-                metadata_route_name="screen_l2_row_pdf_metadata",
+                metadata_route_name="l2_citation_pdf_metadata",
             ),
             breadcrumbs=bc.BreadcrumbTrailForReview(review)[
                 bc.BreadcrumbItem(
                     label=tdt("L2 Screening"),
-                    href=reverse("screening_l2", args=[review.id]),
+                    href=reverse("l2_citations_list", args=[review.id]),
                 ),
                 bc.BreadcrumbItem(label=tdt("PDF screening")),
             ],
@@ -94,7 +94,7 @@ class L2PdfScreeningPage(BasePageTemplate):
             progress_navigation=CitationScreeningProgressNav(
                 citation_row,
                 review,
-                detail_route_name="screen_l2_row_details",
+                detail_route_name="l2_citation_detail",
                 progress_stats=get_l2_screening_progress_stats(review.id),
                 nav_label=tdt("L2 citation navigation"),
             ),
@@ -131,7 +131,7 @@ class L2PdfScreeningPage(BasePageTemplate):
             ".btn.btn-outline-primary.btn-sm",
             type="button",
             hx_post=reverse(
-                "screen_l2_row_process",
+                "l2_citation_process_screening",
                 args=[self.review.id, self.citation_row.id],
             ),
             hx_target=f"#{l2_screening_control_id(self.citation_row)}",

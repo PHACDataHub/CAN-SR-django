@@ -39,7 +39,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review, status_fetcher):
             render_pdf_detail_link(
                 citation_row,
                 review,
-                "screen_l2_row_details",
+                "l2_citation_detail",
             ),
             render_pdf_modal_button(citation_row, review),
         ],
@@ -54,7 +54,7 @@ class L2ScreeningComponent:
 
     @property
     def component_url(self):
-        return reverse("screening_l2_component", args=[self.review.id])
+        return reverse("l2_citations_list_partial", args=[self.review.id])
 
     @property
     def page_number(self):

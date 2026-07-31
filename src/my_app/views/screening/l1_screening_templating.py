@@ -34,7 +34,7 @@ from shortcuts import reverse, tdt
 
 def CitationRowDisplay(citation_row: Citation, review: Review):
     details_url = reverse(
-        "screen_l1_row_details", args=[review.id, citation_row.id]
+        "l1_citation_detail", args=[review.id, citation_row.id]
     )
 
     fetcher = L1ScreeningStatusFetcher.get_instance()
@@ -44,7 +44,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
     btn_id = f"l1-screening-row-screen-btn-{citation_row.id}"
     if status is ScreeningResultStatus.NOT_STARTED:
         screen_action_url = reverse(
-            "screen_l1_row",
+            "l1_citation_process_screening",
             args=[review.id, citation_row.id],
         )
         button_markup = h.button(
@@ -131,7 +131,7 @@ def render_l1_screening_control(citation_row, review, status_fetcher=None):
             ".btn.btn-outline-primary.btn-sm",
             type="button",
             hx_post=reverse(
-                "screen_l1_row",
+                "l1_citation_process_screening",
                 args=[review.id, citation_row.id],
             ),
             hx_target="closest .l1-citation-screening-control",
@@ -160,7 +160,7 @@ class L1ScreeningComponent:
 
     @property
     def component_url(self):
-        return reverse("screening_l1_component", args=[self.review.id])
+        return reverse("l1_citations_list_partial", args=[self.review.id])
 
     @property
     def page_number(self):
@@ -317,7 +317,7 @@ class L1CitationScreeningPage(BasePageTemplate):
             bc.BreadcrumbTrailForReview(review)[
                 bc.BreadcrumbItem(
                     label=tdt("L1 Screening"),
-                    href=reverse("screening_l1", args=[review.id]),
+                    href=reverse("l1_citations_list", args=[review.id]),
                 ),
                 bc.BreadcrumbItem(label=tdt("Citation screening")),
             ],
@@ -325,7 +325,7 @@ class L1CitationScreeningPage(BasePageTemplate):
             CitationScreeningProgressNav(
                 self.citation_row,
                 review,
-                detail_route_name="screen_l1_row_details",
+                detail_route_name="l1_citation_detail",
                 progress_stats=get_l1_screening_progress_stats(review.id),
                 nav_label=tdt("L1 citation navigation"),
             ),
@@ -416,7 +416,7 @@ class L1CitationScreeningPage(BasePageTemplate):
                 ".btn.btn-outline-primary.btn-sm",
                 type="button",
                 hx_post=reverse(
-                    "screen_l1_row",
+                    "l1_citation_process_screening",
                     args=[self.review.id, self.citation_row.id],
                 ),
                 hx_target=f"#{l1_screening_control_id(self.citation_row)}",
@@ -474,12 +474,12 @@ def render_l1_human_review_control(result: L1ScreeningResult, review: Review):
         result,
         prefix="l1",
         answer_url=reverse(
-            "screen_l1_human_answer", args=[review.id, result.id]
+            "l1_citation_human_answer", args=[review.id, result.id]
         ),
         validate_url=reverse(
-            "screen_l1_validate_correct", args=[review.id, result.id]
+            "l1_citation_validate_correct", args=[review.id, result.id]
         ),
         undo_validation_url=reverse(
-            "screen_l1_undo_validation", args=[review.id, result.id]
+            "l1_citation_undo_validation", args=[review.id, result.id]
         ),
     )

@@ -28,12 +28,12 @@ def render_l2_human_review_control(result: L2ScreeningResult, review: Review):
         result,
         prefix="l2",
         answer_url=reverse(
-            "screen_l2_human_answer", args=[review.id, result.id]
+            "l2_citation_human_answer", args=[review.id, result.id]
         ),
         validate_url=reverse(
-            "screen_l2_validate_correct", args=[review.id, result.id]
+            "l2_citation_validate_correct", args=[review.id, result.id]
         ),
         undo_validation_url=reverse(
-            "screen_l2_undo_validation", args=[review.id, result.id]
+            "l2_citation_undo_validation", args=[review.id, result.id]
         ),
     )

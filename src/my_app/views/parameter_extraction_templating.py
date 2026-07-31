@@ -80,7 +80,7 @@ def render_parameter_extraction_control(
             ".btn.btn-outline-primary.btn-sm",
             type="button",
             hx_post=reverse(
-                "parameter_extraction_row_process",
+                "parameter_extraction_citation_process_extraction",
                 args=[review.id, citation_row.id],
             ),
             hx_target="closest .parameter-extraction-control",
@@ -116,7 +116,7 @@ def ParameterCitationRowDisplay(
             render_pdf_detail_link(
                 citation_row,
                 review,
-                "parameter_extraction_row_details",
+                "parameter_extraction_citation_detail",
             ),
             render_pdf_modal_button(citation_row, review),
         ],
@@ -131,7 +131,10 @@ class ParameterExtractionComponent:
 
     @property
     def component_url(self):
-        return reverse("parameter_extraction_component", args=[self.review.id])
+        return reverse(
+            "parameter_extraction_citations_list_partial",
+            args=[self.review.id],
+        )
 
     @property
     def page_number(self):
@@ -289,12 +292,14 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                 citation_row,
                 review,
                 data_id="parameter-extraction-citation-data",
-                metadata_route_name="parameter_extraction_row_pdf_metadata",
+                metadata_route_name="parameter_extraction_citation_pdf_metadata",
             ),
             breadcrumbs=bc.BreadcrumbTrailForReview(review)[
                 bc.BreadcrumbItem(
                     label=tdt("Parameter extraction"),
-                    href=reverse("parameter_extraction", args=[review.id]),
+                    href=reverse(
+                        "parameter_extraction_citations_list", args=[review.id]
+                    ),
                 ),
                 bc.BreadcrumbItem(label=tdt("PDF extraction")),
             ],
@@ -302,7 +307,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
             progress_navigation=CitationScreeningProgressNav(
                 citation_row,
                 review,
-                detail_route_name="parameter_extraction_row_details",
+                detail_route_name="parameter_extraction_citation_detail",
                 progress_stats=get_parameter_extraction_progress_stats(
                     review.id
                 ),
@@ -341,7 +346,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
             ".btn.btn-outline-primary.btn-sm",
             type="button",
             hx_post=reverse(
-                "parameter_extraction_row_process",
+                "parameter_extraction_citation_process_extraction",
                 args=[self.review.id, self.citation_row.id],
             ),
             hx_target=f"#{parameter_extraction_control_id(self.citation_row)}",
@@ -393,7 +398,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
     def render_human_review_control(self, result: ParameterExtractionResult):
         control_id = parameter_extraction_human_review_control_id(result)
         human_answer_url = reverse(
-            "parameter_extraction_human_answer",
+            "parameter_extraction_citation_human_answer",
             args=[self.review.id, result.id],
         )
 
@@ -408,7 +413,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                         ".btn.btn-outline-success.btn-sm",
                         type="button",
                         hx_post=reverse(
-                            "parameter_extraction_validate_ai_answer",
+                            "parameter_extraction_citation_validate_ai_answer",
                             args=[self.review.id, result.id],
                         ),
                         hx_target=f"#{control_id}",

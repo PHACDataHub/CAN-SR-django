@@ -72,14 +72,14 @@ class L2ScreeningBaseView(DocumentCitationListView):
     pass
 
 
-@route("/reviews/<int:review_id>/screening_l2/", name="screening_l2")
+@route("/reviews/<int:review_id>/screening_l2/", name="l2_citations_list")
 class ScreeningL2PageView(L2ScreeningBaseView, HtpyTemplateMixin):
     template_component = L2ScreeningPageTemplate
 
 
 @route(
     "/reviews/<int:review_id>/screening_l2/component/",
-    name="screening_l2_component",
+    name="l2_citations_list_partial",
 )
 class ScreeningL2ComponentView(L2ScreeningBaseView):
     def render_to_response(self, context, **response_kwargs):
@@ -94,14 +94,14 @@ class ScreeningL2ComponentView(L2ScreeningBaseView):
             self.request,
             page_obj,
             component.render(),
-            reverse("screening_l2", args=[self.review.id]),
+            reverse("l2_citations_list", args=[self.review.id]),
             **response_kwargs,
         )
 
 
 @route(
     "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/details/",
-    name="screen_l2_row_details",
+    name="l2_citation_detail",
 )
 class L2PdfScreeningView(DocumentCitationDetailView):
     template_component = L2PdfScreeningPage
@@ -126,7 +126,7 @@ class L2HumanReviewMixin(MustAccessReviewMixin, View):
 
 @route(
     "/reviews/<int:review_id>/screening_l2/results/<int:result_pk>/validate/",
-    name="screen_l2_validate_correct",
+    name="l2_citation_validate_correct",
 )
 class L2ValidateCorrectView(L2HumanReviewMixin):
     def post(self, request, *args, **kwargs):
@@ -147,7 +147,7 @@ class L2ValidateCorrectView(L2HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l2/results/<int:result_pk>/undo-validation/",
-    name="screen_l2_undo_validation",
+    name="l2_citation_undo_validation",
 )
 class L2UndoValidationView(L2HumanReviewMixin):
     def post(self, request, *args, **kwargs):
@@ -164,7 +164,7 @@ class L2UndoValidationView(L2HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l2/results/<int:result_pk>/human-answer/",
-    name="screen_l2_human_answer",
+    name="l2_citation_human_answer",
 )
 class L2HumanAnswerView(L2HumanReviewMixin):
     @cached_property
@@ -198,7 +198,7 @@ class L2HumanAnswerView(L2HumanReviewMixin):
                 h.form(
                     id=form_id,
                     hx_post=reverse(
-                        "screen_l2_human_answer",
+                        "l2_citation_human_answer",
                         args=[self.review.id, self.result.id],
                     ),
                     hx_target="#modal-slot",
@@ -228,7 +228,7 @@ class L2HumanAnswerView(L2HumanReviewMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/process/",
-    name="screen_l2_row_process",
+    name="l2_citation_process_screening",
 )
 class L2PdfScreeningProcessView(DocumentCitationMixin):
     @cached_property
@@ -260,7 +260,7 @@ class L2PdfScreeningProcessView(DocumentCitationMixin):
 
 @route(
     "/reviews/<int:review_id>/screening_l2/rows/<int:row_pk>/pdf-metadata/",
-    name="screen_l2_row_pdf_metadata",
+    name="l2_citation_pdf_metadata",
 )
 class L2PdfCitationMetadataView(PdfCitationMetadataView):
     result_model = L2ScreeningResult
