@@ -14,6 +14,7 @@ from proj.llm_client import (
     LanguageModelSpec,
     LLMConfigurationError,
     LLMMessage,
+    LLMResponseSchema,
     OllamaLLMClient,
     TestLLMClient,
     get_client,
@@ -27,6 +28,15 @@ TEXT_MODEL = LanguageModelSpec(
 )
 MULTIMODAL_MODEL = LanguageModelSpec(
     key="demo", deployment="demo-deployment", has_multimodal=True
+)
+RESPONSE_SCHEMA = LLMResponseSchema(
+    name="demo_result",
+    schema={
+        "type": "object",
+        "properties": {"answer": {"type": "string"}},
+        "required": ["answer"],
+        "additionalProperties": False,
+    },
 )
 
 
@@ -103,6 +113,27 @@ def test_ollama_client_complete_prompt_uses_single_user_message():
     }
 
 
+def test_ollama_client_passes_json_schema_as_format():
+    seen = {}
+
+    def handler(request):
+        seen["request"] = request
+        return httpx.Response(200, json={"message": {"content": "reply"}})
+
+    sync_client = build_httpx_clients(handler)
+    http_client = HttpxLLMHttpClient(
+        "http://ollama.example", sync_client=sync_client
+    )
+    client = OllamaLLMClient(http_client=http_client)
+
+    client.complete_prompt(
+        "hello", TEXT_MODEL, response_schema=RESPONSE_SCHEMA
+    )
+
+    payload = json.loads(seen["request"].content)
+    assert payload["format"] == RESPONSE_SCHEMA.schema
+
+
 def test_ollama_client_complete_multimodal_prompt_adds_base64_images():
     seen = {}
 
@@ -117,7 +148,10 @@ def test_ollama_client_complete_multimodal_prompt_adds_base64_images():
     client = OllamaLLMClient(http_client=http_client)
 
     result = client.complete_multimodal_prompt(
-        "hello", files=[b"image bytes"], model=MULTIMODAL_MODEL
+        "hello",
+        files=[b"image bytes"],
+        model=MULTIMODAL_MODEL,
+        response_schema=RESPONSE_SCHEMA,
     )
 
     assert result == "reply"
@@ -131,6 +165,7 @@ def test_ollama_client_complete_multimodal_prompt_adds_base64_images():
             }
         ],
         "stream": False,
+        "format": RESPONSE_SCHEMA.schema,
     }
 
 
@@ -265,6 +300,31 @@ def test_azure_client_uses_deployment_for_completion():
     )
 
 
+def test_azure_client_passes_strict_json_schema_response_format():
+    sdk_client = MagicMock()
+    sdk_client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="reply"))]
+    )
+    client = AzureLLMClient(sdk_client)
+
+    client.complete_prompt(
+        "hello", TEXT_MODEL, response_schema=RESPONSE_SCHEMA
+    )
+
+    sdk_client.chat.completions.create.assert_called_once_with(
+        model="demo-deployment",
+        messages=[{"role": "user", "content": "hello"}],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "demo_result",
+                "strict": True,
+                "schema": RESPONSE_SCHEMA.schema,
+            },
+        },
+    )
+
+
 def test_azure_client_builds_multimodal_content():
     sdk_client = MagicMock()
     sdk_client.chat.completions.create.return_value = SimpleNamespace(
@@ -273,7 +333,10 @@ def test_azure_client_builds_multimodal_content():
     client = AzureLLMClient(sdk_client)
 
     client.complete_multimodal_prompt(
-        "describe", files=[b"image bytes"], model=MULTIMODAL_MODEL
+        "describe",
+        files=[b"image bytes"],
+        model=MULTIMODAL_MODEL,
+        response_schema=RESPONSE_SCHEMA,
     )
 
     sdk_client.chat.completions.create.assert_called_once_with(
@@ -292,6 +355,14 @@ def test_azure_client_builds_multimodal_content():
                 ],
             }
         ],
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "demo_result",
+                "strict": True,
+                "schema": RESPONSE_SCHEMA.schema,
+            },
+        },
     )
 
 

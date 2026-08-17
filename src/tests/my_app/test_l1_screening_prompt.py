@@ -111,9 +111,18 @@ def test_get_l1_screening_results_returns_exact_matching_option():
     assert result.selected == include_option
     assert result.explanation == "The citation matches the inclusion criteria."
     assert result.confidence == 0.88
-    client.complete_prompt.assert_called_once_with(
-        client.complete_prompt.call_args.args[0], sentinel.model
-    )
+    client.complete_prompt.assert_called_once()
+    call = client.complete_prompt.call_args
+    assert call.args[1] is sentinel.model
+    response_schema = call.kwargs["response_schema"]
+    assert response_schema.name == "l1_screening_result"
+    assert response_schema.schema["properties"]["selected"]["enum"] == [
+        "Include",
+        "No",
+    ]
+    assert response_schema.schema["additionalProperties"] is False
+    assert "minimum" not in response_schema.schema["properties"]["confidence"]
+    assert "maximum" not in response_schema.schema["properties"]["confidence"]
 
 
 @override_settings(HAS_LLM=True)

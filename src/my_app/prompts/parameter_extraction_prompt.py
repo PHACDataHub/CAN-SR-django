@@ -7,7 +7,11 @@ from django.conf import settings
 
 import pydantic
 
-from proj.llm_client import UnexpectedLLMOutputError, get_client
+from proj.llm_client import (
+    LLMResponseSchema,
+    UnexpectedLLMOutputError,
+    get_client,
+)
 
 from my_app.models import (
     Citation,
@@ -108,12 +112,20 @@ class ParameterExtractionPromptBuilder:
 
 
 class ParameterExtractionPromptResult(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
     found: bool
     value: str | None
     explanation: str
     evidence_sentences: List[int]
     evidence_tables: List[int]
     evidence_figures: List[int]
+
+
+PARAMETER_EXTRACTION_RESPONSE_SCHEMA = LLMResponseSchema(
+    name="parameter_extraction_result",
+    schema=ParameterExtractionPromptResult.model_json_schema(),
+)
 
 
 def get_parameter_extraction_results(
@@ -145,10 +157,17 @@ def get_parameter_extraction_results(
     llm_client = get_client()
     if images:
         raw_response = llm_client.complete_multimodal_prompt(
-            prompt, files=images, model=model
+            prompt,
+            files=images,
+            model=model,
+            response_schema=PARAMETER_EXTRACTION_RESPONSE_SCHEMA,
         )
     else:
-        raw_response = llm_client.complete_prompt(prompt, model=model)
+        raw_response = llm_client.complete_prompt(
+            prompt,
+            model=model,
+            response_schema=PARAMETER_EXTRACTION_RESPONSE_SCHEMA,
+        )
 
     try:
         response_dict = json.loads(raw_response)

@@ -8,7 +8,11 @@ from django.conf import settings
 
 import pydantic
 
-from proj.llm_client import UnexpectedLLMOutputError, get_client
+from proj.llm_client import (
+    LLMResponseSchema,
+    UnexpectedLLMOutputError,
+    get_client,
+)
 
 from my_app.models import (
     Citation,
@@ -129,12 +133,27 @@ class L2ScreeningPromptBuilder:
 
 
 class RawL2ScreeningPromptResult(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
     selected: str
     explanation: str
     confidence: pydantic.confloat(ge=0.0, le=1.0)
     evidence_sentences: List[int]
     evidence_tables: List[int]
     evidence_figures: List[int]
+
+
+def build_l2_response_schema(
+    options: List[L2ScreeningQuestionOption],
+) -> LLMResponseSchema:
+    # expected enums are run-time determined because they come from the user
+    schema = RawL2ScreeningPromptResult.model_json_schema()
+    schema["properties"]["selected"]["enum"] = [
+        option.option_text for option in options
+    ]
+    schema["properties"]["confidence"].pop("minimum")
+    schema["properties"]["confidence"].pop("maximum")
+    return LLMResponseSchema(name="l2_screening_result", schema=schema)
 
 
 class L2ScreeningPromptResult(RawL2ScreeningPromptResult):
@@ -169,10 +188,17 @@ def get_l2_screening_results(
     llm_client = get_client()
     if images:
         raw_response = llm_client.complete_multimodal_prompt(
-            prompt, files=images, model=model
+            prompt,
+            files=images,
+            model=model,
+            response_schema=build_l2_response_schema(options),
         )
     else:
-        raw_response = llm_client.complete_prompt(prompt, model)
+        raw_response = llm_client.complete_prompt(
+            prompt,
+            model,
+            response_schema=build_l2_response_schema(options),
+        )
 
     try:
         response_dict = json.loads(raw_response)

@@ -206,9 +206,18 @@ def test_get_l2_screening_results_returns_exact_matching_option():
     assert result.evidence_sentences == [0, 1]
     assert result.evidence_tables == [2]
     assert result.evidence_figures == [3]
-    client.complete_prompt.assert_called_once_with(
-        client.complete_prompt.call_args.args[0], sentinel.model
-    )
+    client.complete_prompt.assert_called_once()
+    call = client.complete_prompt.call_args
+    assert call.args[1] is sentinel.model
+    response_schema = call.kwargs["response_schema"]
+    assert response_schema.name == "l2_screening_result"
+    assert response_schema.schema["properties"]["selected"]["enum"] == [
+        "Include",
+        "No",
+    ]
+    assert response_schema.schema["additionalProperties"] is False
+    assert "minimum" not in response_schema.schema["properties"]["confidence"]
+    assert "maximum" not in response_schema.schema["properties"]["confidence"]
 
 
 @override_settings(HAS_LLM=True)
@@ -266,6 +275,9 @@ def test_get_l2_screening_results_sends_figures_as_multimodal_files(tmp_path):
     _, kwargs = client.complete_multimodal_prompt.call_args
     assert kwargs["files"] == [figure.file]
     assert kwargs["model"] is sentinel.model
+    assert kwargs["response_schema"].schema["properties"]["selected"][
+        "enum"
+    ] == ["Include", "No"]
 
 
 @override_settings(HAS_LLM=True)

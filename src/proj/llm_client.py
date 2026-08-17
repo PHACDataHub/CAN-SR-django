@@ -41,6 +41,12 @@ class LLMMessage:
     content: str
 
 
+@dataclass(frozen=True)
+class LLMResponseSchema:
+    name: str
+    schema: dict[str, object]
+
+
 class LanguageModelSpec(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(from_attributes=True)
 
@@ -124,21 +130,36 @@ class LLMClient(ABC):
     def _prompt_messages(self, prompt: str) -> Sequence[LLMMessage]:
         return [LLMMessage(role="user", content=prompt)]
 
-    def complete_prompt(self, prompt: str, model: LanguageModelSpec) -> str:
-        return self.complete(self._prompt_messages(prompt), model)
+    def complete_prompt(
+        self,
+        prompt: str,
+        model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
+    ) -> str:
+        return self.complete(
+            self._prompt_messages(prompt),
+            model,
+            response_schema=response_schema,
+        )
 
     def complete_multimodal_prompt(
         self,
         prompt: str,
         files: Sequence[bytes | BinaryIO],
         model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> str:
         model_spec = LanguageModelSpec.model_validate(model)
         if not model_spec.has_multimodal:
             raise LLMConfigurationError(
                 f"Language model '{model_spec.key}' does not support multimodal input"
             )
-        return self._complete_multimodal_prompt(prompt, files, model_spec)
+        return self._complete_multimodal_prompt(
+            prompt,
+            files,
+            model_spec,
+            response_schema=response_schema,
+        )
 
     @abstractmethod
     def _complete_multimodal_prompt(
@@ -146,12 +167,16 @@ class LLMClient(ABC):
         prompt: str,
         files: Sequence[bytes | BinaryIO],
         model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> str:
         raise NotImplementedError
 
     @abstractmethod
     def complete(
-        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+        self,
+        messages: Sequence[LLMMessage],
+        model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> str:
         raise NotImplementedError
 
@@ -177,21 +202,28 @@ class OllamaLLMClient(LLMClient):
         self.http_client = http_client
 
     def _payload(
-        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+        self,
+        messages: Sequence[LLMMessage],
+        model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> dict:
-        return {
+        payload = {
             "model": model.key,
             "messages": [_message_to_payload(message) for message in messages],
             "stream": False,
         }
+        if response_schema is not None:
+            payload["format"] = response_schema.schema
+        return payload
 
     def _multimodal_payload(
         self,
         prompt: str,
         files: Sequence[bytes | BinaryIO],
         model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> dict:
-        return {
+        payload = {
             "model": model.key,
             "messages": [
                 {
@@ -202,12 +234,18 @@ class OllamaLLMClient(LLMClient):
             ],
             "stream": False,
         }
+        if response_schema is not None:
+            payload["format"] = response_schema.schema
+        return payload
 
     def complete(
-        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+        self,
+        messages: Sequence[LLMMessage],
+        model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> str:
         model_spec = LanguageModelSpec.model_validate(model)
-        payload = self._payload(messages, model_spec)
+        payload = self._payload(messages, model_spec, response_schema)
         response = self.http_client.complete("/api/chat", payload)
         return response.get("message", {}).get("content", "")
 
@@ -216,8 +254,11 @@ class OllamaLLMClient(LLMClient):
         prompt: str,
         files: Sequence[bytes | BinaryIO],
         model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> str:
-        payload = self._multimodal_payload(prompt, files, model)
+        payload = self._multimodal_payload(
+            prompt, files, model, response_schema
+        )
         response = self.http_client.complete("/api/chat", payload)
         return response.get("message", {}).get("content", "")
 
@@ -234,7 +275,10 @@ class TestLLMClient(LLMClient):
         return "test client response"
 
     def complete(
-        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+        self,
+        messages: Sequence[LLMMessage],
+        model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> str:
         return self._render(messages)
 
@@ -243,6 +287,7 @@ class TestLLMClient(LLMClient):
         prompt: str,
         files: Sequence[bytes | BinaryIO],
         model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> str:
         return f"{self._render(self._prompt_messages(prompt))} ({len(files)} files)"
 
@@ -252,23 +297,41 @@ class AzureLLMClient(LLMClient):
         self.client = client
 
     def _create_completion(
-        self, messages: list[dict], model: LanguageModelSpec
+        self,
+        messages: list[dict],
+        model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ):
+        completion_kwargs = {
+            "model": model.deployment,
+            "messages": messages,
+        }
+        if response_schema is not None:
+            completion_kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": response_schema.name,
+                    "strict": True,
+                    "schema": response_schema.schema,
+                },
+            }
         try:
-            return self.client.chat.completions.create(
-                model=model.deployment,
-                messages=messages,
-            )
+            return self.client.chat.completions.create(**completion_kwargs)
         except Exception as exc:
             logger.exception(exc)
             raise ClientFailureError("Azure OpenAI request failed") from exc
 
     def complete(
-        self, messages: Sequence[LLMMessage], model: LanguageModelSpec
+        self,
+        messages: Sequence[LLMMessage],
+        model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> str:
         model_spec = LanguageModelSpec.model_validate(model)
         response = self._create_completion(
-            [_message_to_payload(message) for message in messages], model_spec
+            [_message_to_payload(message) for message in messages],
+            model_spec,
+            response_schema,
         )
         return response.choices[0].message.content or ""
 
@@ -277,6 +340,7 @@ class AzureLLMClient(LLMClient):
         prompt: str,
         files: Sequence[bytes | BinaryIO],
         model: LanguageModelSpec,
+        response_schema: LLMResponseSchema | None = None,
     ) -> str:
         content = [{"type": "text", "text": prompt}]
         content.extend(
@@ -289,7 +353,7 @@ class AzureLLMClient(LLMClient):
             for file in files
         )
         response = self._create_completion(
-            [{"role": "user", "content": content}], model
+            [{"role": "user", "content": content}], model, response_schema
         )
         return response.choices[0].message.content or ""
 
