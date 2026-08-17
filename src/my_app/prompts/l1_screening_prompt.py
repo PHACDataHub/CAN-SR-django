@@ -5,7 +5,11 @@ from django.conf import settings
 
 import pydantic
 
-from proj.llm_client import UnexpectedLLMOutputError, get_client
+from proj.llm_client import (
+    LLMResponseSchema,
+    UnexpectedLLMOutputError,
+    get_client,
+)
 
 from my_app.models import (
     Citation,
@@ -93,9 +97,24 @@ class L1ScreeningPromptBuilder:
 
 
 class RawL1ScreeningPromptResult(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
     explanation: str
     confidence: pydantic.confloat(ge=0.0, le=1.0)
     selected: str
+
+
+def build_l1_response_schema(
+    options: List[L1ScreeningQuestionOption],
+) -> LLMResponseSchema:
+    # expected enums are run-time determined because they come from the user
+    schema = RawL1ScreeningPromptResult.model_json_schema()
+    schema["properties"]["selected"]["enum"] = [
+        option.option_text for option in options
+    ]
+    schema["properties"]["confidence"].pop("minimum")
+    schema["properties"]["confidence"].pop("maximum")
+    return LLMResponseSchema(name="l1_screening_result", schema=schema)
 
 
 class L1ScreeningPromptResult(RawL1ScreeningPromptResult):
@@ -120,7 +139,11 @@ def get_l1_screening_results(
     prompt = prompt_builder.build_str()
 
     llm_client = get_client()
-    raw_answer = llm_client.complete_prompt(prompt, model)
+    raw_answer = llm_client.complete_prompt(
+        prompt,
+        model,
+        response_schema=build_l1_response_schema(options),
+    )
 
     try:
         json_answer = json.loads(raw_answer)
