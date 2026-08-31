@@ -26,8 +26,8 @@ from my_app.pdf.figure_extraction.client import AzureDocIntExtractionClient
 from my_app.pdf.types import PdfCoordinate
 from my_app.services.figure_extraction_service import (
     FigureExtractionService,
-    QueueFigureExtractionService,
 )
+from my_app.tasks.figure_extraction_task import process_figure_extraction
 
 pytestmark = pytest.mark.backend
 
@@ -150,14 +150,9 @@ def test_figure_extraction_service_saves_result_to_database(tmp_path):
         client = MagicMock()
         client.extract_figures.return_value = result
 
-        with (
-            patch(
-                "my_app.services.figure_extraction_service.get_figure_extraction_client",
-                return_value=client,
-            ),
-            patch(
-                "my_app.services.figure_extraction_service.enqueue_requested_post_processing"
-            ) as post_processing,
+        with patch(
+            "my_app.services.figure_extraction_service.get_figure_extraction_client",
+            return_value=client,
         ):
             FigureExtractionService(document=document).perform()
 
@@ -179,7 +174,6 @@ def test_figure_extraction_service_saves_result_to_database(tmp_path):
         f"documents/{document.id}/figures/example_figure_1.png"
     )
     assert figure_bytes == b"png bytes"
-    post_processing.assert_called_once_with(document.id)
 
 
 def test_figure_extraction_service_replaces_existing_artifacts(tmp_path):
@@ -225,7 +219,7 @@ def test_figure_extraction_service_replaces_existing_artifacts(tmp_path):
     )
 
 
-def test_queue_figure_extraction_service_creates_pending_result_and_enqueues():
+def test_figure_extraction_service_prepare_creates_pending_result_and_does_not_enqueue():
     document = DocumentFactory()
     task_mock = MagicMock()
     task_mock.enqueue = MagicMock()
@@ -234,12 +228,11 @@ def test_queue_figure_extraction_service_creates_pending_result_and_enqueues():
         "my_app.tasks.figure_extraction_task.process_figure_extraction",
         task_mock,
     ):
-        QueueFigureExtractionService(document=document).perform()
+        FigureExtractionService(document=document).prepare()
 
     result_record = FigureExtractionResult.objects.get(document=document)
     assert result_record.status == FigureExtractionResult.Status.PENDING
-    assert task_mock.enqueue.call_count == 1
-    assert task_mock.enqueue.call_args.kwargs == {"document_id": document.id}
+    assert task_mock.enqueue.call_count == 0
 
 
 def test_process_figure_extraction_task_saves_database_result(tmp_path):
@@ -254,7 +247,8 @@ def test_process_figure_extraction_task_saves_database_result(tmp_path):
             "my_app.services.figure_extraction_service.get_figure_extraction_client",
             return_value=client,
         ):
-            QueueFigureExtractionService(document=document).perform()
+            FigureExtractionService(document=document).prepare()
+            process_figure_extraction.enqueue(document_id=document.id)
             assert DatabaseTask.objects.count() == 1
 
             call_command("run_database_tasks", verbosity=0)

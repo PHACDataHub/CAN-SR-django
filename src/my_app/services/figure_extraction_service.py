@@ -11,40 +11,7 @@ from my_app.models import (
 )
 from my_app.pdf.figure_extraction.azure import FigureExtractionResultData
 from my_app.pdf.figure_extraction.client import get_figure_extraction_client
-from my_app.services.document_post_processing import (
-    enqueue_requested_post_processing,
-)
 from shortcuts import cached_property, logger
-
-
-class QueueFigureExtractionService:
-    def __init__(self, document: Document):
-        self.document = document
-
-    def perform(self):
-        from my_app.tasks.figure_extraction_task import (
-            process_figure_extraction,
-        )
-
-        logger.info(
-            "QueueFigureExtractionService started for document_id=%s",
-            self.document.id,
-        )
-
-        result_record, created = FigureExtractionResult.objects.get_or_create(
-            document=self.document,
-        )
-        if not created:
-            logger.info(
-                "QueueFigureExtractionService was called for a document "
-                "(document_id=%s) that already has a result record.",
-                self.document.id,
-            )
-
-        result_record.status = FigureExtractionResult.Status.PENDING
-        result_record.save(update_fields=["status", "updated_at"])
-
-        process_figure_extraction.enqueue(document_id=self.document.id)
 
 
 class FigureExtractionService:
@@ -54,6 +21,28 @@ class FigureExtractionService:
 
     def __init__(self, document: Document):
         self.document = document
+
+    def prepare(self):
+        """
+        called separately from perform()
+        """
+        logger.info(
+            "FigureExtractionService.prepare started for document_id=%s",
+            self.document.id,
+        )
+
+        result_record, created = FigureExtractionResult.objects.get_or_create(
+            document=self.document,
+        )
+        if not created:
+            logger.info(
+                "FigureExtractionService.prepare was called for a document "
+                "(document_id=%s) that already has a result record.",
+                self.document.id,
+            )
+
+        result_record.status = FigureExtractionResult.Status.PENDING
+        result_record.save(update_fields=["status", "updated_at"])
 
     @cached_property
     def progress_result_record(self):
@@ -141,4 +130,3 @@ class FigureExtractionService:
             self.save_figures()
             self.save_tables()
             self.set_success()
-            enqueue_requested_post_processing(self.document.id)

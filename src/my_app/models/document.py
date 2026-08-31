@@ -149,22 +149,3 @@ class FigureExtractionResult(models.Model):
 
     def __str__(self):
         return f"{self.document_id} figure extraction: {self.status}"
-
-
-@add_to_admin
-class DocumentProcessingRequest(models.Model):
-    """
-    This model only exists to track whether the user requested
-    immediate L2 or parameter extraction when they upload a document
-    it's immediately useless after that round of tasks completes
-    """
-
-    citation = fields.ForeignKey(
-        "my_app.Citation",
-        related_name="document_processing_requests",
-        on_delete=models.CASCADE,
-        verbose_name=tdt("Citation"),
-    )
-    requested_at = models.DateTimeField(auto_now_add=True)
-    should_run_l2_screening = models.BooleanField(default=False)
-    should_run_parameter_extraction = models.BooleanField(default=False)
