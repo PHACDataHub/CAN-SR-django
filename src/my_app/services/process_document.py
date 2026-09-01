@@ -6,9 +6,7 @@ from my_app.queries import (
     is_l2_screening_defined,
     is_parameter_extraction_defined,
 )
-from my_app.services.figure_extraction_service import (
-    FigureExtractionService,
-)
+from my_app.services.figure_extraction_service import FigureExtractionService
 from my_app.services.text_extraction import TextExtractionService
 from shortcuts import cached_property, logger
 
