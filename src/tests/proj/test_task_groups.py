@@ -1,6 +1,5 @@
 from unittest.mock import patch
 
-from django.core.management import call_command
 from django.tasks import task
 from django.test import override_settings
 
@@ -37,7 +36,7 @@ def task_backend(backend):
     return {
         "default": {
             "BACKEND": backend,
-            "QUEUES": [],
+            "QUEUES": ["default"],
         }
     }
 
@@ -45,9 +44,7 @@ def task_backend(backend):
 IMMEDIATE_TASKS = task_backend(
     "django.tasks.backends.immediate.ImmediateBackend"
 )
-DATABASE_TASKS = task_backend(
-    "django_database_task.backends.DatabaseTaskBackend"
-)
+DATABASE_TASKS = task_backend("django_tasks_db.DatabaseBackend")
 
 
 @override_settings(TASKS=IMMEDIATE_TASKS)
@@ -73,7 +70,9 @@ def test_gather_tasks_completes_and_calls_back_with_immediate_backend():
 
 
 @override_settings(TASKS=DATABASE_TASKS)
-def test_gather_tasks_waits_and_calls_back_with_database_backend():
+def test_gather_tasks_waits_and_calls_back_with_database_backend(
+    run_database_tasks,
+):
     with patch(
         "tests.proj.test_task_groups.task_group_callback_spy"
     ) as callback_spy:
@@ -90,7 +89,7 @@ def test_gather_tasks_waits_and_calls_back_with_database_backend():
         assert group.status == TaskGroup.Status.WAITING
         callback_spy.assert_not_called()
 
-        call_command("run_database_tasks", verbosity=0)
+        run_database_tasks()
 
     group.refresh_from_db()
     assert group.status == TaskGroup.Status.SUCCESSFUL
@@ -104,7 +103,9 @@ def test_gather_tasks_waits_and_calls_back_with_database_backend():
     "backend",
     [IMMEDIATE_TASKS, DATABASE_TASKS],
 )
-def test_gather_tasks_records_failure_and_calls_error_callback(backend):
+def test_gather_tasks_records_failure_and_calls_error_callback(
+    backend, run_database_tasks
+):
     with override_settings(TASKS=backend):
         with patch(
             "tests.proj.test_task_groups.task_group_callback_spy"
@@ -125,7 +126,7 @@ def test_gather_tasks_records_failure_and_calls_error_callback(backend):
             )
 
             if group.status == TaskGroup.Status.WAITING:
-                call_command("run_database_tasks", verbosity=0)
+                run_database_tasks()
 
     group.refresh_from_db()
     assert group.status == TaskGroup.Status.FAILED

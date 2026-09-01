@@ -6,7 +6,6 @@ from my_app.models import (
     Citation,
     CitationDataset,
     CitationDatasetColumn,
-    DemoTaskRun,
     Document,
     FigureExtractionResult,
     L1ScreeningQuestion,
@@ -23,17 +22,6 @@ from my_app.models import (
     ScreeningResultStatus,
     TextExtractionResult,
 )
-
-
-class DemoTaskRunFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = DemoTaskRun
-
-    task_result_id = factory.Faker("uuid4")
-    kind = "sync"
-    label = factory.Faker("word")
-    record_count = factory.Faker("random_int")
-    attempt = 1
 
 
 class UserFactory(factory.django.DjangoModelFactory):

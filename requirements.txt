@@ -12,7 +12,7 @@ django-phac_aspc-helpers==3.2.1
 django-routify==0.3.4
 django-versionator==2.1
 django-data-fetcher==2.2
-django-database-task==0.2.4
+django-tasks-db==0.13.0
 Django==6.0.1
 Faker==15.1.1
 gunicorn==22.0.0
