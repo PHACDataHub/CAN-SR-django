@@ -1,172 +1,116 @@
-from unittest.mock import MagicMock, patch
-
-from django.db import transaction
+from unittest.mock import patch
 
 import pytest
+
+from proj.models import TaskGroup
 
 from my_app.model_factories import (
     CitationFactory,
     DocumentFactory,
-    DocumentProcessingRequestFactory,
-    FigureExtractionResultFactory,
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
     ParameterCategoryFactory,
     ParameterFactory,
-    TextExtractionResultFactory,
 )
-from my_app.models import (
-    FigureExtractionResult,
-    L2ScreeningResult,
-    ParameterExtractionResult,
-    TextExtractionResult,
-)
+from my_app.models import L2ScreeningResult, ParameterExtractionResult
 from my_app.services.document_post_processing import (
-    enqueue_l2_screening_if_requested,
-    enqueue_parameter_extraction_if_requested,
+    RequestedDocumentPostProcessingService,
 )
 
 pytestmark = pytest.mark.backend
 
 
-def _build_ready_citation():
+def _build_citation_and_group():
     document = DocumentFactory()
     citation = CitationFactory(document=document)
-    TextExtractionResultFactory(
-        document=document,
-        status=TextExtractionResult.TextExtractionStatus.COMPLETED,
-    )
-    FigureExtractionResultFactory(
-        document=document,
-        status=FigureExtractionResult.Status.COMPLETED,
-    )
-    l2_question = L2ScreeningQuestionFactory(review=citation.dataset.review)
-    L2ScreeningQuestionOptionFactory(question=l2_question)
-    parameter_category = ParameterCategoryFactory(
-        review=citation.dataset.review
-    )
-    parameter = ParameterFactory(category=parameter_category)
-    return citation, l2_question, parameter
+    question = L2ScreeningQuestionFactory(review=citation.dataset.review)
+    L2ScreeningQuestionOptionFactory(question=question)
+    category = ParameterCategoryFactory(review=citation.dataset.review)
+    parameter = ParameterFactory(category=category)
+    group = TaskGroup.objects.create(key=f"process-document:{document.id}")
+    return citation, question, parameter, group
 
 
-def test_enqueue_l2_screening_runs_after_commit_when_requested(
-    django_capture_on_commit_callbacks,
-):
-    citation, question, _parameter = _build_ready_citation()
-    DocumentProcessingRequestFactory(
-        citation=citation,
-        should_run_l2_screening=True,
+def _service(group, citation, **kwargs):
+    return RequestedDocumentPostProcessingService(
+        task_group_id=group.id,
+        citation_id=citation.id,
+        should_run_l2_screening=kwargs.get("should_run_l2_screening", False),
+        should_run_parameter_extraction=kwargs.get(
+            "should_run_parameter_extraction", False
+        ),
     )
-    task_mock = MagicMock()
+
+
+def test_requested_post_processing_enqueues_selected_work():
+    citation, question, parameter, group = _build_citation_and_group()
+
+    with (
+        patch(
+            "my_app.services.document_post_processing.DeferredL2ScreeningService"
+        ) as l2_service,
+        patch(
+            "my_app.services.document_post_processing.DeferredParameterExtractionService"
+        ) as parameter_service,
+    ):
+        _service(
+            group,
+            citation,
+            should_run_l2_screening=True,
+            should_run_parameter_extraction=True,
+        ).perform()
+
+    assert l2_service.call_args.kwargs == {
+        "rows": [citation],
+        "questions": [question],
+        "overwrite_existing": True,
+    }
+    l2_service.return_value.perform.assert_called_once_with()
+    assert parameter_service.call_args.kwargs == {
+        "rows": [citation],
+        "questions": [parameter],
+        "overwrite_existing": True,
+    }
+    parameter_service.return_value.perform.assert_called_once_with()
+
+
+def test_requested_post_processing_ignores_a_superseded_group():
+    citation, _question, _parameter, older_group = _build_citation_and_group()
+    TaskGroup.objects.create(key=older_group.key)
 
     with patch(
-        "my_app.tasks.l2_screening.process_l2_screening_task", task_mock
-    ):
-        with django_capture_on_commit_callbacks(execute=True):
-            with transaction.atomic():
-                enqueue_l2_screening_if_requested(citation.id)
-                task_mock.enqueue.assert_not_called()
-
-    result = L2ScreeningResult.objects.get(
-        citation=citation,
-        question=question,
-    )
-    task_mock.enqueue.assert_called_once_with(result_id=result.id)
-
-
-def test_enqueue_parameter_extraction_runs_after_commit_when_requested(
-    django_capture_on_commit_callbacks,
-):
-    citation, _question, parameter = _build_ready_citation()
-    DocumentProcessingRequestFactory(
-        citation=citation,
-        should_run_parameter_extraction=True,
-    )
-    task_mock = MagicMock()
-
-    with patch(
-        "my_app.tasks.parameter_extraction.process_parameter_extraction_task",
-        task_mock,
-    ):
-        with django_capture_on_commit_callbacks(execute=True):
-            with transaction.atomic():
-                enqueue_parameter_extraction_if_requested(citation.id)
-                task_mock.enqueue.assert_not_called()
-
-    result = ParameterExtractionResult.objects.get(
-        citation=citation,
-        question=parameter,
-    )
-    task_mock.enqueue.assert_called_once_with(result_id=result.id)
-
-
-@pytest.mark.parametrize(
-    ("enqueue_function", "request_field", "service_path"),
-    [
-        (
-            enqueue_l2_screening_if_requested,
-            "should_run_l2_screening",
-            "my_app.services.document_post_processing.DeferredL2ScreeningService",
-        ),
-        (
-            enqueue_parameter_extraction_if_requested,
-            "should_run_parameter_extraction",
-            "my_app.services.document_post_processing.DeferredParameterExtractionService",
-        ),
-    ],
-)
-def test_post_processing_uses_flags_from_most_recent_request(
-    django_capture_on_commit_callbacks,
-    enqueue_function,
-    request_field,
-    service_path,
-):
-    citation, _question, _parameter = _build_ready_citation()
-    DocumentProcessingRequestFactory(
-        citation=citation,
-        **{request_field: True},
-    )
-    DocumentProcessingRequestFactory(
-        citation=citation,
-        **{request_field: False},
-    )
-
-    with patch(service_path) as service:
-        with django_capture_on_commit_callbacks(execute=True):
-            enqueue_function(citation.id)
+        "my_app.services.document_post_processing.DeferredL2ScreeningService"
+    ) as service:
+        _service(
+            older_group,
+            citation,
+            should_run_l2_screening=True,
+        ).perform()
 
     service.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    ("enqueue_function", "request_field", "result_model", "service_path"),
+    ("flag", "result_model", "service_path"),
     [
         (
-            enqueue_l2_screening_if_requested,
             "should_run_l2_screening",
             L2ScreeningResult,
             "my_app.services.document_post_processing.DeferredL2ScreeningService",
         ),
         (
-            enqueue_parameter_extraction_if_requested,
             "should_run_parameter_extraction",
             ParameterExtractionResult,
             "my_app.services.document_post_processing.DeferredParameterExtractionService",
         ),
     ],
 )
-def test_post_processing_skips_when_a_result_is_newer_than_request(
-    django_capture_on_commit_callbacks,
-    enqueue_function,
-    request_field,
+def test_requested_post_processing_preserves_results_newer_than_group(
+    flag,
     result_model,
     service_path,
 ):
-    citation, question, parameter = _build_ready_citation()
-    DocumentProcessingRequestFactory(
-        citation=citation,
-        **{request_field: True},
-    )
+    citation, question, parameter, group = _build_citation_and_group()
     result_model.objects.create(
         citation=citation,
         question=(
@@ -175,89 +119,44 @@ def test_post_processing_skips_when_a_result_is_newer_than_request(
     )
 
     with patch(service_path) as service:
-        with django_capture_on_commit_callbacks(execute=True):
-            enqueue_function(citation.id)
+        _service(group, citation, **{flag: True}).perform()
 
     service.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    ("enqueue_function", "request_field", "result_model", "service_path"),
+    ("flag", "result_model", "service_path"),
     [
         (
-            enqueue_l2_screening_if_requested,
             "should_run_l2_screening",
             L2ScreeningResult,
             "my_app.services.document_post_processing.DeferredL2ScreeningService",
         ),
         (
-            enqueue_parameter_extraction_if_requested,
             "should_run_parameter_extraction",
             ParameterExtractionResult,
             "my_app.services.document_post_processing.DeferredParameterExtractionService",
         ),
     ],
 )
-def test_post_processing_requests_overwrite_for_results_older_than_request(
-    django_capture_on_commit_callbacks,
-    enqueue_function,
-    request_field,
+def test_requested_post_processing_overwrites_results_older_than_group(
+    flag,
     result_model,
     service_path,
 ):
-    citation, question, parameter = _build_ready_citation()
+    citation, question, parameter, _group = _build_citation_and_group()
     result_model.objects.create(
         citation=citation,
         question=(
             question if result_model is L2ScreeningResult else parameter
         ),
     )
-    DocumentProcessingRequestFactory(
-        citation=citation,
-        **{request_field: True},
+    group = TaskGroup.objects.create(
+        key=f"process-document:{citation.document_id}"
     )
 
     with patch(service_path) as service:
-        with django_capture_on_commit_callbacks(execute=True):
-            enqueue_function(citation.id)
+        _service(group, citation, **{flag: True}).perform()
 
     service.assert_called_once()
     assert service.call_args.kwargs["overwrite_existing"] is True
-
-
-@pytest.mark.parametrize(
-    ("enqueue_function", "request_field", "service_path"),
-    [
-        (
-            enqueue_l2_screening_if_requested,
-            "should_run_l2_screening",
-            "my_app.services.document_post_processing.DeferredL2ScreeningService",
-        ),
-        (
-            enqueue_parameter_extraction_if_requested,
-            "should_run_parameter_extraction",
-            "my_app.services.document_post_processing.DeferredParameterExtractionService",
-        ),
-    ],
-)
-def test_post_processing_waits_for_both_extractions(
-    django_capture_on_commit_callbacks,
-    enqueue_function,
-    request_field,
-    service_path,
-):
-    citation, _question, _parameter = _build_ready_citation()
-    citation.document.figure_extraction_result.status = (
-        FigureExtractionResult.Status.PENDING
-    )
-    citation.document.figure_extraction_result.save()
-    DocumentProcessingRequestFactory(
-        citation=citation,
-        **{request_field: True},
-    )
-
-    with patch(service_path) as service:
-        with django_capture_on_commit_callbacks(execute=True):
-            enqueue_function(citation.id)
-
-    service.assert_not_called()

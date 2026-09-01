@@ -9,9 +9,9 @@ from django_database_task.models import DatabaseTask
 
 from my_app.models import Document, TextExtractionResult
 from my_app.services.text_extraction import (
-    QueueTextExtractionService,
     TextExtractionService,
 )
+from my_app.tasks.text_extraction_task import process_text_extraction_result
 
 pytestmark = pytest.mark.backend
 
@@ -24,7 +24,7 @@ def _build_pdf_file(name="example.pdf"):
     )
 
 
-def test_queue_text_extraction_service_creates_pending_result_and_enqueues_task(
+def test_text_extraction_service_prepare_creates_pending_result_and_does_not_enqueue(
     tmp_path,
 ):
     with override_settings(MEDIA_ROOT=tmp_path):
@@ -37,7 +37,7 @@ def test_queue_text_extraction_service_creates_pending_result_and_enqueues_task(
             "my_app.tasks.text_extraction_task.process_text_extraction_result",
             task_mock,
         ):
-            QueueTextExtractionService(document=document).perform()
+            TextExtractionService(document=document).prepare()
 
     text_extraction_result = TextExtractionResult.objects.get(
         document=document
@@ -47,8 +47,7 @@ def test_queue_text_extraction_service_creates_pending_result_and_enqueues_task(
         text_extraction_result.status
         == TextExtractionResult.TextExtractionStatus.PENDING
     )
-    assert task_mock.enqueue.call_count == 1
-    assert task_mock.enqueue.call_args.kwargs == {"document_id": document.id}
+    assert task_mock.enqueue.call_count == 0
 
 
 def test_process_text_extraction_result_task_populates_result_and_marks_completed(
@@ -56,16 +55,14 @@ def test_process_text_extraction_result_task_populates_result_and_marks_complete
 ):
     with override_settings(MEDIA_ROOT=tmp_path):
         document = Document.objects.create(file=_build_pdf_file())
-        QueueTextExtractionService(document=document).perform()
+        TextExtractionService(document=document).prepare()
+        process_text_extraction_result.enqueue(document_id=document.id)
 
         assert DatabaseTask.objects.count() == 1
         queued_task = DatabaseTask.objects.get()
         assert queued_task.kwargs_json["document_id"] == document.id
 
-        with patch(
-            "my_app.services.text_extraction.enqueue_requested_post_processing"
-        ) as post_processing:
-            call_command("run_database_tasks", verbosity=0)
+        call_command("run_database_tasks", verbosity=0)
 
     queued_task.refresh_from_db()
     assert queued_task.status == "SUCCESSFUL"
@@ -80,7 +77,6 @@ def test_process_text_extraction_result_task_populates_result_and_marks_complete
     assert text_extraction_result.pages
     assert text_extraction_result.coordinates
     assert text_extraction_result.raw_xml
-    post_processing.assert_called_once_with(document.id)
 
 
 def test_text_extraction_service_marks_failed_when_processing_raises(

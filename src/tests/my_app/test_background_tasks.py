@@ -10,8 +10,6 @@ import pytest
 from data_fetcher.global_request_context import storage
 from django_database_task.models import DatabaseTask
 
-from proj.tasks import example_task_for_testing
-
 from my_app.model_factories import ReviewFactory
 from my_app.models import DemoTaskRun
 from my_app.tasks.example_tasks import (
@@ -20,6 +18,39 @@ from my_app.tasks.example_tasks import (
 )
 
 pytestmark = pytest.mark.view
+
+
+from django.tasks import task
+
+from data_fetcher.util import get_request
+
+
+def func_to_spy(args):
+    pass
+
+
+def inner_func():
+    # just checking context propagation
+    request = get_request()
+    from tests.my_app.test_background_tasks import func_to_spy
+
+    func_to_spy(request)
+    func_to_spy(request.context_id)
+
+
+@task
+def example_task_for_testing(arg: int):
+    """
+    This is an example task we can test using
+    both immediate and DB backends
+    """
+    request = get_request()
+    from tests.my_app.test_background_tasks import func_to_spy
+
+    func_to_spy(request)
+    func_to_spy(request.context_id)
+    func_to_spy(arg)
+    inner_func()
 
 
 def test_background_tasks_demo_page_renders(admin_client):
@@ -161,7 +192,7 @@ def test_signals_and_contextvars_are_set_in_task_execution(backend):
     with (
         override_settings(TASKS=get_task_backend(backend)),
         patch("proj.signals.generate_context_id", fake_generate_context_id),
-        patch("proj.tasks.func_to_spy", spy),
+        patch("tests.my_app.test_background_tasks.func_to_spy", spy),
     ):
         task_result = example_task_for_testing.enqueue(42)
         assert storage.get() is None

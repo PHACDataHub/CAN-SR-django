@@ -3,30 +3,24 @@ from django.db import transaction
 from my_app.models import Document, TextExtractionResult
 from my_app.pdf.text_extraction.processors import get_pdf_processor
 from my_app.pdf.text_extraction.tei import GrobidTeiParser
-from my_app.services.document_post_processing import (
-    enqueue_requested_post_processing,
-)
 from shortcuts import logger
 
 
-class QueueTextExtractionService:
+class TextExtractionService:
     """
-    creates text extraction result record
-    queues up the text extraction task
-
-    (later TODO: queue up the docint task too)
+    performs text extraction for the PDF
     """
 
     def __init__(self, document: Document):
         self.document = document
 
-    def perform(self):
-        from my_app.tasks.text_extraction_task import (
-            process_text_extraction_result,
-        )
+    def prepare(self):
+        """
+        called separately from perform()
+        """
 
         logger.info(
-            "QueueTextExtractionService started for document_id=%s",
+            "TextExtractionService.prepare started for document_id=%s",
             self.document.id,
         )
 
@@ -38,7 +32,7 @@ class QueueTextExtractionService:
 
         if not created:
             logger.info(
-                "QueueTextExtractionService was called "
+                "TextExtractionService.prepare was called "
                 "for a document (document_id=%s) "
                 "that already has a text extraction result. "
                 "this is tolerated, but unexpected ",
@@ -49,17 +43,6 @@ class QueueTextExtractionService:
             TextExtractionResult.TextExtractionStatus.PENDING
         )
         text_extraction_result.save()
-
-        process_text_extraction_result.enqueue(document_id=self.document.id)
-
-
-class TextExtractionService:
-    """
-    performs text extraction for the PDF
-    """
-
-    def __init__(self, document: Document):
-        self.document = document
 
     def perform(self):
         logger.info(
@@ -90,4 +73,3 @@ class TextExtractionService:
                 TextExtractionResult.TextExtractionStatus.COMPLETED
             )
             text_extraction_result.save()
-            enqueue_requested_post_processing(document.id)
