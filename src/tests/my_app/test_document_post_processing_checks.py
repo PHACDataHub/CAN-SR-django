@@ -1,6 +1,5 @@
 from unittest.mock import patch
 
-from django.core.management import call_command
 from django.test import override_settings
 
 import pytest
@@ -101,16 +100,18 @@ def test_queue_process_document_rejects_unconfigured_post_processing(
     "backend",
     [
         "django.tasks.backends.immediate.ImmediateBackend",
-        "django_database_task.backends.DatabaseTaskBackend",
+        "django_tasks_db.DatabaseBackend",
     ],
 )
-def test_process_document_group_completes_with_supported_backends(backend):
+def test_process_document_group_completes_with_supported_backends(
+    backend, run_database_tasks
+):
     document = DocumentFactory()
     CitationFactory(document=document)
     task_settings = {
         "default": {
             "BACKEND": backend,
-            "QUEUES": [],
+            "QUEUES": ["default"],
         }
     }
 
@@ -123,7 +124,7 @@ def test_process_document_group_completes_with_supported_backends(backend):
     ):
         group = QueueProcessDocumentService(document).perform()
         if group.status == TaskGroup.Status.WAITING:
-            call_command("run_database_tasks", verbosity=0)
+            run_database_tasks()
 
     group.refresh_from_db()
     assert group.status == TaskGroup.Status.SUCCESSFUL

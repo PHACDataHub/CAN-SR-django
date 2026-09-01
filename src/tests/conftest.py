@@ -19,6 +19,35 @@ def enable_db_access_for_all_tests(db):
     pass
 
 
+@pytest.fixture
+def run_database_tasks():
+    """Drain database tasks without closing pytest's managed connection."""
+    from django_tasks_db.management.commands.db_worker import Worker
+    from django_tasks_db.models import DBTaskResult
+
+    def run():
+        worker = Worker(
+            queue_names=["default"],
+            excluded_queue_names=[],
+            interval=0,
+            batch=True,
+            backend_name="default",
+            startup_delay=False,
+            max_tasks=None,
+            worker_id="pytest-worker",
+        )
+
+        while task_result := (
+            DBTaskResult.objects.ready()
+            .filter(backend_name="default", queue_name="default")
+            .first()
+        ):
+            task_result.claim(worker.worker_id)
+            worker.run_task(task_result)
+
+    return run
+
+
 @pytest.fixture(scope="session")
 def globally_scoped_fixture_helper(django_db_setup, django_db_blocker):
     with django_db_blocker.unblock():

@@ -68,8 +68,8 @@ services:
     command:
       - python
       - manage.py
-      - run_database_tasks
-      - --continuous
+      - db_worker
+      - --no-reload
       - --interval=1
     restart: unless-stopped
 

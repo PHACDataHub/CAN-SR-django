@@ -3,11 +3,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.management import call_command
 from django.test import override_settings
 
 import pytest
-from django_database_task.models import DatabaseTask
+from django_tasks_db.models import DBTaskResult
 
 from my_app.model_factories import DocumentFactory
 from my_app.models import (
@@ -24,9 +23,7 @@ from my_app.pdf.figure_extraction.azure import (
 )
 from my_app.pdf.figure_extraction.client import AzureDocIntExtractionClient
 from my_app.pdf.types import PdfCoordinate
-from my_app.services.figure_extraction_service import (
-    FigureExtractionService,
-)
+from my_app.services.figure_extraction_service import FigureExtractionService
 from my_app.tasks.figure_extraction_task import process_figure_extraction
 
 pytestmark = pytest.mark.backend
@@ -235,7 +232,9 @@ def test_figure_extraction_service_prepare_creates_pending_result_and_does_not_e
     assert task_mock.enqueue.call_count == 0
 
 
-def test_process_figure_extraction_task_saves_database_result(tmp_path):
+def test_process_figure_extraction_task_saves_database_result(
+    tmp_path, run_database_tasks
+):
     with override_settings(MEDIA_ROOT=tmp_path):
         document = Document.objects.create(file=_build_pdf_file())
         result = _build_result()
@@ -249,9 +248,9 @@ def test_process_figure_extraction_task_saves_database_result(tmp_path):
         ):
             FigureExtractionService(document=document).prepare()
             process_figure_extraction.enqueue(document_id=document.id)
-            assert DatabaseTask.objects.count() == 1
+            assert DBTaskResult.objects.count() == 1
 
-            call_command("run_database_tasks", verbosity=0)
+            run_database_tasks()
 
     assert FigureExtractionResult.objects.get(document=document).status == (
         FigureExtractionResult.Status.COMPLETED

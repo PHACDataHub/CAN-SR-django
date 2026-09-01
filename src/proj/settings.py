@@ -74,7 +74,7 @@ INSTALLED_APPS = configure_apps(
         "django.contrib.messages",
         "django.contrib.staticfiles",
         "django_extensions",
-        "django_database_task",
+        "django_tasks_db",
         "proj.apps.CoreAppConfig",
         "my_app.apps.MyAppConfig",
         *(["debug_toolbar"] if ENABLE_DEBUG_TOOLBAR else []),
@@ -83,17 +83,17 @@ INSTALLED_APPS = configure_apps(
 )
 
 if IS_RUNNING_PYTESTS:
-    task_backend = "django_database_task.backends.DatabaseTaskBackend"
+    task_backend = "django_tasks_db.DatabaseBackend"
 
 elif config("USE_IMMEDIATE_TASKS", default=False, cast=bool):
     task_backend = "django.tasks.backends.immediate.ImmediateBackend"
 else:
-    task_backend = "django_database_task.backends.DatabaseTaskBackend"
+    task_backend = "django_tasks_db.DatabaseBackend"
 
 TASKS = {
     "default": {
         "BACKEND": task_backend,
-        "QUEUES": [],
+        "QUEUES": ["default"],
     }
 }
 

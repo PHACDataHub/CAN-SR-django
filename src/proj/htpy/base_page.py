@@ -349,10 +349,6 @@ def get_top_right_dropdown_items(request):
             ".dropdown-item",
             href=reverse("review_list"),
         )[tdt("Systematic reviews")],
-        h.a(
-            ".dropdown-item",
-            href=reverse("background_tasks_demo"),
-        )[tdt("Background tasks demo")],
         test_rule("is_admin", request.user)
         and h.a(
             ".dropdown-item",
