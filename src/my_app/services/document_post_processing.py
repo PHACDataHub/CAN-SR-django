@@ -7,9 +7,9 @@ from my_app.models import (
     Parameter,
     ParameterExtractionResult,
 )
-from my_app.services.l2_screening import DeferredL2ScreeningService
+from my_app.services.l2_screening import EnqueueL2ScreeningService
 from my_app.services.parameter_extraction import (
-    DeferredParameterExtractionService,
+    EnqueueParameterExtractionService,
 )
 
 
@@ -51,7 +51,7 @@ class RequestedDocumentPostProcessingService:
                 review=self.citation.dataset.review
             )
         )
-        DeferredL2ScreeningService(
+        EnqueueL2ScreeningService(
             rows=[self.citation],
             questions=questions,
             overwrite_existing=True,
@@ -70,7 +70,7 @@ class RequestedDocumentPostProcessingService:
                 category__review=self.citation.dataset.review
             )
         )
-        DeferredParameterExtractionService(
+        EnqueueParameterExtractionService(
             rows=[self.citation],
             questions=parameters,
             overwrite_existing=True,

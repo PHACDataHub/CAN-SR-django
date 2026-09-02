@@ -25,7 +25,7 @@ from my_app.models import (
     TextExtractionResult,
 )
 from my_app.services.parameter_extraction import (
-    DeferredParameterExtractionService,
+    EnqueueParameterExtractionService,
     ProcessParameterExtractionService,
 )
 
@@ -115,7 +115,7 @@ def test_deferred_parameter_extraction_service_enqueues_created_results():
         "my_app.tasks.parameter_extraction.process_parameter_extraction_task",
         task_mock,
     ):
-        service = DeferredParameterExtractionService(
+        service = EnqueueParameterExtractionService(
             rows=[row_1, row_2],
             questions=[parameter],
             overwrite_existing=False,
@@ -168,7 +168,7 @@ def test_deferred_parameter_extraction_service_overwrite_targets_only_requested_
         "my_app.tasks.parameter_extraction.process_parameter_extraction_task",
         task_mock,
     ):
-        service = DeferredParameterExtractionService(
+        service = EnqueueParameterExtractionService(
             rows=[target_row],
             questions=[parameter],
             overwrite_existing=True,

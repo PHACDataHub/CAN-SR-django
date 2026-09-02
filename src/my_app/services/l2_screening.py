@@ -25,7 +25,7 @@ from my_app.services.service_util import (
 from shortcuts import logger
 
 
-class L2ScreeningService:
+class EnqueueL2ScreeningService:
     """
     creates the empty result objects
     to be later used by the processing task
@@ -44,6 +44,15 @@ class L2ScreeningService:
         self.rows = rows
         self.questions = questions
         self.overwrite_existing = overwrite_existing
+
+    def enqueue_task_for_result(self, result_id: int):
+        logger.info(
+            "Enqueuing background L2 screening processing for result_id=%s",
+            result_id,
+        )
+        from my_app.tasks.l2_screening import process_l2_screening_task
+
+        process_l2_screening_task.enqueue(result_id=result_id)
 
     def perform(self):
         citation_ids = {row.id for row in self.rows}
@@ -82,31 +91,7 @@ class L2ScreeningService:
                     status=ScreeningResultStatus.PENDING,
                 )
 
-                self.process_screening(result.id)
-
-    def process_screening(self, result_id: int):
-        raise NotImplementedError
-
-
-class ImmediateL2ScreeningService(L2ScreeningService):
-    def process_screening(self, result_id: int):
-        logger.info(
-            "Immediately processing L2 screening for result_id=%s",
-            result_id,
-        )
-
-        ProcessL2ScreeningService(result_id=result_id).perform()
-
-
-class DeferredL2ScreeningService(L2ScreeningService):
-    def process_screening(self, result_id: int):
-        logger.info(
-            "Enqueuing background L2 screening processing for result_id=%s",
-            result_id,
-        )
-        from my_app.tasks.l2_screening import process_l2_screening_task
-
-        process_l2_screening_task.enqueue(result_id=result_id)
+                self.enqueue_task_for_result(result.id)
 
 
 class ProcessL2ScreeningService:

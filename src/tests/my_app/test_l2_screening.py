@@ -25,7 +25,7 @@ from my_app.models import (
     TextExtractionResult,
 )
 from my_app.services.l2_screening import (
-    DeferredL2ScreeningService,
+    EnqueueL2ScreeningService,
     ProcessL2ScreeningService,
 )
 
@@ -123,7 +123,7 @@ def test_deferred_l2_screening_service_enqueues_created_results():
         "my_app.tasks.l2_screening.process_l2_screening_task",
         task_mock,
     ):
-        service = DeferredL2ScreeningService(
+        service = EnqueueL2ScreeningService(
             rows=[row_1, row_2],
             questions=[question],
             overwrite_existing=False,
@@ -185,7 +185,7 @@ def test_deferred_l2_screening_service_overwrite_targets_only_requested_rows_and
         "my_app.tasks.l2_screening.process_l2_screening_task",
         task_mock,
     ):
-        service = DeferredL2ScreeningService(
+        service = EnqueueL2ScreeningService(
             rows=[target_row],
             questions=[question],
             overwrite_existing=True,
@@ -330,7 +330,7 @@ def test_deferred_l2_screening_service_raises_when_text_extraction_result_missin
             MissingPreconditionError,
             match="requires text extraction to be completed",
         ):
-            DeferredL2ScreeningService(
+            EnqueueL2ScreeningService(
                 rows=[row],
                 questions=[question],
                 overwrite_existing=False,
@@ -356,7 +356,7 @@ def test_deferred_l2_screening_service_raises_when_text_extraction_incomplete():
             MissingPreconditionError,
             match="requires text extraction to be completed",
         ):
-            DeferredL2ScreeningService(
+            EnqueueL2ScreeningService(
                 rows=[row],
                 questions=[question],
                 overwrite_existing=False,
@@ -402,7 +402,7 @@ def test_deferred_l2_screening_service_raises_when_figure_extraction_result_miss
             MissingPreconditionError,
             match="requires figure extraction to be completed",
         ):
-            DeferredL2ScreeningService(
+            EnqueueL2ScreeningService(
                 rows=[row],
                 questions=[question],
                 overwrite_existing=False,

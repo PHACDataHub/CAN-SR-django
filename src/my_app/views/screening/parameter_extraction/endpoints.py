@@ -8,7 +8,7 @@ from proj.htpy.modal_component import ModalComponent
 from my_app.models import Parameter, ParameterExtractionResult
 from my_app.router import route
 from my_app.services.parameter_extraction import (
-    DeferredParameterExtractionService,
+    EnqueueParameterExtractionService,
 )
 from my_app.views.screening.document_util_components import (
     DocumentCitationMixin,
@@ -78,7 +78,7 @@ class ParameterExtractionProcessView(DocumentCitationMixin):
                 status=409,
             )
 
-        DeferredParameterExtractionService(
+        EnqueueParameterExtractionService(
             rows=[self.citation_row],
             questions=self.parameters,
             overwrite_existing=True,

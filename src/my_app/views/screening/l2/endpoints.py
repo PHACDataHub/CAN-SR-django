@@ -12,7 +12,7 @@ from my_app.models import (
     L2ScreeningResult,
 )
 from my_app.router import route
-from my_app.services.l2_screening import DeferredL2ScreeningService
+from my_app.services.l2_screening import EnqueueL2ScreeningService
 from my_app.views.screening.document_util_components import (
     DocumentCitationMixin,
     PdfCitationMetadataView,
@@ -194,7 +194,7 @@ class L2PdfScreeningProcessView(DocumentCitationMixin):
                 status=409,
             )
 
-        DeferredL2ScreeningService(
+        EnqueueL2ScreeningService(
             rows=[self.citation_row],
             questions=self.screening_questions,
             overwrite_existing=True,

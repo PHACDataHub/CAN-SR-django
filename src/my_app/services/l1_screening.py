@@ -19,8 +19,10 @@ from my_app.prompts.l1_screening_prompt import (
 from my_app.queries import get_model_for_review, options_for_question
 from shortcuts import logger
 
+# class EnqueueL1ScreeningService(L1ScreeningService):
 
-class L1ScreeningService:
+
+class EnqueueL1ScreeningService:
     """
     creates the empty result objects
     to be later used by the processing task
@@ -76,30 +78,9 @@ class L1ScreeningService:
                     status=ScreeningResultStatus.PENDING,
                 )
 
-                self.process_screening(result.id)
+                self.enqueue_task_for_result(result.id)
 
-    def process_screening(self, result_id: int):
-        raise NotImplementedError
-
-
-class ImmediateL1ScreeningService(L1ScreeningService):
-    """
-    This will be very slow if used on many questions/citations,
-    1 LLM query per citation-question pair,
-    and we wait for the response before moving on to the next pair
-    """
-
-    def process_screening(self, result_id: int):
-        logger.info(
-            "Immediately processing L1 screening for result_id=%s",
-            result_id,
-        )
-
-        ProcessL1ScreeningService(result_id=result_id).perform()
-
-
-class DeferredL1ScreeningService(L1ScreeningService):
-    def process_screening(self, result_id: int):
+    def enqueue_task_for_result(self, result_id: int):
         logger.info(
             "Enqueuing background L1 screening processing for result_id=%s",
             result_id,
