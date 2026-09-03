@@ -7,6 +7,7 @@ beautifulsoup4==4.14.3
 django-debug-toolbar==4.4.6
 django-extensions==4.1
 django-htmx==1.21.0
+django-htmx-autocomplete==1.0.17
 django-phac_aspc-helpers==3.2.1
 # -e /Users/acl/Documents/code/django-phac_aspc-helpers
 django-routify==0.3.4

@@ -28,6 +28,13 @@ class Review(models.Model):
         blank=True,
         verbose_name=tdt("Language model"),
     )
+    users = fields.ManyToManyField(
+        User,
+        through="my_app.ReviewUserLink",
+        related_name="reviews",
+        verbose_name=tdt("users"),
+        blank=True,
+    )
     created_at = fields.DateTimeField(
         auto_now_add=True, verbose_name=tm("systematic_review_created_at")
     )

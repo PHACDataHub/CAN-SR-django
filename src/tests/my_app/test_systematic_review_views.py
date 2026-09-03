@@ -2,9 +2,15 @@ from django.test import override_settings
 from django.urls import reverse
 
 import pytest
+from autocomplete import AutocompleteWidget
 from phac_aspc.rules import patch_rules
 
-from my_app.model_factories import ReviewFactory, ReviewUserLinkFactory
+from my_app.autocompletes import UserAutocomplete
+from my_app.model_factories import (
+    ReviewFactory,
+    ReviewUserLinkFactory,
+    UserFactory,
+)
 from my_app.models import LanguageModel, Review, ReviewUserLink
 from my_app.views.review import ReviewForm
 
@@ -43,6 +49,18 @@ def test_review_form_only_lists_supported_models_and_labels_default():
     assert field.empty_label == "Default (currently Default model)"
 
 
+def test_review_form_uses_multiselect_user_autocomplete():
+    field = ReviewForm().fields["users"]
+
+    assert isinstance(field.widget, AutocompleteWidget)
+    assert field.widget.ac_class is UserAutocomplete
+    assert field.widget.config == {
+        "multiselect": True,
+        "placeholder": "search for users",
+    }
+    assert not field.required
+
+
 def test_create_review_creates_link_and_redirects(
     vanilla_user_client, vanilla_user
 ):
@@ -68,6 +86,65 @@ def test_create_review_creates_link_and_redirects(
     assert "Systematic Reviews" in body
     assert "Create systematic review" in body
     assert "Cancel" not in body
+
+
+def test_create_review_saves_selected_users_and_creator(
+    vanilla_user_client, vanilla_user
+):
+    selected_user = UserFactory()
+
+    response = vanilla_user_client.post(
+        reverse("create_review"),
+        {
+            "title": "Review with users",
+            "description": "Description",
+            "users": [selected_user.id],
+        },
+    )
+
+    assert response.status_code == 302
+    review = Review.objects.get(title="Review with users")
+    assert set(review.users.all()) == {vanilla_user, selected_user}
+
+
+def test_edit_review_requires_non_admin_to_retain_access(
+    vanilla_user_client, vanilla_user
+):
+    review = ReviewFactory()
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
+
+    response = vanilla_user_client.post(
+        reverse("edit_review", args=[review.id]),
+        {
+            "title": review.title,
+            "description": review.description,
+            "users": [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.context["form"].errors["users"] == [
+        "You must include yourself as an author."
+    ]
+    assert review.users.filter(pk=vanilla_user.pk).exists()
+
+
+def test_admin_can_remove_all_review_users(admin_client):
+    review = ReviewFactory()
+    linked_user = UserFactory()
+    ReviewUserLinkFactory(user=linked_user, review=review)
+
+    response = admin_client.post(
+        reverse("edit_review", args=[review.id]),
+        {
+            "title": review.title,
+            "description": review.description,
+            "users": [],
+        },
+    )
+
+    assert response.status_code == 302
+    assert not review.users.exists()
 
 
 def test_edit_review_uses_rule(vanilla_user_client, vanilla_user):
