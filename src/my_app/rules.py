@@ -18,3 +18,8 @@ def can_access_review(user, review_id):
 
     accessible_reviews = get_accessible_reviews(user.id)
     return any(review.id == review_id for review in accessible_reviews)
+
+
+@auto_rule
+def can_hard_delete_review(user, review):
+    return is_admin(user)
