@@ -61,6 +61,27 @@ def test_review_form_uses_multiselect_user_autocomplete():
     assert not field.required
 
 
+def test_review_form_only_includes_is_deleted_field_when_editing():
+    assert "is_deleted" not in ReviewForm().fields
+
+    field = ReviewForm(instance=ReviewFactory()).fields["is_deleted"]
+    assert not field.required
+
+
+def test_review_form_initially_selects_non_admin_creator(vanilla_user):
+    with patch_rules(is_admin=False):
+        form = ReviewForm(request_user=vanilla_user)
+
+    assert form.initial["users"] == [vanilla_user]
+
+
+def test_review_form_does_not_initially_select_admin_creator(admin_user):
+    with patch_rules(is_admin=True):
+        form = ReviewForm(request_user=admin_user)
+
+    assert "users" not in form.initial
+
+
 def test_create_review_creates_link_and_redirects(
     vanilla_user_client, vanilla_user
 ):
@@ -200,6 +221,23 @@ def test_detail_review_links_to_upload_when_dataset_missing(
     assert "Upload dataset" in body
 
 
+def test_deleted_review_detail_shows_archive_warning_and_breadcrumb(
+    vanilla_user_client, vanilla_user
+):
+    review = ReviewFactory(title="Archived review", is_deleted=True)
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_user_client.get(
+            reverse("review_detail", args=[review.id])
+        )
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "This review is archived." in body
+    assert "Archived review (ARCHIVED)" in body
+
+
 def test_screening_criteria_page_uses_rule_and_detail_links_to_it(
     vanilla_user_client, vanilla_user
 ):
@@ -254,3 +292,22 @@ def test_admin_sees_all_reviews(vanilla_user_client):
     assert len(response.context["object_list"]) == 2
     body = response.content.decode()
     assert "Systematic Reviews" in body
+
+
+@pytest.mark.parametrize("is_admin", [False, True])
+def test_list_reviews_hides_deleted_reviews(
+    vanilla_user_client, vanilla_user, is_admin
+):
+    active_review = ReviewFactory(title="Active review")
+    deleted_review = ReviewFactory(title="Deleted review", is_deleted=True)
+    ReviewUserLinkFactory(user=vanilla_user, review=active_review)
+    ReviewUserLinkFactory(user=vanilla_user, review=deleted_review)
+
+    with patch_rules(is_admin=is_admin):
+        response = vanilla_user_client.get(reverse("review_list"))
+
+    object_ids = [review.id for review in response.context["object_list"]]
+    assert active_review.id in object_ids
+    assert deleted_review.id not in object_ids
+    assert "Active review" in response.content.decode()
+    assert "Deleted review" not in response.content.decode()

@@ -35,6 +35,7 @@ class Review(models.Model):
         verbose_name=tdt("users"),
         blank=True,
     )
+    is_deleted = fields.BooleanField(default=False)
     created_at = fields.DateTimeField(
         auto_now_add=True, verbose_name=tm("systematic_review_created_at")
     )
