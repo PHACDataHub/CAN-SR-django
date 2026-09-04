@@ -108,4 +108,8 @@ translation_entries = {
         "en": "Created at",
         "fr": "Créée le",
     },
+    "users": {
+        "en": "users",
+        "fr": "utilisateurs",
+    },
 }

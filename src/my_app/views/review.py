@@ -1,3 +1,10 @@
+from django import forms
+
+from autocomplete import AutocompleteWidget
+
+from proj.models import User
+
+from my_app.autocompletes import UserAutocomplete
 from my_app.htpy.review import (
     ReviewCreatePage,
     ReviewDetailPage,
@@ -21,16 +28,31 @@ from shortcuts import (
     reverse,
     tdt,
     test_rule,
+    tm,
     transaction,
 )
 
 
 class ReviewForm(ModelForm, StandardFormMixin):
+    users = forms.ModelMultipleChoiceField(
+        queryset=User.objects.all(),
+        label=tm("users"),
+        widget=AutocompleteWidget(
+            ac_class=UserAutocomplete,
+            options={
+                "multiselect": True,
+                "placeholder": tdt("search for users"),
+            },
+        ),
+        required=False,
+    )
+
     class Meta:
         model = Review
-        fields = ["title", "description", "language_model"]
+        fields = ["title", "description", "language_model", "users"]
 
     def __init__(self, *args, **kwargs):
+        self.request_user = kwargs.pop("request_user", None)
         super().__init__(*args, **kwargs)
         supported_models = LanguageModel.get_supported_models()
         default_model = supported_models.filter(is_default=True).first()
@@ -38,6 +60,20 @@ class ReviewForm(ModelForm, StandardFormMixin):
         self.fields["language_model"].empty_label = tdt(
             f"Default (currently {default_model})"
         )
+
+    def clean_users(self):
+        users = self.cleaned_data["users"]
+        is_edit = bool(self.instance.pk)
+        if (
+            is_edit
+            and self.request_user
+            and not test_rule("is_admin", self.request_user)
+            and self.request_user not in users
+        ):
+            raise forms.ValidationError(
+                tdt("You must include yourself as an author.")
+            )
+        return users
 
 
 @route("reviews/", name="review_list")
@@ -60,7 +96,7 @@ class CreateReviewView(CreateView, HtpyTemplateMixin):
     def form_valid(self, form):
         with transaction.atomic():
             self.object = form.save()
-            ReviewUserLink.objects.create(
+            ReviewUserLink.objects.get_or_create(
                 user=self.request.user,
                 review=self.object,
             )
@@ -78,13 +114,18 @@ class EditReviewView(UpdateView, MustAccessReviewMixin, HtpyTemplateMixin):
     form_class = ReviewForm
     template_component = ReviewEditPage
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request_user"] = self.request.user
+        return kwargs
+
     def form_valid(self, form):
         ret = super().form_valid(form)
         messages.success(self.request, tdt("Review updated"))
         return ret
 
     def get_success_url(self):
-        return reverse("review_detail", args=[self.object.id])
+        return reverse("edit_review", args=[self.object.id])
 
 
 @route("reviews/<int:review_id>/detail/", name="review_detail")

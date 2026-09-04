@@ -73,6 +73,7 @@ INSTALLED_APPS = configure_apps(
         "django.contrib.sessions",
         "django.contrib.messages",
         "django.contrib.staticfiles",
+        "autocomplete",
         "django_extensions",
         "django_tasks_db",
         "proj.apps.CoreAppConfig",
