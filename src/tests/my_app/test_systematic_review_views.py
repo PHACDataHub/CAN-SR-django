@@ -7,11 +7,19 @@ from phac_aspc.rules import patch_rules
 
 from my_app.autocompletes import UserAutocomplete
 from my_app.model_factories import (
+    CitationDatasetFactory,
+    L1ScreeningQuestionFactory,
     ReviewFactory,
     ReviewUserLinkFactory,
     UserFactory,
 )
-from my_app.models import LanguageModel, Review, ReviewUserLink
+from my_app.models import (
+    CitationDataset,
+    L1ScreeningQuestion,
+    LanguageModel,
+    Review,
+    ReviewUserLink,
+)
 from my_app.views.review import ReviewForm
 
 pytestmark = pytest.mark.view
@@ -186,6 +194,74 @@ def test_edit_review_uses_rule(vanilla_user_client, vanilla_user):
         assert review.title in body
         assert "Edit review" in body
         assert "Cancel" not in body
+
+
+def test_edit_review_only_shows_danger_zone_when_user_can_hard_delete(
+    vanilla_user_client, vanilla_user
+):
+    review = ReviewFactory()
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
+    url = reverse("edit_review", args=[review.id])
+
+    with patch_rules(can_access_review=True, can_hard_delete_review=False):
+        response = vanilla_user_client.get(url)
+
+    assert "Danger zone" not in response.content.decode()
+
+    with patch_rules(can_access_review=True, can_hard_delete_review=True):
+        response = vanilla_user_client.get(url)
+
+    body = response.content.decode()
+    assert "Danger zone" in body
+    assert reverse("hard_delete_review", args=[review.id]) in body
+
+
+def test_hard_delete_review_requires_rule(vanilla_user_client):
+    review = ReviewFactory()
+    url = reverse("hard_delete_review", args=[review.id])
+
+    with patch_rules(can_hard_delete_review=False):
+        assert vanilla_user_client.get(url).status_code == 403
+        assert (
+            vanilla_user_client.post(url, {"confirm": True}).status_code == 403
+        )
+
+    assert Review.objects.filter(pk=review.pk).exists()
+
+
+def test_hard_delete_review_requires_confirmation(vanilla_user_client):
+    review = ReviewFactory()
+    url = reverse("hard_delete_review", args=[review.id])
+
+    with patch_rules(can_hard_delete_review=True):
+        response = vanilla_user_client.post(url, {})
+
+    assert response.status_code == 200
+    assert "This field is required." in response.content.decode()
+    assert Review.objects.filter(pk=review.pk).exists()
+
+
+def test_hard_delete_review_cascades_and_redirects(vanilla_user_client):
+    review = ReviewFactory()
+    ReviewUserLinkFactory(review=review)
+    dataset = CitationDatasetFactory(review=review)
+    question = L1ScreeningQuestionFactory(review=review)
+    review_id = review.id
+    url = reverse("hard_delete_review", args=[review_id])
+
+    with patch_rules(can_hard_delete_review=True):
+        response = vanilla_user_client.post(
+            url,
+            {"confirm": True},
+            HTTP_HX_REQUEST="true",
+        )
+
+    assert response.status_code == 200
+    assert response["HX-Redirect"] == reverse("review_list")
+    assert not Review.objects.filter(pk=review_id).exists()
+    assert not ReviewUserLink.objects.filter(review_id=review_id).exists()
+    assert not CitationDataset.objects.filter(pk=dataset.pk).exists()
+    assert not L1ScreeningQuestion.objects.filter(pk=question.pk).exists()
 
 
 def test_detail_review_uses_rule(vanilla_user_client, vanilla_user):

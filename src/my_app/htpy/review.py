@@ -3,7 +3,7 @@ import htpy as h
 from my_app.models import CitationDataset
 from shortcuts import BasePageTemplate, GenericFormWithContainer
 from shortcuts import breadcrumbs as bc
-from shortcuts import reverse, tdt
+from shortcuts import get_request, reverse, tdt, test_rule
 
 
 class ReviewListPage(BasePageTemplate):
@@ -66,6 +66,27 @@ class ReviewEditPage(BasePageTemplate):
             h.h1[tdt("Edit review")],
             GenericFormWithContainer(
                 self.context["form"],
+            ),
+            (
+                h.details(".border.border-danger.rounded.p-3.mt-5")[
+                    h.summary(".text-danger.fw-semibold")[tdt("Danger zone")],
+                    h.p(".mt-3")[
+                        tdt(
+                            "Permanently hard-delete this review and all of its related data."
+                        )
+                    ],
+                    h.button(
+                        ".btn.btn-danger",
+                        type="button",
+                        hx_get=reverse("hard_delete_review", args=[review.id]),
+                        hx_target="#modal-slot",
+                        hx_swap="innerHTML",
+                    )[tdt("Hard-delete review")],
+                ]
+                if test_rule(
+                    "can_hard_delete_review", get_request().user, review
+                )
+                else None
             ),
         ]
 

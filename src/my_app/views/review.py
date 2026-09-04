@@ -1,7 +1,11 @@
 from django import forms
+from django.http import HttpResponse
 
+import htpy as h
 from autocomplete import AutocompleteWidget
 
+from proj.htpy.generic_form import GenericForm
+from proj.htpy.modal_component import ModalComponent
 from proj.models import User
 
 from my_app.autocompletes import UserAutocomplete
@@ -14,13 +18,15 @@ from my_app.htpy.review import (
 from my_app.models import LanguageModel, Review, ReviewUserLink
 from my_app.queries import get_accessible_reviews
 from my_app.router import route
-from my_app.views.view_utils import MustAccessReviewMixin
+from my_app.views.view_utils import MustAccessReviewMixin, ReviewMixin
 from shortcuts import (
     CreateView,
     DetailView,
+    FormView,
     HtpyTemplateMixin,
     ListView,
     ModelForm,
+    MustPassRuleMixin,
     StandardFormMixin,
     UpdateView,
     messages,
@@ -106,6 +112,15 @@ class ReviewForm(ModelForm, StandardFormMixin):
         return users
 
 
+class HardDeleteReviewForm(forms.Form):
+    confirm = forms.BooleanField(
+        label=tdt(
+            "I confirm that I want to permanently hard-delete this review and all of its related data."
+        ),
+        required=True,
+    )
+
+
 @route("reviews/", name="review_list")
 class ReviewListView(ListView, HtpyTemplateMixin):
     template_component = ReviewListPage
@@ -174,3 +189,57 @@ class ReviewDetailView(MustAccessReviewMixin, DetailView, HtpyTemplateMixin):
     model = Review
     pk_url_kwarg = "review_id"
     template_component = ReviewDetailPage
+
+
+@route("reviews/<int:review_id>/hard-delete/", name="hard_delete_review")
+class HardDeleteReviewView(MustPassRuleMixin, ReviewMixin, FormView):
+    form_class = HardDeleteReviewForm
+    form_id = "hard-delete-review-form"
+
+    def check_rule(self, user):
+        return test_rule("can_hard_delete_review", user, self.review)
+
+    def get(self, request, *args, **kwargs):
+        return HttpResponse(self.render_modal(self.get_form()))
+
+    def form_valid(self, form):
+        self.review.delete()
+        messages.success(self.request, tdt("Review hard-deleted."))
+        success_url = reverse("review_list")
+
+        if self.request.headers.get("HX-Request") == "true":
+            return HttpResponse(headers={"HX-Redirect": success_url})
+
+        return redirect(success_url)
+
+    def form_invalid(self, form):
+        return HttpResponse(self.render_modal(form))
+
+    def render_modal(self, form):
+        hard_delete_url = reverse("hard_delete_review", args=[self.review.id])
+        footer = h.fragment[
+            h.button(
+                type="button",
+                class_="btn btn-secondary",
+                data_modal_close=True,
+            )[tdt("Cancel")],
+            h.button(
+                ".btn.btn-danger",
+                type="submit",
+                form=self.form_id,
+            )[tdt("Hard-delete review")],
+        ]
+        body = h.form(
+            id=self.form_id,
+            method="post",
+            action=hard_delete_url,
+            hx_post=hard_delete_url,
+            hx_target="#modal-slot",
+            hx_swap="innerHTML",
+        )[GenericForm(form)]
+
+        return ModalComponent(
+            title=tdt("Hard-delete review"),
+            footer=footer,
+            modal_id="hard-delete-review-modal",
+        )[body]
