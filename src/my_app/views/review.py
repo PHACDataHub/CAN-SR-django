@@ -34,6 +34,13 @@ from shortcuts import (
 
 
 class ReviewForm(ModelForm, StandardFormMixin):
+    is_deleted = forms.BooleanField(
+        label=tdt("Is deleted"),
+        help_text=tdt(
+            "Also known as archive; this will remove links to this page."
+        ),
+        required=False,
+    )
     users = forms.ModelMultipleChoiceField(
         queryset=User.objects.all(),
         label=tm("users"),
@@ -49,17 +56,40 @@ class ReviewForm(ModelForm, StandardFormMixin):
 
     class Meta:
         model = Review
-        fields = ["title", "description", "language_model", "users"]
+        fields = [
+            "title",
+            "description",
+            "language_model",
+            "users",
+            "is_deleted",
+        ]
 
     def __init__(self, *args, **kwargs):
         self.request_user = kwargs.pop("request_user", None)
         super().__init__(*args, **kwargs)
+        self.configure_initial_users()
+        self.configure_language_model()
+        self.configure_is_deleted()
+
+    def configure_initial_users(self):
+        if (
+            not self.instance.pk
+            and self.request_user
+            and not test_rule("is_admin", self.request_user)
+        ):
+            self.initial.setdefault("users", [self.request_user])
+
+    def configure_language_model(self):
         supported_models = LanguageModel.get_supported_models()
         default_model = supported_models.filter(is_default=True).first()
         self.fields["language_model"].queryset = supported_models
         self.fields["language_model"].empty_label = tdt(
             f"Default (currently {default_model})"
         )
+
+    def configure_is_deleted(self):
+        if not self.instance.pk:
+            self.fields.pop("is_deleted")
 
     def clean_users(self):
         users = self.cleaned_data["users"]
@@ -82,9 +112,15 @@ class ReviewListView(ListView, HtpyTemplateMixin):
 
     def get_queryset(self):
         if test_rule("is_admin", self.request.user):
-            return Review.objects.all().order_by("-created_at", "-id")
+            return Review.objects.filter(is_deleted=False).order_by(
+                "-created_at", "-id"
+            )
 
-        return get_accessible_reviews(self.request.user.id)
+        return [
+            review
+            for review in get_accessible_reviews(self.request.user.id)
+            if not review.is_deleted
+        ]
 
 
 @route("reviews/create/", name="create_review")
@@ -92,6 +128,11 @@ class CreateReviewView(CreateView, HtpyTemplateMixin):
     form_class = ReviewForm
     model = Review
     template_component = ReviewCreatePage
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request_user"] = self.request.user
+        return kwargs
 
     def form_valid(self, form):
         with transaction.atomic():

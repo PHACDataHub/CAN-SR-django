@@ -121,6 +121,13 @@ class ReviewDetailPage(BasePageTemplate):
 
         return [
             bc.BreadcrumbTrailForReview(review),
+            (
+                h.div(".alert.alert-warning", role="alert")[
+                    tdt("This review is archived.")
+                ]
+                if review.is_deleted
+                else None
+            ),
             h.h1[review.title],
             h.p(".text-muted.fs-5")[review.description],
             h.div(".d-grid.gap-3.mb-4")[
