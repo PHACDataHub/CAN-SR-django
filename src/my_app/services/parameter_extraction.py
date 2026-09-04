@@ -24,7 +24,7 @@ from my_app.services.service_util import (
 from shortcuts import logger
 
 
-class ParameterExtractionService:
+class EnqueueParameterExtractionService:
     """
     creates the empty result objects
     to be later used by the processing task
@@ -81,24 +81,9 @@ class ParameterExtractionService:
                     status=ScreeningResultStatus.PENDING,
                 )
 
-                self.process_screening(result.id)
+                self.enqueue_task_for_result(result.id)
 
-    def process_screening(self, result_id: int):
-        raise NotImplementedError
-
-
-class ImmediateParameterExtractionService(ParameterExtractionService):
-    def process_screening(self, result_id: int):
-        logger.info(
-            "Immediately processing parameter extraction for result_id=%s",
-            result_id,
-        )
-
-        ProcessParameterExtractionService(result_id=result_id).perform()
-
-
-class DeferredParameterExtractionService(ParameterExtractionService):
-    def process_screening(self, result_id: int):
+    def enqueue_task_for_result(self, result_id: int):
         logger.info(
             "Enqueuing background parameter extraction processing for result_id=%s",
             result_id,

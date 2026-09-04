@@ -47,10 +47,10 @@ def test_requested_post_processing_enqueues_selected_work():
 
     with (
         patch(
-            "my_app.services.document_post_processing.DeferredL2ScreeningService"
+            "my_app.services.document_post_processing.EnqueueL2ScreeningService"
         ) as l2_service,
         patch(
-            "my_app.services.document_post_processing.DeferredParameterExtractionService"
+            "my_app.services.document_post_processing.EnqueueParameterExtractionService"
         ) as parameter_service,
     ):
         _service(
@@ -79,7 +79,7 @@ def test_requested_post_processing_ignores_a_superseded_group():
     TaskGroup.objects.create(key=older_group.key)
 
     with patch(
-        "my_app.services.document_post_processing.DeferredL2ScreeningService"
+        "my_app.services.document_post_processing.EnqueueL2ScreeningService"
     ) as service:
         _service(
             older_group,
@@ -96,12 +96,12 @@ def test_requested_post_processing_ignores_a_superseded_group():
         (
             "should_run_l2_screening",
             L2ScreeningResult,
-            "my_app.services.document_post_processing.DeferredL2ScreeningService",
+            "my_app.services.document_post_processing.EnqueueL2ScreeningService",
         ),
         (
             "should_run_parameter_extraction",
             ParameterExtractionResult,
-            "my_app.services.document_post_processing.DeferredParameterExtractionService",
+            "my_app.services.document_post_processing.EnqueueParameterExtractionService",
         ),
     ],
 )
@@ -130,12 +130,12 @@ def test_requested_post_processing_preserves_results_newer_than_group(
         (
             "should_run_l2_screening",
             L2ScreeningResult,
-            "my_app.services.document_post_processing.DeferredL2ScreeningService",
+            "my_app.services.document_post_processing.EnqueueL2ScreeningService",
         ),
         (
             "should_run_parameter_extraction",
             ParameterExtractionResult,
-            "my_app.services.document_post_processing.DeferredParameterExtractionService",
+            "my_app.services.document_post_processing.EnqueueParameterExtractionService",
         ),
     ],
 )

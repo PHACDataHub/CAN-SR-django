@@ -40,6 +40,7 @@ strong>span+label {
 
 
 dl.custom-dl {
+    container: custom-dl / inline-size;
     display: grid;
     grid-template-columns: fit-content(14rem) minmax(0, 1fr);
     gap: 0.5rem 0;
@@ -69,6 +70,23 @@ dl.custom-dl {
     dt:last-of-type,
     dd:last-of-type {
         border-bottom: none;
+    }
+}
+
+@container custom-dl (max-width: 34rem) {
+    dl.custom-dl > dt,
+    dl.custom-dl > dd {
+        grid-column: 1 / -1;
+    }
+
+    dl.custom-dl > dt {
+        padding-bottom: 0;
+        border-bottom: 0;
+    }
+
+    dl.custom-dl > dd {
+        padding-left: 0;
+        padding-bottom: 0.75rem;
     }
 }
 

@@ -20,7 +20,7 @@ from my_app.models import (
     ScreeningResultStatus,
 )
 from my_app.services.l1_screening import (
-    DeferredL1ScreeningService,
+    EnqueueL1ScreeningService,
     ProcessL1ScreeningService,
 )
 
@@ -71,7 +71,7 @@ def test_deferred_l1_screening_service_enqueues_created_results():
         "my_app.tasks.l1_screening.process_l1_screening_task",
         task_mock,
     ):
-        service = DeferredL1ScreeningService(
+        service = EnqueueL1ScreeningService(
             rows=[row_1, row_2],
             questions=[question],
             overwrite_existing=False,
@@ -160,7 +160,7 @@ def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and
         "my_app.tasks.l1_screening.process_l1_screening_task",
         task_mock,
     ):
-        service = DeferredL1ScreeningService(
+        service = EnqueueL1ScreeningService(
             rows=[target_row],
             questions=[question],
             overwrite_existing=True,

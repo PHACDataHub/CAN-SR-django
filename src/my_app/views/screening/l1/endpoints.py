@@ -14,7 +14,7 @@ from my_app.models import (
     L1ScreeningResult,
 )
 from my_app.router import route
-from my_app.services.l1_screening import DeferredL1ScreeningService
+from my_app.services.l1_screening import EnqueueL1ScreeningService
 from my_app.views.screening.l1.detail import (
     l1_human_review_control_id,
     render_l1_human_review_control,
@@ -72,7 +72,7 @@ class ScreenL1RowView(MustAccessReviewMixin, View):
         )
 
     def post(self, request, *args, **kwargs):
-        DeferredL1ScreeningService(
+        EnqueueL1ScreeningService(
             rows=[self.citation_row],
             questions=self.screening_questions,
             overwrite_existing=True,
