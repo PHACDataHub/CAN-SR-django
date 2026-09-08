@@ -53,31 +53,28 @@ class CitationQueryResult(models.Model):
     explanation = models.TextField(null=True, blank=True)
 
 
-class HumanValidatedScreeningResult(CitationQueryResult):
+class HumanAnswer(models.Model):
     class Meta:
         abstract = True
 
-    human_validation_timestamp = models.DateTimeField(
-        null=True,
-        default=None,
-        verbose_name=tdt("Human validation timestamp"),
-    )
-    human_validated_by = models.ForeignKey(
+    citation = models.ForeignKey("Citation", on_delete=models.CASCADE)
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        blank=True,
         related_name="+",
-        verbose_name=tdt("Human validated by"),
+        verbose_name=tdt("User"),
     )
-    human_notes = models.TextField(
+    notes = models.TextField(
         null=True,
         blank=True,
-        verbose_name=tdt("Human notes"),
+        verbose_name=tdt("Notes"),
     )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
-class L1ScreeningResult(HumanValidatedScreeningResult):
+class L1ScreeningResult(CitationQueryResult):
     question = models.ForeignKey(
         "L1ScreeningQuestion", on_delete=models.CASCADE
     )
@@ -87,20 +84,12 @@ class L1ScreeningResult(HumanValidatedScreeningResult):
         null=True,
         blank=True,
     )
-    human_selected_answer = models.ForeignKey(
-        "L1ScreeningQuestionOption",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="+",
-        verbose_name=tdt("Human selected answer"),
-    )
 
     class Meta:
         unique_together = ("citation", "question")
 
 
-class L2ScreeningResult(HumanValidatedScreeningResult):
+class L2ScreeningResult(CitationQueryResult):
     question = models.ForeignKey(
         "L2ScreeningQuestion", on_delete=models.CASCADE
     )
@@ -110,15 +99,6 @@ class L2ScreeningResult(HumanValidatedScreeningResult):
         null=True,
         blank=True,
     )
-    human_selected_answer = models.ForeignKey(
-        "L2ScreeningQuestionOption",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="+",
-        verbose_name=tdt("Human selected answer"),
-    )
-
     evidence_sentences = models.JSONField(
         default=list,
         blank=True,
@@ -134,6 +114,30 @@ class L2ScreeningResult(HumanValidatedScreeningResult):
 
     class Meta:
         unique_together = ("citation", "question")
+
+
+class L1HumanAnswer(HumanAnswer):
+    question = models.ForeignKey(
+        "L1ScreeningQuestion", on_delete=models.CASCADE
+    )
+    selected_option = models.ForeignKey(
+        "L1ScreeningQuestionOption", on_delete=models.CASCADE
+    )
+
+
+class L2HumanAnswer(HumanAnswer):
+    question = models.ForeignKey(
+        "L2ScreeningQuestion", on_delete=models.CASCADE
+    )
+    selected_option = models.ForeignKey(
+        "L2ScreeningQuestionOption", on_delete=models.CASCADE
+    )
+
+
+class ParameterHumanAnswer(HumanAnswer):
+    question = models.ForeignKey("Parameter", on_delete=models.CASCADE)
+    found = models.BooleanField(default=False)
+    value = models.TextField(null=True, blank=True)
 
 
 class ParameterExtractionResult(CitationQueryResult):

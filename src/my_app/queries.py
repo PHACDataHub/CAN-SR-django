@@ -238,6 +238,7 @@ def _get_screening_progress_stats(
     review_id: int,
     question_model: type,
     result_relation_name: str,
+    human_answer_relation_name: str,
 ):
     question_count = question_model.objects.filter(review_id=review_id).count()
     citations = Citation.objects.filter(dataset__review_id=review_id)
@@ -252,9 +253,6 @@ def _get_screening_progress_stats(
         )
 
     status_field = f"{result_relation_name}__status"
-    human_validated_field = f"{result_relation_name}__human_validated_by"
-    human_answered_field = f"{result_relation_name}__human_selected_answer"
-
     rows = citations.annotate(
         result_count=Count(result_relation_name, distinct=True),
         completed_count=Count(
@@ -263,14 +261,7 @@ def _get_screening_progress_stats(
             distinct=True,
         ),
         human_reviewed_count=Count(
-            result_relation_name,
-            filter=(
-                Q(**{status_field: ScreeningResultStatus.COMPLETED})
-                & (
-                    Q(**{f"{human_validated_field}__isnull": False})
-                    | Q(**{f"{human_answered_field}__isnull": False})
-                )
-            ),
+            f"{human_answer_relation_name}__question",
             distinct=True,
         ),
     ).values("result_count", "completed_count", "human_reviewed_count")
@@ -310,6 +301,7 @@ def get_l1_screening_progress_stats(review_id: int):
         review_id,
         L1ScreeningQuestion,
         "l1screeningresult",
+        "l1humananswer",
     )
 
 
@@ -319,6 +311,7 @@ def get_l2_screening_progress_stats(review_id: int):
         review_id,
         L2ScreeningQuestion,
         "l2screeningresult",
+        "l2humananswer",
     )
 
 

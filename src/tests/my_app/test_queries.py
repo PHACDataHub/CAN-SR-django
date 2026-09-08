@@ -6,6 +6,7 @@ from my_app.model_factories import (
     CitationFactory,
     DocumentFactory,
     FigureExtractionResultFactory,
+    L1HumanAnswerFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningQuestionOptionFactory,
     L1ScreeningResultFactory,
@@ -249,13 +250,23 @@ def test_l1_screening_progress_stats_counts_review_citations_by_human_review_sta
         citation=human_answered_row,
         question=question,
         status=ScreeningResultStatus.COMPLETED,
-        human_selected_answer=answer,
+    )
+    L1HumanAnswerFactory(
+        citation=human_answered_row,
+        question=question,
+        selected_option=answer,
+        user=user,
     )
     L1ScreeningResultFactory(
         citation=human_validated_row,
         question=question,
         status=ScreeningResultStatus.COMPLETED,
-        human_validated_by=user,
+    )
+    L1HumanAnswerFactory(
+        citation=human_validated_row,
+        question=question,
+        selected_option=answer,
+        user=user,
     )
 
     stats = get_l1_screening_progress_stats(review.id)

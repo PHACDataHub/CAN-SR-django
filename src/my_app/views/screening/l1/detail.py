@@ -3,6 +3,7 @@ from proj.htpy.components import PercentFormatter
 
 from my_app.models import (
     Citation,
+    L1HumanAnswer,
     L1ScreeningResult,
     Review,
     ScreeningResultStatus,
@@ -66,18 +67,32 @@ def l1_human_review_control_id(result):
     return human_review_control_id("l1", result)
 
 
-def render_l1_human_review_control(result: L1ScreeningResult, review: Review):
+def render_l1_human_review_control(
+    result: L1ScreeningResult,
+    review: Review,
+    current_user,
+    answers=None,
+):
+    if answers is None:
+        answers = (
+            L1HumanAnswer.objects.filter(
+                citation=result.citation,
+                question=result.question,
+            )
+            .select_related("selected_option", "user")
+            .order_by("-updated_at", "-id")
+        )
+
     return render_human_review_control(
         result,
+        answers=answers,
+        current_user=current_user,
         prefix="l1",
         answer_url=reverse(
             "l1_citation_human_answer", args=[review.id, result.id]
         ),
         validate_url=reverse(
             "l1_citation_validate_correct", args=[review.id, result.id]
-        ),
-        undo_validation_url=reverse(
-            "l1_citation_undo_validation", args=[review.id, result.id]
         ),
     )
 
@@ -102,11 +117,26 @@ class L1CitationScreeningPage(BasePageTemplate):
             .select_related(
                 "question",
                 "selected_option",
-                "human_selected_answer",
-                "human_validated_by",
             )
             .order_by("question_id")
         )
+
+    @cached_property
+    def human_answers_by_question_id(self):
+        answers = (
+            L1HumanAnswer.objects.filter(
+                citation=self.citation_row,
+                question_id__in=[
+                    result.question_id for result in self.screening_results
+                ],
+            )
+            .select_related("selected_option", "user")
+            .order_by("-updated_at", "-id")
+        )
+        grouped_answers = {}
+        for answer in answers:
+            grouped_answers.setdefault(answer.question_id, []).append(answer)
+        return grouped_answers
 
     @cached_property
     def included_field_names(self):
@@ -266,11 +296,17 @@ class L1CitationScreeningPage(BasePageTemplate):
                     ScreeningResultStatus(result.status).label,
                 ),
                 (
-                    tdt("Selected option"),
-                    render_l1_human_review_control(result, self.review),
+                    tdt("Answers"),
+                    render_l1_human_review_control(
+                        result,
+                        self.review,
+                        self.request.user,
+                        self.human_answers_by_question_id.get(
+                            result.question_id, []
+                        ),
+                    ),
                 ),
                 (tdt("Confidence"), PercentFormatter(result.confidence)),
-                (tdt("Notes"), result.explanation or tdt("None")),
             ]
         )
 
