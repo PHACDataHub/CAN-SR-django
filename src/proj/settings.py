@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse_lazy
 
 from decouple import Csv, config
@@ -209,6 +210,9 @@ WSGI_APPLICATION = "proj.wsgi.application"
 
 
 USE_SQLITE = config("USE_SQLITE", default=False, cast=bool)
+
+DB_AUTH_MODE = config("DB_AUTH_MODE", default="local")
+
 if USE_SQLITE:
     DATABASES = {
         "default": {
@@ -233,6 +237,14 @@ else:
             },
         }
     }
+
+    if DB_AUTH_MODE == "azure":
+        DATABASES["default"]["ENGINE"] = "proj.db_backends.azure_postgresql"
+        DATABASES["default"]["PASSWORD"] = ""
+        DATABASES["default"]["TEST"][
+            "ENGINE"
+        ] = "proj.db_backends.azure_postgresql"
+
 
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
