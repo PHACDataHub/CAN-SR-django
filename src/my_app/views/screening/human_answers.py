@@ -41,14 +41,18 @@ class ScreeningHumanAnswerViewMixin(MustAccessReviewMixin, View):
     prefix = None
     route_name = None
     render_control_component = None
+    result_select_related = (
+        "citation",
+        "question",
+        "selected_option",
+    )
+    modal_title = tdt("Your screening answer")
 
     @cached_property
     def result(self):
         return get_object_or_404(
             self.result_model.objects.select_related(
-                "citation",
-                "question",
-                "selected_option",
+                *self.result_select_related
             ),
             pk=self.kwargs["result_pk"],
             citation__dataset__review=self.review,
@@ -75,6 +79,15 @@ class ScreeningHumanAnswerViewMixin(MustAccessReviewMixin, View):
             )
         )
 
+    def can_validate(self):
+        return self.result.selected_option_id is not None
+
+    def validated_answer_values(self):
+        return {"selected_option": self.result.selected_option}
+
+    def human_answer_form_kwargs(self):
+        return {"question": self.result.question}
+
 
 class ValidateAIAnswerView:
     def post(self, request, *args, **kwargs):
@@ -82,12 +95,12 @@ class ValidateAIAnswerView:
             citation=self.result.citation,
             question=self.result.question,
         )
-        if not answers.exists() and self.result.selected_option_id is not None:
+        if not answers.exists() and self.can_validate():
             self.answer_model.objects.create(
                 citation=self.result.citation,
                 question=self.result.question,
-                selected_option=self.result.selected_option,
                 user=request.user,
+                **self.validated_answer_values(),
             )
         return HttpResponse(self.render_control())
 
@@ -108,7 +121,7 @@ class HumanAnswerFormView:
         return self.form_class(
             self.request.POST or None,
             instance=self.answer,
-            question=self.result.question,
+            **self.human_answer_form_kwargs(),
         )
 
     def render_modal(self):
@@ -130,7 +143,7 @@ class HumanAnswerFormView:
         ]
         return str(
             ModalComponent(
-                title=tdt("Your screening answer"),
+                title=self.modal_title,
                 modal_id=f"{self.prefix}-human-answer-modal-{self.result.id}",
                 footer=footer,
             )[

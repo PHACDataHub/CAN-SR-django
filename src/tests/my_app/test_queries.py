@@ -15,12 +15,14 @@ from my_app.model_factories import (
     ParameterCategoryFactory,
     ParameterExtractionResultFactory,
     ParameterFactory,
+    ParameterHumanAnswerFactory,
     ReviewFactory,
     TextExtractionResultFactory,
     UserFactory,
 )
 from my_app.models import (
     FigureExtractionResult,
+    ParameterAnswerAgreement,
     ScreeningResultStatus,
     TextExtractionResult,
 )
@@ -28,7 +30,9 @@ from my_app.queries import (
     L1ScreeningStatusFetcher,
     get_adjacent_citation_ids,
     get_l1_screening_progress_stats,
+    get_parameter_answer_agreement_metrics,
     get_parameter_extraction_progress_stats,
+    get_parameter_human_ai_agreements,
     is_l2_screening_defined,
     is_parameter_extraction_defined,
     is_ready_for_l2_screening,
@@ -302,8 +306,12 @@ def test_parameter_extraction_progress_stats_counts_human_reviewed_citations():
         citation=human_reviewed_row,
         question=parameter,
         status=ScreeningResultStatus.COMPLETED,
-        human_found=False,
-        human_value=None,
+    )
+    ParameterHumanAnswerFactory(
+        citation=human_reviewed_row,
+        question=parameter,
+        found=False,
+        value=None,
     )
 
     stats = get_parameter_extraction_progress_stats(review.id)
@@ -313,3 +321,94 @@ def test_parameter_extraction_progress_stats_counts_human_reviewed_citations():
     assert stats.completed_not_human_reviewed_citations == 1
     assert stats.human_reviewed_citations == 1
     assert stats.human_reviewed_percent == 33
+
+
+def test_parameter_human_ai_agreements_pair_answers_and_normalize_values():
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    parameter = ParameterFactory(
+        category=ParameterCategoryFactory(review=review)
+    )
+    user = UserFactory()
+
+    scenarios = [
+        (
+            True,
+            "10 mg",
+            False,
+            None,
+            ParameterAnswerAgreement.DETECTION_DISAGREEMENT,
+        ),
+        (
+            False,
+            None,
+            False,
+            "Ignored human value",
+            ParameterAnswerAgreement.ABSENCE_AGREEMENT,
+        ),
+        (
+            True,
+            " 10 MG\n",
+            True,
+            "10mg",
+            ParameterAnswerAgreement.VALUE_AGREEMENT,
+        ),
+        (
+            True,
+            "heart attack",
+            True,
+            "myocardial infarction",
+            ParameterAnswerAgreement.VALUE_DISAGREEMENT,
+        ),
+    ]
+    expected_by_answer_id = {}
+    agreement_citation = None
+    for ai_found, ai_value, human_found, human_value, agreement in scenarios:
+        citation = CitationFactory(dataset=dataset)
+        ParameterExtractionResultFactory(
+            citation=citation,
+            question=parameter,
+            status=ScreeningResultStatus.COMPLETED,
+            found=ai_found,
+            value=ai_value,
+        )
+        answer = ParameterHumanAnswerFactory(
+            citation=citation,
+            question=parameter,
+            user=user,
+            found=human_found,
+            value=human_value,
+        )
+        expected_by_answer_id[answer.id] = agreement
+        if agreement is ParameterAnswerAgreement.VALUE_AGREEMENT:
+            agreement_citation = citation
+
+    second_reviewer_answer = ParameterHumanAnswerFactory(
+        citation=agreement_citation,
+        question=parameter,
+        found=True,
+        value="10 mg",
+    )
+    expected_by_answer_id[second_reviewer_answer.id] = (
+        ParameterAnswerAgreement.VALUE_AGREEMENT
+    )
+
+    other_review_answer = ParameterHumanAnswerFactory()
+    unmatched_answer = ParameterHumanAnswerFactory(
+        citation=CitationFactory(dataset=dataset),
+        question=parameter,
+    )
+
+    agreements = get_parameter_human_ai_agreements(review.id)
+    actual_by_answer_id = dict(agreements.values_list("id", "agreement"))
+
+    assert actual_by_answer_id == expected_by_answer_id
+    assert other_review_answer.id not in actual_by_answer_id
+    assert unmatched_answer.id not in actual_by_answer_id
+
+    metrics = get_parameter_answer_agreement_metrics(review.id)
+    assert metrics.detection_disagreement == 1
+    assert metrics.absence_agreement == 1
+    assert metrics.value_agreement == 2
+    assert metrics.value_disagreement == 1
+    assert metrics.total == 5

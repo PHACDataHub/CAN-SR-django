@@ -31,3 +31,4 @@ coverage.xml
 
 # Local container overrides
 compose.override.yaml
+ignore-me/

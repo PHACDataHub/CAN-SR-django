@@ -3,7 +3,12 @@ from my_app.model_factories import (
     L2HumanAnswerFactory,
     ParameterHumanAnswerFactory,
 )
-from my_app.models import L1HumanAnswer, L2HumanAnswer, ParameterHumanAnswer
+from my_app.models import (
+    L1HumanAnswer,
+    L2HumanAnswer,
+    ParameterExtractionResult,
+    ParameterHumanAnswer,
+)
 
 
 def test_human_answer_flavors_are_decoupled_and_allow_duplicates():
@@ -30,3 +35,10 @@ def test_human_answer_flavors_are_decoupled_and_allow_duplicates():
         assert not model._meta.unique_together
         assert not hasattr(answer, "status")
         assert not hasattr(answer, "language_model")
+
+
+def test_parameter_result_has_no_human_answer_fields():
+    result = ParameterExtractionResult()
+
+    assert not hasattr(result, "human_found")
+    assert not hasattr(result, "human_value")

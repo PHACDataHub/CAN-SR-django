@@ -24,6 +24,19 @@ class ScreeningResultStatus(models.TextChoices):
     ABANDONED = ("abandoned", tdt("Abandoned"))
 
 
+class ParameterAnswerAgreement(models.TextChoices):
+    DETECTION_DISAGREEMENT = (
+        "detection_disagreement",
+        tdt("Detection disagreement"),
+    )
+    ABSENCE_AGREEMENT = ("absence_agreement", tdt("Agreed absent"))
+    VALUE_AGREEMENT = ("value_agreement", tdt("Correct"))
+    VALUE_DISAGREEMENT = (
+        "value_disagreement",
+        tdt("Potential value disagreement"),
+    )
+
+
 class CitationQueryResult(models.Model):
     class Meta:
         abstract = True
@@ -144,16 +157,6 @@ class ParameterExtractionResult(CitationQueryResult):
     question = models.ForeignKey("Parameter", on_delete=models.CASCADE)
     found = models.BooleanField(default=False)
     value = models.TextField(null=True, blank=True)
-    human_found = models.BooleanField(
-        null=True,
-        blank=True,
-        verbose_name=tdt("Human found"),
-    )
-    human_value = models.TextField(
-        null=True,
-        blank=True,
-        verbose_name=tdt("Human value"),
-    )
     explanation = models.TextField(null=True, blank=True)
     evidence_sentences = models.JSONField(
         default=list,

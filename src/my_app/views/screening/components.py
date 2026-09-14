@@ -273,7 +273,10 @@ def render_selected_option(selected_option):
     if selected_option is None:
         return h.span(".text-muted")[tdt("No option selected")]
 
-    return h.div[h.div(".fw-semibold")[selected_option.option_text],]
+    return h.div[
+        h.div(".fw-semibold")[selected_option.option_text],
+        h.div(".small.text-muted")[selected_option.option_value],
+    ]
 
 
 def render_answer_timestamp(timestamp):
