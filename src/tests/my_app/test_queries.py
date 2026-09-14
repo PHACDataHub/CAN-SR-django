@@ -323,15 +323,43 @@ def test_parameter_extraction_progress_stats_counts_human_reviewed_citations():
     assert stats.human_reviewed_percent == 33
 
 
-def test_parameter_human_ai_agreements_pair_answers_and_normalize_values():
-    review = ReviewFactory()
-    dataset = CitationDatasetFactory(review=review)
+def _create_parameter_human_ai_pair(
+    *,
+    review=None,
+    ai_found=True,
+    ai_value=None,
+    human_found=True,
+    human_value=None,
+    result_status=ScreeningResultStatus.COMPLETED,
+):
+    if review is None:
+        review = ReviewFactory()
+    dataset = getattr(review, "citation_dataset", None)
+    if dataset is None:
+        dataset = CitationDatasetFactory(review=review)
     parameter = ParameterFactory(
         category=ParameterCategoryFactory(review=review)
     )
-    user = UserFactory()
+    citation = CitationFactory(dataset=dataset)
+    result = ParameterExtractionResultFactory(
+        citation=citation,
+        question=parameter,
+        status=result_status,
+        found=ai_found,
+        value=ai_value,
+    )
+    answer = ParameterHumanAnswerFactory(
+        citation=citation,
+        question=parameter,
+        found=human_found,
+        value=human_value,
+    )
+    return review, result, answer
 
-    scenarios = [
+
+@pytest.mark.parametrize(
+    ("ai_found", "ai_value", "human_found", "human_value", "expected"),
+    [
         (
             True,
             "10 mg",
@@ -343,7 +371,7 @@ def test_parameter_human_ai_agreements_pair_answers_and_normalize_values():
             False,
             None,
             False,
-            "Ignored human value",
+            "Ignored value",
             ParameterAnswerAgreement.ABSENCE_AGREEMENT,
         ),
         (
@@ -360,55 +388,72 @@ def test_parameter_human_ai_agreements_pair_answers_and_normalize_values():
             "myocardial infarction",
             ParameterAnswerAgreement.VALUE_DISAGREEMENT,
         ),
-    ]
-    expected_by_answer_id = {}
-    agreement_citation = None
-    for ai_found, ai_value, human_found, human_value, agreement in scenarios:
-        citation = CitationFactory(dataset=dataset)
-        ParameterExtractionResultFactory(
-            citation=citation,
-            question=parameter,
-            status=ScreeningResultStatus.COMPLETED,
-            found=ai_found,
-            value=ai_value,
-        )
-        answer = ParameterHumanAnswerFactory(
-            citation=citation,
-            question=parameter,
-            user=user,
-            found=human_found,
-            value=human_value,
-        )
-        expected_by_answer_id[answer.id] = agreement
-        if agreement is ParameterAnswerAgreement.VALUE_AGREEMENT:
-            agreement_citation = citation
+    ],
+)
+def test_parameter_human_ai_agreement_states(
+    ai_found,
+    ai_value,
+    human_found,
+    human_value,
+    expected,
+):
+    review, _, answer = _create_parameter_human_ai_pair(
+        ai_found=ai_found,
+        ai_value=ai_value,
+        human_found=human_found,
+        human_value=human_value,
+    )
 
-    second_reviewer_answer = ParameterHumanAnswerFactory(
-        citation=agreement_citation,
-        question=parameter,
+    agreement = get_parameter_human_ai_agreements(review.id).get(pk=answer.pk)
+
+    assert agreement.agreement == expected
+
+
+def test_parameter_agreements_only_pair_completed_results_in_same_review():
+    review, _, answer = _create_parameter_human_ai_pair()
+    _, _, other_review_answer = _create_parameter_human_ai_pair()
+    _, _, pending_answer = _create_parameter_human_ai_pair(
+        review=review,
+        result_status=ScreeningResultStatus.PENDING,
+    )
+    unmatched_answer = ParameterHumanAnswerFactory(
+        citation=CitationFactory(dataset=answer.citation.dataset),
+        question=answer.question,
+    )
+
+    answer_ids = set(
+        get_parameter_human_ai_agreements(review.id).values_list(
+            "id", flat=True
+        )
+    )
+
+    assert answer_ids == {answer.id}
+    assert other_review_answer.id not in answer_ids
+    assert pending_answer.id not in answer_ids
+    assert unmatched_answer.id not in answer_ids
+
+
+def test_parameter_agreement_metrics_count_each_human_ai_pair():
+    review, result, _ = _create_parameter_human_ai_pair(
+        ai_value="10 mg",
+        human_value="10mg",
+    )
+
+    ParameterHumanAnswerFactory(
+        citation=result.citation,
+        question=result.question,
         found=True,
         value="10 mg",
     )
-    expected_by_answer_id[second_reviewer_answer.id] = (
-        ParameterAnswerAgreement.VALUE_AGREEMENT
+    _create_parameter_human_ai_pair(
+        review=review,
+        ai_found=True,
+        human_found=False,
     )
-
-    other_review_answer = ParameterHumanAnswerFactory()
-    unmatched_answer = ParameterHumanAnswerFactory(
-        citation=CitationFactory(dataset=dataset),
-        question=parameter,
-    )
-
-    agreements = get_parameter_human_ai_agreements(review.id)
-    actual_by_answer_id = dict(agreements.values_list("id", "agreement"))
-
-    assert actual_by_answer_id == expected_by_answer_id
-    assert other_review_answer.id not in actual_by_answer_id
-    assert unmatched_answer.id not in actual_by_answer_id
 
     metrics = get_parameter_answer_agreement_metrics(review.id)
     assert metrics.detection_disagreement == 1
-    assert metrics.absence_agreement == 1
+    assert metrics.absence_agreement == 0
     assert metrics.value_agreement == 2
-    assert metrics.value_disagreement == 1
-    assert metrics.total == 5
+    assert metrics.value_disagreement == 0
+    assert metrics.total == 3
