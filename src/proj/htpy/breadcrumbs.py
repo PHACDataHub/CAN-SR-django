@@ -28,8 +28,12 @@ def ListReviewsItem():
 
 
 def ReviewRootItem(review):
+    label = review.title
+    if review.is_deleted:
+        label = f'{label} {tdt("(ARCHIVED)")}'
+
     return BreadcrumbItem(
-        label=review.title,
+        label=label,
         href=reverse("review_detail", args=[review.id]),
     )
 

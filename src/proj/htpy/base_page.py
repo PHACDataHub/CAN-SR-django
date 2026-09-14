@@ -352,6 +352,11 @@ def get_top_right_dropdown_items(request):
         test_rule("is_admin", request.user)
         and h.a(
             ".dropdown-item",
+            href=reverse("list_users"),
+        )[tdt("Users")],
+        test_rule("is_admin", request.user)
+        and h.a(
+            ".dropdown-item",
             href=reverse("admin:index"),
         )[tdt("django-admin")],
     ]

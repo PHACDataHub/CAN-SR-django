@@ -1,6 +1,6 @@
 import htpy as h
 
-from my_app.models import Citation, L2ScreeningResult, Review
+from my_app.models import Citation, L2HumanAnswer, L2ScreeningResult, Review
 from my_app.views.screening.components import (
     Badge,
     human_review_control_id,
@@ -23,17 +23,31 @@ def l2_human_review_control_id(result):
     return human_review_control_id("l2", result)
 
 
-def render_l2_human_review_control(result: L2ScreeningResult, review: Review):
+def render_l2_human_review_control(
+    result: L2ScreeningResult,
+    review: Review,
+    current_user,
+    answers=None,
+):
+    if answers is None:
+        answers = (
+            L2HumanAnswer.objects.filter(
+                citation=result.citation,
+                question=result.question,
+            )
+            .select_related("selected_option", "user")
+            .order_by("-updated_at", "-id")
+        )
+
     return render_human_review_control(
         result,
+        answers=answers,
+        current_user=current_user,
         prefix="l2",
         answer_url=reverse(
             "l2_citation_human_answer", args=[review.id, result.id]
         ),
         validate_url=reverse(
             "l2_citation_validate_correct", args=[review.id, result.id]
-        ),
-        undo_validation_url=reverse(
-            "l2_citation_undo_validation", args=[review.id, result.id]
         ),
     )

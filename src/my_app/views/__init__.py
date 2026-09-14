@@ -7,4 +7,5 @@ from . import (
     review,
     screening,
     screening_criteria,
+    user_management,
 )

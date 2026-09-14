@@ -27,3 +27,11 @@ def test_review_access_rule(admin_user):
         assert not my_test_rule(
             "can_access_review", other_user, linked_review.id
         )
+
+
+def test_review_hard_delete_rule_delegates_to_admin(vanilla_user, admin_user):
+    review = ReviewFactory()
+
+    with GlobalRequest():
+        assert my_test_rule("can_hard_delete_review", admin_user, review)
+        assert not my_test_rule("can_hard_delete_review", vanilla_user, review)

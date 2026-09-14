@@ -1,7 +1,20 @@
 from dataclasses import dataclass
 from typing import List
 
-from django.db.models import Count, Q
+from django.db.models import (
+    BooleanField,
+    Case,
+    CharField,
+    Count,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    TextField,
+    Value,
+    When,
+)
+from django.db.models.functions import Coalesce, Lower, Replace, Trim
 
 from data_fetcher import DataFetcher
 from data_fetcher.extras import cache_within_request as cached_within_request
@@ -17,14 +30,128 @@ from my_app.models import (
     L2ScreeningResult,
     LanguageModel,
     Parameter,
+    ParameterAnswerAgreement,
     ParameterCategory,
     ParameterExtractionResult,
+    ParameterHumanAnswer,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
     TextExtractionResult,
 )
 from shortcuts import logger
+
+
+def normalize_parameter_value(expression):
+    normalized = Coalesce(
+        expression,
+        Value("", output_field=TextField()),
+        output_field=TextField(),
+    )
+    normalized = Lower(Trim(normalized), output_field=TextField())
+    for whitespace in (" ", "\t", "\n", "\r"):
+        normalized = Replace(
+            normalized,
+            Value(whitespace),
+            Value(""),
+            output_field=TextField(),
+        )
+    return normalized
+
+
+def get_parameter_human_ai_agreements(review_id: int):
+    ai_results = ParameterExtractionResult.objects.filter(
+        citation_id=OuterRef("citation_id"),
+        question_id=OuterRef("question_id"),
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    answers = (
+        ParameterHumanAnswer.objects.filter(
+            question__category__review_id=review_id,
+            citation__dataset__review_id=review_id,
+        )
+        .annotate(
+            ai_result_id=Subquery(ai_results.values("id")[:1]),
+            ai_found=Subquery(
+                ai_results.values("found")[:1],
+                output_field=BooleanField(),
+            ),
+            ai_value=Subquery(
+                ai_results.values("value")[:1],
+                output_field=TextField(),
+            ),
+        )
+        .filter(ai_result_id__isnull=False)
+        .annotate(
+            normalized_human_value=normalize_parameter_value(F("value")),
+            normalized_ai_value=normalize_parameter_value(F("ai_value")),
+        )
+        .annotate(
+            agreement=Case(
+                When(
+                    Q(found=True, ai_found=False)
+                    | Q(found=False, ai_found=True),
+                    then=Value(
+                        ParameterAnswerAgreement.DETECTION_DISAGREEMENT
+                    ),
+                ),
+                When(
+                    found=False,
+                    ai_found=False,
+                    then=Value(ParameterAnswerAgreement.ABSENCE_AGREEMENT),
+                ),
+                When(
+                    found=True,
+                    ai_found=True,
+                    normalized_human_value=F("normalized_ai_value"),
+                    then=Value(ParameterAnswerAgreement.VALUE_AGREEMENT),
+                ),
+                default=Value(ParameterAnswerAgreement.VALUE_DISAGREEMENT),
+                output_field=CharField(),
+            )
+        )
+    )
+    return answers
+
+
+@dataclass(frozen=True)
+class ParameterAnswerAgreementMetrics:
+    detection_disagreement: int = 0
+    absence_agreement: int = 0
+    value_agreement: int = 0
+    value_disagreement: int = 0
+
+    @property
+    def total(self):
+        return (
+            self.detection_disagreement
+            + self.absence_agreement
+            + self.value_agreement
+            + self.value_disagreement
+        )
+
+
+def get_parameter_answer_agreement_metrics(review_id: int):
+    counts = {
+        row["agreement"]: row["count"]
+        for row in get_parameter_human_ai_agreements(review_id)
+        .values("agreement")
+        .annotate(count=Count("id"))
+    }
+    return ParameterAnswerAgreementMetrics(
+        detection_disagreement=counts.get(
+            ParameterAnswerAgreement.DETECTION_DISAGREEMENT, 0
+        ),
+        absence_agreement=counts.get(
+            ParameterAnswerAgreement.ABSENCE_AGREEMENT, 0
+        ),
+        value_agreement=counts.get(
+            ParameterAnswerAgreement.VALUE_AGREEMENT, 0
+        ),
+        value_disagreement=counts.get(
+            ParameterAnswerAgreement.VALUE_DISAGREEMENT, 0
+        ),
+    )
 
 
 def is_l2_screening_defined(citation_id: int) -> bool:
@@ -238,6 +365,7 @@ def _get_screening_progress_stats(
     review_id: int,
     question_model: type,
     result_relation_name: str,
+    human_answer_relation_name: str,
 ):
     question_count = question_model.objects.filter(review_id=review_id).count()
     citations = Citation.objects.filter(dataset__review_id=review_id)
@@ -252,9 +380,6 @@ def _get_screening_progress_stats(
         )
 
     status_field = f"{result_relation_name}__status"
-    human_validated_field = f"{result_relation_name}__human_validated_by"
-    human_answered_field = f"{result_relation_name}__human_selected_answer"
-
     rows = citations.annotate(
         result_count=Count(result_relation_name, distinct=True),
         completed_count=Count(
@@ -263,14 +388,7 @@ def _get_screening_progress_stats(
             distinct=True,
         ),
         human_reviewed_count=Count(
-            result_relation_name,
-            filter=(
-                Q(**{status_field: ScreeningResultStatus.COMPLETED})
-                & (
-                    Q(**{f"{human_validated_field}__isnull": False})
-                    | Q(**{f"{human_answered_field}__isnull": False})
-                )
-            ),
+            f"{human_answer_relation_name}__question",
             distinct=True,
         ),
     ).values("result_count", "completed_count", "human_reviewed_count")
@@ -310,6 +428,7 @@ def get_l1_screening_progress_stats(review_id: int):
         review_id,
         L1ScreeningQuestion,
         "l1screeningresult",
+        "l1humananswer",
     )
 
 
@@ -319,6 +438,7 @@ def get_l2_screening_progress_stats(review_id: int):
         review_id,
         L2ScreeningQuestion,
         "l2screeningresult",
+        "l2humananswer",
     )
 
 
@@ -379,13 +499,7 @@ def get_parameter_extraction_progress_stats(review_id: int):
             distinct=True,
         ),
         human_reviewed_count=Count(
-            "parameterextractionresult",
-            filter=(
-                Q(
-                    parameterextractionresult__status=ScreeningResultStatus.COMPLETED
-                )
-                & Q(parameterextractionresult__human_found__isnull=False)
-            ),
+            "parameterhumananswer__question",
             distinct=True,
         ),
     ).values("result_count", "completed_count", "human_reviewed_count")

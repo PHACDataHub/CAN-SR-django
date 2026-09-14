@@ -3,58 +3,56 @@ from django.http import HttpResponse
 
 import htpy as h
 
-from proj.htpy.modal_component import ModalComponent
-
-from my_app.models import Parameter, ParameterExtractionResult
+from my_app.models import (
+    Parameter,
+    ParameterExtractionResult,
+    ParameterHumanAnswer,
+)
 from my_app.router import route
 from my_app.services.parameter_extraction import (
-    DeferredParameterExtractionService,
+    EnqueueParameterExtractionService,
 )
 from my_app.views.screening.document_util_components import (
     DocumentCitationMixin,
     PdfCitationMetadataView,
 )
+from my_app.views.screening.human_answers import (
+    HumanAnswerFormView,
+    ScreeningHumanAnswerViewMixin,
+    ValidateAIAnswerView,
+)
 from my_app.views.screening.parameter_extraction.detail import (
-    ParameterExtractionPdfPage,
     render_parameter_extraction_control,
 )
 from my_app.views.screening.parameter_extraction.list import (
-    parameter_extraction_human_review_control_id,
+    render_parameter_human_review_control,
 )
 from my_app.views.screening.util import can_start_parameter_extraction
-from my_app.views.view_utils import MustAccessReviewMixin
-from shortcuts import (
-    GenericForm,
-    StandardFormMixin,
-    View,
-    cached_property,
-    get_object_or_404,
-    reverse,
-    tdt,
-)
+from shortcuts import StandardFormMixin, cached_property, tdt
 
 
 class ParameterExtractionHumanAnswerForm(
     forms.ModelForm,
     StandardFormMixin,
 ):
-    human_found = forms.TypedChoiceField(
-        label=tdt("Human found"),
+    found = forms.TypedChoiceField(
+        label=tdt("Found"),
         choices=((True, tdt("Yes")), (False, tdt("No"))),
         coerce=lambda value: value == "True",
         widget=forms.RadioSelect,
     )
 
     class Meta:
-        model = ParameterExtractionResult
-        fields = ["human_found", "human_value"]
+        model = ParameterHumanAnswer
+        fields = ["found", "value", "notes"]
         labels = {
-            "human_found": tdt("Human found"),
-            "human_value": tdt("Human value"),
+            "found": tdt("Found"),
+            "value": tdt("Value"),
+            "notes": tdt("Notes"),
         }
 
-    def clean_human_value(self):
-        return self.cleaned_data["human_value"] or None
+    def clean_value(self):
+        return self.cleaned_data["value"] or None
 
 
 @route(
@@ -78,7 +76,7 @@ class ParameterExtractionProcessView(DocumentCitationMixin):
                 status=409,
             )
 
-        DeferredParameterExtractionService(
+        EnqueueParameterExtractionService(
             rows=[self.citation_row],
             questions=self.parameters,
             overwrite_existing=True,
@@ -94,25 +92,33 @@ class ParameterExtractionProcessView(DocumentCitationMixin):
         )
 
 
-class ParameterExtractionHumanReviewMixin(MustAccessReviewMixin, View):
-    @cached_property
-    def result(self):
-        return get_object_or_404(
-            ParameterExtractionResult.objects.select_related(
-                "citation",
-                "question",
-                "question__category",
-            ),
-            pk=self.kwargs["result_pk"],
-            citation__dataset__review=self.review,
-        )
+class ParameterExtractionHumanReviewMixin(ScreeningHumanAnswerViewMixin):
+    result_model = ParameterExtractionResult
+    answer_model = ParameterHumanAnswer
+    form_class = ParameterExtractionHumanAnswerForm
+    prefix = "parameter-extraction"
+    route_name = "parameter_extraction_citation_human_answer"
+    render_control_component = staticmethod(
+        render_parameter_human_review_control
+    )
+    result_select_related = (
+        "citation",
+        "question",
+        "question__category",
+    )
+    modal_title = tdt("Your parameter answer")
 
-    def render_control(self):
-        component = ParameterExtractionPdfPage(
-            context={"object": self.result.citation, "review": self.review},
-            request=self.request,
-        )
-        return str(component.render_human_review_control(self.result))
+    def can_validate(self):
+        return True
+
+    def validated_answer_values(self):
+        return {
+            "found": self.result.found,
+            "value": self.result.value,
+        }
+
+    def human_answer_form_kwargs(self):
+        return {}
 
 
 @route(
@@ -120,76 +126,21 @@ class ParameterExtractionHumanReviewMixin(MustAccessReviewMixin, View):
     name="parameter_extraction_citation_validate_ai_answer",
 )
 class ParameterExtractionValidateAiAnswerView(
-    ParameterExtractionHumanReviewMixin
+    ParameterExtractionHumanReviewMixin,
+    ValidateAIAnswerView,
 ):
-    def post(self, request, *args, **kwargs):
-        self.result.human_found = self.result.found
-        self.result.human_value = self.result.value
-        self.result.save(update_fields=["human_found", "human_value"])
-        return HttpResponse(self.render_control())
+    pass
 
 
 @route(
     "/reviews/<int:review_id>/parameter_extraction/results/<int:result_pk>/human-answer/",
     name="parameter_extraction_citation_human_answer",
 )
-class ParameterExtractionHumanAnswerView(ParameterExtractionHumanReviewMixin):
-    @cached_property
-    def form(self):
-        return ParameterExtractionHumanAnswerForm(
-            self.request.POST or None,
-            instance=self.result,
-        )
-
-    def render_modal(self):
-        form_id = f"parameter-extraction-human-answer-form-{self.result.id}"
-        footer = h.fragment[
-            h.button(
-                ".btn.btn-secondary",
-                type="button",
-                **{"data-modal-close": True},
-            )[tdt("Cancel")],
-            h.button(
-                ".btn.btn-primary",
-                type="submit",
-                form=form_id,
-                **{"hx-disabled-elt": "this"},
-            )[tdt("Save")],
-        ]
-        return str(
-            ModalComponent(
-                title=tdt("Modify human values"),
-                modal_id=f"parameter-extraction-human-answer-modal-{self.result.id}",
-                footer=footer,
-            )[
-                h.form(
-                    id=form_id,
-                    hx_post=reverse(
-                        "parameter_extraction_citation_human_answer",
-                        args=[self.review.id, self.result.id],
-                    ),
-                    hx_target="#modal-slot",
-                    hx_swap="innerHTML",
-                )[GenericForm(self.form)]
-            ]
-        )
-
-    def get(self, request, *args, **kwargs):
-        return HttpResponse(self.render_modal())
-
-    def post(self, request, *args, **kwargs):
-        if not self.form.is_valid():
-            return HttpResponse(self.render_modal())
-
-        self.form.save()
-
-        response = HttpResponse(self.render_control())
-        response["HX-Retarget"] = (
-            f"#{parameter_extraction_human_review_control_id(self.result)}"
-        )
-        response["HX-Reswap"] = "outerHTML"
-        response["HX-Trigger-After-Settle"] = "modal-close"
-        return response
+class ParameterExtractionHumanAnswerView(
+    ParameterExtractionHumanReviewMixin,
+    HumanAnswerFormView,
+):
+    pass
 
 
 @route(
