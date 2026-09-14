@@ -3,7 +3,12 @@ import htpy as h
 from proj.htpy import definition_list as DefList
 from proj.htpy.components import PercentFormatter
 
-from my_app.models import Citation, L2ScreeningResult, ScreeningResultStatus
+from my_app.models import (
+    Citation,
+    L2HumanAnswer,
+    L2ScreeningResult,
+    ScreeningResultStatus,
+)
 from my_app.queries import (
     L2ScreeningStatusFetcher,
     get_l2_screening_progress_stats,
@@ -144,6 +149,9 @@ class L2PdfScreeningPage(BasePageTemplate):
 
     def render_results_panel(self, citation_row: Citation):
         results = self.get_results(citation_row)
+        self.human_answers_by_question_id = (
+            self.get_human_answers_by_question_id(citation_row, results)
+        )
         return WorkflowResultsPanel(
             title=tdt("L2 screening results"),
             results=results,
@@ -157,11 +165,23 @@ class L2PdfScreeningPage(BasePageTemplate):
             .select_related(
                 "question",
                 "selected_option",
-                "human_selected_answer",
-                "human_validated_by",
             )
             .order_by("question_id")
         )
+
+    def get_human_answers_by_question_id(self, citation_row, results):
+        answers = (
+            L2HumanAnswer.objects.filter(
+                citation=citation_row,
+                question_id__in=[result.question_id for result in results],
+            )
+            .select_related("selected_option", "user")
+            .order_by("-updated_at", "-id")
+        )
+        grouped_answers = {}
+        for answer in answers:
+            grouped_answers.setdefault(answer.question_id, []).append(answer)
+        return grouped_answers
 
     def render_result(self, result: L2ScreeningResult):
 
@@ -173,11 +193,17 @@ class L2PdfScreeningPage(BasePageTemplate):
                     ScreeningResultStatus(result.status).label,
                 ),
                 (
-                    tdt("Selected option"),
-                    render_l2_human_review_control(result, self.review),
+                    tdt("Answers"),
+                    render_l2_human_review_control(
+                        result,
+                        self.review,
+                        self.request.user,
+                        self.human_answers_by_question_id.get(
+                            result.question_id, []
+                        ),
+                    ),
                 ),
                 (tdt("Confidence"), PercentFormatter(result.confidence)),
-                (tdt("Notes"), result.explanation or tdt("None")),
                 *EvidenceDefinitionItems(result),
             ]
         )

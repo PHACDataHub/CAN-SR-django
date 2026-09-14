@@ -8,15 +8,18 @@ from my_app.models import (
     CitationDatasetColumn,
     Document,
     FigureExtractionResult,
+    L1HumanAnswer,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L1ScreeningResult,
+    L2HumanAnswer,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     L2ScreeningResult,
     Parameter,
     ParameterCategory,
     ParameterExtractionResult,
+    ParameterHumanAnswer,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
@@ -165,6 +168,22 @@ class L1ScreeningResultFactory(factory.django.DjangoModelFactory):
     status = ScreeningResultStatus.PENDING
 
 
+class L1HumanAnswerFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = L1HumanAnswer
+
+    citation = factory.SubFactory(CitationFactory)
+    question = factory.SubFactory(
+        L1ScreeningQuestionFactory,
+        review=factory.SelfAttribute("..citation.dataset.review"),
+    )
+    selected_option = factory.SubFactory(
+        L1ScreeningQuestionOptionFactory,
+        question=factory.SelfAttribute("..question"),
+    )
+    user = factory.SubFactory(UserFactory)
+
+
 class L2ScreeningResultFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = L2ScreeningResult
@@ -178,6 +197,22 @@ class L2ScreeningResultFactory(factory.django.DjangoModelFactory):
     status = ScreeningResultStatus.PENDING
 
 
+class L2HumanAnswerFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = L2HumanAnswer
+
+    citation = factory.SubFactory(CitationFactory)
+    question = factory.SubFactory(
+        L2ScreeningQuestionFactory,
+        review=factory.SelfAttribute("..citation.dataset.review"),
+    )
+    selected_option = factory.SubFactory(
+        L2ScreeningQuestionOptionFactory,
+        question=factory.SelfAttribute("..question"),
+    )
+    user = factory.SubFactory(UserFactory)
+
+
 class ParameterExtractionResultFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = ParameterExtractionResult
@@ -188,3 +223,15 @@ class ParameterExtractionResultFactory(factory.django.DjangoModelFactory):
         category__review=factory.SelfAttribute("..citation.dataset.review"),
     )
     status = ScreeningResultStatus.PENDING
+
+
+class ParameterHumanAnswerFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ParameterHumanAnswer
+
+    citation = factory.SubFactory(CitationFactory)
+    question = factory.SubFactory(
+        ParameterFactory,
+        category__review=factory.SelfAttribute("...citation.dataset.review"),
+    )
+    user = factory.SubFactory(UserFactory)

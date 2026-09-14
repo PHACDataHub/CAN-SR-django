@@ -13,6 +13,7 @@ from my_app.model_factories import (
     DocumentFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningResultFactory,
+    L2HumanAnswerFactory,
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
     L2ScreeningResultFactory,
@@ -28,6 +29,7 @@ from my_app.models import (
     DocumentTable,
     FigureExtractionResult,
     L1ScreeningResult,
+    L2HumanAnswer,
     L2ScreeningResult,
     ParameterExtractionResult,
     ScreeningResultStatus,
@@ -438,7 +440,7 @@ def test_screen_l2_row_process_view_rejects_unprocessed_document(
     assert task_mock.enqueue.call_count == 0
 
 
-def test_l2_human_validation_can_be_set_and_undone(
+def test_l2_validation_creates_human_answer_matching_ai_answer(
     vanilla_client, vanilla_user
 ):
     review = ReviewFactory()
@@ -459,39 +461,35 @@ def test_l2_human_validation_can_be_set_and_undone(
             )
         )
 
-    result.refresh_from_db()
     body = response.content.decode()
+    human_answer = L2HumanAnswer.objects.get()
     assert response.status_code == 200
-    assert result.human_validated_by == vanilla_user
-    assert result.human_validation_timestamp is not None
+    assert human_answer.user == vanilla_user
+    assert human_answer.citation == row
+    assert human_answer.question == question
+    assert human_answer.selected_option == selected_option
+    assert human_answer.notes is None
     assert "Validated" in body
-    assert vanilla_user.username in body
-    assert "Undo" in body
-
-    with patch_rules(can_access_review=True):
-        response = vanilla_client.post(
-            reverse("l2_citation_undo_validation", args=[review.id, result.id])
-        )
-
-    result.refresh_from_db()
-    body = response.content.decode()
-    assert response.status_code == 200
-    assert result.human_validated_by is None
-    assert result.human_validation_timestamp is None
-    assert "Validate correct" in body
-    assert "Manually answer screening" in body
+    assert "Your answer" in body
+    assert f'id="l2-validate-answer-{result.id}"' not in body
 
 
 def test_l2_human_answer_modal_saves_question_option_and_notes(
-    vanilla_client,
+    vanilla_client, vanilla_user
 ):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     row = CitationFactory(dataset=dataset)
     question = L2ScreeningQuestionFactory(review=review)
     answer = L2ScreeningQuestionOptionFactory(question=question)
+    edited_answer = L2ScreeningQuestionOptionFactory(question=question)
     other_answer = L2ScreeningQuestionOptionFactory()
     result = L2ScreeningResultFactory(citation=row, question=question)
+    other_reviewer_answer = L2HumanAnswerFactory(
+        citation=row,
+        question=question,
+        selected_option=answer,
+    )
     url = reverse("l2_citation_human_answer", args=[review.id, result.id])
 
     with patch_rules(can_access_review=True):
@@ -499,34 +497,50 @@ def test_l2_human_answer_modal_saves_question_option_and_notes(
 
     body = response.content.decode()
     assert response.status_code == 200
-    assert "Manually answer screening" in body
+    assert "Your screening answer" in body
     assert answer.option_text in body
     assert other_answer.option_text not in body
-    assert "human_selected_answer" in body
-    assert "human_notes" in body
+    assert "selected_option" in body
+    assert "notes" in body
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
             url,
             {
-                "human_selected_answer": answer.id,
-                "human_notes": "Human review notes.",
+                "selected_option": answer.id,
+                "notes": "Human review notes.",
             },
         )
 
-    result.refresh_from_db()
+    human_answer = L2HumanAnswer.objects.get(user=vanilla_user)
     body = response.content.decode()
     assert response.status_code == 200
-    assert result.human_selected_answer == answer
-    assert result.human_notes == "Human review notes."
-    assert result.human_validation_timestamp is None
-    assert result.human_validated_by is None
+    assert human_answer.user == vanilla_user
+    assert human_answer.selected_option == answer
+    assert human_answer.notes == "Human review notes."
     assert response["HX-Trigger-After-Settle"] == "modal-close"
     assert response["HX-Retarget"] == f"#l2-human-review-{result.id}"
+    assert response["HX-Reswap"] == "morph:outerHTML"
     assert answer.option_text in body
     assert "Human review notes." in body
-    assert "Human entered" in body
+    assert "Your answer" in body
+    assert other_reviewer_answer.user.username in body
     assert "Edit" in body
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.post(
+            url,
+            {
+                "selected_option": edited_answer.id,
+                "notes": "Updated notes.",
+            },
+        )
+
+    human_answer.refresh_from_db()
+    assert response.status_code == 200
+    assert human_answer.selected_option == edited_answer
+    assert human_answer.notes == "Updated notes."
+    assert L2HumanAnswer.objects.count() == 2
 
 
 def test_l2_human_review_views_require_access_and_matching_review(
@@ -536,7 +550,6 @@ def test_l2_human_review_views_require_access_and_matching_review(
     other_review = ReviewFactory()
     endpoints = [
         "l2_citation_validate_correct",
-        "l2_citation_undo_validation",
         "l2_citation_human_answer",
     ]
 

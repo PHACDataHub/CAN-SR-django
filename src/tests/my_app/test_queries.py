@@ -6,6 +6,7 @@ from my_app.model_factories import (
     CitationFactory,
     DocumentFactory,
     FigureExtractionResultFactory,
+    L1HumanAnswerFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningQuestionOptionFactory,
     L1ScreeningResultFactory,
@@ -14,12 +15,14 @@ from my_app.model_factories import (
     ParameterCategoryFactory,
     ParameterExtractionResultFactory,
     ParameterFactory,
+    ParameterHumanAnswerFactory,
     ReviewFactory,
     TextExtractionResultFactory,
     UserFactory,
 )
 from my_app.models import (
     FigureExtractionResult,
+    ParameterAnswerAgreement,
     ScreeningResultStatus,
     TextExtractionResult,
 )
@@ -27,7 +30,9 @@ from my_app.queries import (
     L1ScreeningStatusFetcher,
     get_adjacent_citation_ids,
     get_l1_screening_progress_stats,
+    get_parameter_answer_agreement_metrics,
     get_parameter_extraction_progress_stats,
+    get_parameter_human_ai_agreements,
     is_l2_screening_defined,
     is_parameter_extraction_defined,
     is_ready_for_l2_screening,
@@ -249,13 +254,23 @@ def test_l1_screening_progress_stats_counts_review_citations_by_human_review_sta
         citation=human_answered_row,
         question=question,
         status=ScreeningResultStatus.COMPLETED,
-        human_selected_answer=answer,
+    )
+    L1HumanAnswerFactory(
+        citation=human_answered_row,
+        question=question,
+        selected_option=answer,
+        user=user,
     )
     L1ScreeningResultFactory(
         citation=human_validated_row,
         question=question,
         status=ScreeningResultStatus.COMPLETED,
-        human_validated_by=user,
+    )
+    L1HumanAnswerFactory(
+        citation=human_validated_row,
+        question=question,
+        selected_option=answer,
+        user=user,
     )
 
     stats = get_l1_screening_progress_stats(review.id)
@@ -291,8 +306,12 @@ def test_parameter_extraction_progress_stats_counts_human_reviewed_citations():
         citation=human_reviewed_row,
         question=parameter,
         status=ScreeningResultStatus.COMPLETED,
-        human_found=False,
-        human_value=None,
+    )
+    ParameterHumanAnswerFactory(
+        citation=human_reviewed_row,
+        question=parameter,
+        found=False,
+        value=None,
     )
 
     stats = get_parameter_extraction_progress_stats(review.id)
@@ -302,3 +321,139 @@ def test_parameter_extraction_progress_stats_counts_human_reviewed_citations():
     assert stats.completed_not_human_reviewed_citations == 1
     assert stats.human_reviewed_citations == 1
     assert stats.human_reviewed_percent == 33
+
+
+def _create_parameter_human_ai_pair(
+    *,
+    review=None,
+    ai_found=True,
+    ai_value=None,
+    human_found=True,
+    human_value=None,
+    result_status=ScreeningResultStatus.COMPLETED,
+):
+    if review is None:
+        review = ReviewFactory()
+    dataset = getattr(review, "citation_dataset", None)
+    if dataset is None:
+        dataset = CitationDatasetFactory(review=review)
+    parameter = ParameterFactory(
+        category=ParameterCategoryFactory(review=review)
+    )
+    citation = CitationFactory(dataset=dataset)
+    result = ParameterExtractionResultFactory(
+        citation=citation,
+        question=parameter,
+        status=result_status,
+        found=ai_found,
+        value=ai_value,
+    )
+    answer = ParameterHumanAnswerFactory(
+        citation=citation,
+        question=parameter,
+        found=human_found,
+        value=human_value,
+    )
+    return review, result, answer
+
+
+@pytest.mark.parametrize(
+    ("ai_found", "ai_value", "human_found", "human_value", "expected"),
+    [
+        (
+            True,
+            "10 mg",
+            False,
+            None,
+            ParameterAnswerAgreement.DETECTION_DISAGREEMENT,
+        ),
+        (
+            False,
+            None,
+            False,
+            "Ignored value",
+            ParameterAnswerAgreement.ABSENCE_AGREEMENT,
+        ),
+        (
+            True,
+            " 10 MG\n",
+            True,
+            "10mg",
+            ParameterAnswerAgreement.VALUE_AGREEMENT,
+        ),
+        (
+            True,
+            "heart attack",
+            True,
+            "myocardial infarction",
+            ParameterAnswerAgreement.VALUE_DISAGREEMENT,
+        ),
+    ],
+)
+def test_parameter_human_ai_agreement_states(
+    ai_found,
+    ai_value,
+    human_found,
+    human_value,
+    expected,
+):
+    review, _, answer = _create_parameter_human_ai_pair(
+        ai_found=ai_found,
+        ai_value=ai_value,
+        human_found=human_found,
+        human_value=human_value,
+    )
+
+    agreement = get_parameter_human_ai_agreements(review.id).get(pk=answer.pk)
+
+    assert agreement.agreement == expected
+
+
+def test_parameter_agreements_only_pair_completed_results_in_same_review():
+    review, _, answer = _create_parameter_human_ai_pair()
+    _, _, other_review_answer = _create_parameter_human_ai_pair()
+    _, _, pending_answer = _create_parameter_human_ai_pair(
+        review=review,
+        result_status=ScreeningResultStatus.PENDING,
+    )
+    unmatched_answer = ParameterHumanAnswerFactory(
+        citation=CitationFactory(dataset=answer.citation.dataset),
+        question=answer.question,
+    )
+
+    answer_ids = set(
+        get_parameter_human_ai_agreements(review.id).values_list(
+            "id", flat=True
+        )
+    )
+
+    assert answer_ids == {answer.id}
+    assert other_review_answer.id not in answer_ids
+    assert pending_answer.id not in answer_ids
+    assert unmatched_answer.id not in answer_ids
+
+
+def test_parameter_agreement_metrics_count_each_human_ai_pair():
+    review, result, _ = _create_parameter_human_ai_pair(
+        ai_value="10 mg",
+        human_value="10mg",
+    )
+
+    ParameterHumanAnswerFactory(
+        citation=result.citation,
+        question=result.question,
+        found=True,
+        value="10 mg",
+    )
+    _create_parameter_human_ai_pair(
+        review=review,
+        ai_found=True,
+        human_found=False,
+    )
+
+    metrics = get_parameter_answer_agreement_metrics(review.id)
+    assert metrics.detection_disagreement == 1
+    assert metrics.absence_agreement == 0
+    assert metrics.value_agreement == 2
+    assert metrics.value_disagreement == 0
+    assert metrics.total == 3

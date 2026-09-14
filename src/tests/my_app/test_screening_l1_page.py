@@ -8,12 +8,17 @@ from my_app.model_factories import (
     CitationDatasetColumnFactory,
     CitationDatasetFactory,
     CitationFactory,
+    L1HumanAnswerFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningQuestionOptionFactory,
     L1ScreeningResultFactory,
     ReviewFactory,
 )
-from my_app.models import L1ScreeningResult, ScreeningResultStatus
+from my_app.models import (
+    L1HumanAnswer,
+    L1ScreeningResult,
+    ScreeningResultStatus,
+)
 
 pytestmark = [pytest.mark.view, pytest.mark.l1_screening]
 
@@ -253,8 +258,9 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
         in body
     )
     assert "Re-screen" in body
-    assert "Validate correct" in body
-    assert "Manually answer screening" in body
+    assert "AI answer" in body
+    assert "Validate" in body
+    assert "Add your answer" in body
 
 
 def test_screen_l1_row_details_view_renders_screening_process_button(
@@ -310,7 +316,7 @@ def test_screen_l1_row_view_replaces_existing_screening_results(
     assert result.status == ScreeningResultStatus.PENDING
 
 
-def test_l1_human_validation_can_be_set_and_undone(
+def test_l1_validation_creates_human_answer_matching_ai_answer(
     vanilla_client, vanilla_user
 ):
     review = ReviewFactory()
@@ -331,31 +337,30 @@ def test_l1_human_validation_can_be_set_and_undone(
             )
         )
 
-    result.refresh_from_db()
     body = response.content.decode()
+    human_answer = L1HumanAnswer.objects.get()
     assert response.status_code == 200
-    assert result.human_validated_by == vanilla_user
-    assert result.human_validation_timestamp is not None
+    assert human_answer.user == vanilla_user
+    assert human_answer.citation == row
+    assert human_answer.question == question
+    assert human_answer.selected_option == selected_option
+    assert human_answer.notes is None
     assert "Validated" in body
-    assert vanilla_user.username in body
-    assert "Undo" in body
+    assert "Your answer" in body
+    assert f'id="l1-validate-answer-{result.id}"' not in body
 
     with patch_rules(can_access_review=True):
-        response = vanilla_client.post(
-            reverse("l1_citation_undo_validation", args=[review.id, result.id])
+        vanilla_client.post(
+            reverse(
+                "l1_citation_validate_correct", args=[review.id, result.id]
+            )
         )
 
-    result.refresh_from_db()
-    body = response.content.decode()
-    assert response.status_code == 200
-    assert result.human_validated_by is None
-    assert result.human_validation_timestamp is None
-    assert "Validate correct" in body
-    assert "Manually answer screening" in body
+    assert L1HumanAnswer.objects.count() == 1
 
 
 def test_l1_human_answer_modal_saves_question_option_and_notes(
-    vanilla_client,
+    vanilla_client, vanilla_user
 ):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
@@ -371,24 +376,58 @@ def test_l1_human_answer_modal_saves_question_option_and_notes(
 
     body = response.content.decode()
     assert response.status_code == 200
-    assert "Manually answer screening" in body
+    assert "Your screening answer" in body
     assert answer.option_text in body
     assert other_answer.option_text not in body
-    assert "human_selected_answer" in body
-    assert "human_notes" in body
+    assert "selected_option" in body
+    assert "notes" in body
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.post(
             url,
             {
-                "human_selected_answer": answer.id,
-                "human_notes": "Human review notes.",
+                "selected_option": answer.id,
+                "notes": "Human review notes.",
             },
         )
 
-    result.refresh_from_db()
+    human_answer = L1HumanAnswer.objects.get()
     body = response.content.decode()
     assert response.status_code == 200
-    assert result.human_selected_answer == answer
-    assert result.human_notes == "Human review notes."
-    assert "Human entered" in body
+    assert human_answer.user == vanilla_user
+    assert human_answer.selected_option == answer
+    assert human_answer.notes == "Human review notes."
+    assert response["HX-Reswap"] == "morph:outerHTML"
+    assert "Your answer" in body
+    assert "Edit" in body
+
+
+def test_l1_answer_section_renders_other_reviewers_and_refuted_status(
+    vanilla_client, vanilla_user
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset)
+    question = L1ScreeningQuestionFactory(review=review)
+    ai_option = L1ScreeningQuestionOptionFactory(question=question)
+    other_option = L1ScreeningQuestionOptionFactory(question=question)
+    result = L1ScreeningResultFactory(
+        citation=row, question=question, selected_option=ai_option
+    )
+    other_answer = L1HumanAnswerFactory(
+        citation=row,
+        question=question,
+        selected_option=other_option,
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("l1_citation_detail", args=[review.id, row.id])
+        )
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "Refuted" in body
+    assert other_answer.user.username in body
+    assert "Add your answer" in body
+    assert "Validate" not in body

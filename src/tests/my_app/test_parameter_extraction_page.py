@@ -13,6 +13,7 @@ from my_app.model_factories import (
     ParameterCategoryFactory,
     ParameterExtractionResultFactory,
     ParameterFactory,
+    ParameterHumanAnswerFactory,
     ReviewFactory,
     TextExtractionResultFactory,
 )
@@ -21,6 +22,7 @@ from my_app.models import (
     DocumentTable,
     FigureExtractionResult,
     ParameterExtractionResult,
+    ParameterHumanAnswer,
     ScreeningResultStatus,
     TextExtractionResult,
 )
@@ -181,9 +183,10 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     assert "Dose" in body
     assert "10 mg" in body
     assert "Reported in the methods." in body
-    assert "Needs human review" in body
-    assert "Validate AI answer" in body
-    assert "Modify human values" in body
+    assert "AI answer" in body
+    assert "Validate" in body
+    assert "Add your answer" in body
+    assert 'hx-swap="morph:outerHTML"' in body
     assert 'id="parameter-extraction-citation-data"' in body
     assert (
         f'data-pdf-url="{reverse("citation_download_pdf_document", args=[review.id, row.id])}"'
@@ -213,8 +216,8 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     assert "Re-extract" in body
 
 
-def test_parameter_extraction_validate_ai_answer_sets_human_values(
-    vanilla_client,
+def test_parameter_extraction_validate_ai_answer_creates_human_answer(
+    vanilla_client, vanilla_user
 ):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
@@ -238,18 +241,24 @@ def test_parameter_extraction_validate_ai_answer_sets_human_values(
             )
         )
 
-    result.refresh_from_db()
     body = response.content.decode()
+    human_answer = ParameterHumanAnswer.objects.get()
 
     assert response.status_code == 200
-    assert result.human_found is True
-    assert result.human_value == "10 mg"
-    assert "Human entered" in body
-    assert "Human found" in body
+    assert human_answer.user == vanilla_user
+    assert human_answer.citation == row
+    assert human_answer.question == parameter
+    assert human_answer.found is True
+    assert human_answer.value == "10 mg"
+    assert human_answer.notes is None
+    assert "Correct" in body
+    assert "Your answer" in body
     assert "10 mg" in body
 
 
-def test_parameter_extraction_human_answer_modal_saves_values(vanilla_client):
+def test_parameter_extraction_human_answer_modal_saves_and_edits_values(
+    vanilla_client, vanilla_user
+):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     row = CitationFactory(dataset=dataset, order=1)
@@ -263,6 +272,13 @@ def test_parameter_extraction_human_answer_modal_saves_values(vanilla_client):
         found=True,
         value="10 mg",
     )
+    other_reviewer_answer = ParameterHumanAnswerFactory(
+        citation=row,
+        question=parameter,
+        found=True,
+        value="10 mg",
+        notes="Other reviewer notes.",
+    )
     url = reverse(
         "parameter_extraction_citation_human_answer",
         args=[review.id, result.id],
@@ -272,22 +288,47 @@ def test_parameter_extraction_human_answer_modal_saves_values(vanilla_client):
         get_response = vanilla_client.get(url)
         post_response = vanilla_client.post(
             url,
-            {"human_found": "False", "human_value": "Not reported"},
+            {
+                "found": "False",
+                "value": "Not reported",
+                "notes": "Checked the full text.",
+            },
         )
 
-    result.refresh_from_db()
+    human_answer = ParameterHumanAnswer.objects.get(user=vanilla_user)
     get_body = get_response.content.decode()
     post_body = post_response.content.decode()
 
     assert get_response.status_code == 200
-    assert "Modify human values" in get_body
-    assert "Human found" in get_body
+    assert "Your parameter answer" in get_body
+    assert "Found" in get_body
     assert post_response.status_code == 200
     assert post_response["HX-Trigger-After-Settle"] == "modal-close"
-    assert result.human_found is False
-    assert result.human_value == "Not reported"
-    assert "Human entered" in post_body
+    assert post_response["HX-Reswap"] == "morph:outerHTML"
+    assert human_answer.found is False
+    assert human_answer.value == "Not reported"
+    assert human_answer.notes == "Checked the full text."
+    assert "Your answer" in post_body
+    assert other_reviewer_answer.user.username in post_body
+    assert "Detection disagreement" in post_body
     assert "Not reported" in post_body
+
+    with patch_rules(can_access_review=True):
+        edit_response = vanilla_client.post(
+            url,
+            {
+                "found": "True",
+                "value": "10 mg",
+                "notes": "Updated notes.",
+            },
+        )
+
+    human_answer.refresh_from_db()
+    assert edit_response.status_code == 200
+    assert human_answer.found is True
+    assert human_answer.value == "10 mg"
+    assert human_answer.notes == "Updated notes."
+    assert ParameterHumanAnswer.objects.count() == 2
 
 
 def test_parameter_extraction_process_view_enqueues_extraction_and_returns_control(
