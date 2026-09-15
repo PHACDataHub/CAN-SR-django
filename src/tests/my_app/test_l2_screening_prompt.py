@@ -117,6 +117,10 @@ def test_screening_prompt_builder():
     prompt_str = prompt_builder.build_str(prompt_args)
     assert "Is this relevant?" in prompt_str
     assert "[0] First sentence." in prompt_str
+    assert (
+        '"evidence_sentences": [<indices of sentences used as evidence>]'
+        in (prompt_str)
+    )
 
 
 def test_screening_prompt_builder_includes_tables_and_figures(tmp_path):

@@ -102,6 +102,10 @@ def test_parameter_extraction_prompt_builder():
     assert "- Parameter name: Dose" in prompt_str
     assert "The administered dose, including units." in prompt_str
     assert "[0] First sentence." in prompt_str
+    assert "Units and reporting instructions:" not in prompt_str
+    assert "Calculation instructions:" not in prompt_str
+    assert "Available options" not in prompt_str
+    assert "Select exactly one of the option names below" not in prompt_str
 
 
 def test_parameter_extraction_prompt_includes_instructions_and_options():
@@ -130,6 +134,9 @@ def test_parameter_extraction_prompt_includes_instructions_and_options():
     assert "Report the dose band." in prompt
     assert "Use the total daily dose." in prompt
     assert '"High dose": At least 10 mg per day.' in prompt
+    assert "- Available options (select exactly one):" in prompt
+    assert "Select exactly one of the option names below" in prompt
+    assert "Follow the calculation instructions below" in prompt
 
 
 def test_parameter_extraction_prompt_builder_includes_tables_and_figures(
