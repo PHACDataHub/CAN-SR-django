@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse_lazy
 
 from decouple import Csv, config
@@ -149,7 +150,7 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = (os.path.join("static"),)
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = Path(config("MEDIA_ROOT", default=str(BASE_DIR / "media")))
 
 MIDDLEWARE = configure_middleware(
     [
@@ -210,6 +211,9 @@ WSGI_APPLICATION = "proj.wsgi.application"
 
 
 USE_SQLITE = config("USE_SQLITE", default=False, cast=bool)
+
+DB_AUTH_MODE = config("DB_AUTH_MODE", default="local")
+
 if USE_SQLITE:
     DATABASES = {
         "default": {
@@ -234,6 +238,14 @@ else:
             },
         }
     }
+
+    if DB_AUTH_MODE == "azure":
+        DATABASES["default"]["ENGINE"] = "proj.db_backends.azure_postgresql"
+        DATABASES["default"]["PASSWORD"] = ""
+        DATABASES["default"]["TEST"][
+            "ENGINE"
+        ] = "proj.db_backends.azure_postgresql"
+
 
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
@@ -278,3 +290,5 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
