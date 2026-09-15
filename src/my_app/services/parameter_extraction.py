@@ -55,7 +55,7 @@ class EnqueueParameterExtractionService:
             ).delete()
 
         for question in self.questions:
-            model = get_model_for_review(question.category.review_id)
+            model = get_model_for_review(question.review_id)
             existing_results = ParameterExtractionResult.objects.filter(
                 question=question,
                 citation_id__in=citation_ids,
@@ -203,6 +203,15 @@ class ProcessParameterExtractionService:
 
         result.found = extraction_results.found
         result.value = extraction_results.value
+        selected_option_id = getattr(
+            extraction_results, "selected_option_id", None
+        )
+        if selected_option_id is not None:
+            result.selected_option = question.options.get(
+                id=selected_option_id
+            )
+        else:
+            result.selected_option = None
         result.explanation = extraction_results.explanation
         result.evidence_sentences = extraction_results.evidence_sentences
         result.evidence_tables = extraction_results.evidence_tables

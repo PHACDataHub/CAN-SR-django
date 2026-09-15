@@ -10,7 +10,6 @@ from my_app.model_factories import (
     L1ScreeningQuestionOptionFactory,
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
-    ParameterCategoryFactory,
     ParameterFactory,
     ReviewFactory,
     ReviewUserLinkFactory,
@@ -20,7 +19,7 @@ from my_app.models import (
     L1ScreeningQuestionOption,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
-    ParameterCategory,
+    Parameter,
 )
 from my_app.views.screening_criteria import (
     ChildEditor,
@@ -51,12 +50,20 @@ def test_editor_helper_class_new_question():
         **add_formset_prefix(
             fs_prefix,
             0,
-            {"option_text": "Option 1", "option_value": "The first option"},
+            {
+                "option_text": "Option 1",
+                "option_value": "The first option",
+                "screening_action": "screening_disabled",
+            },
         ),
         **add_formset_prefix(
             fs_prefix,
             1,
-            {"option_text": "Option 2", "option_value": "The second option"},
+            {
+                "option_text": "Option 2",
+                "option_value": "The second option",
+                "screening_action": "screening_disabled",
+            },
         ),
     }
 
@@ -104,12 +111,17 @@ def test_editor_helper_class_modify_question():
                 "id": question_option1.id,
                 "option_text": "Modified Option 1",
                 "option_value": "Modified value 1",
+                "screening_action": "screening_disabled",
             },
         ),
         **add_formset_prefix(
             fs_prefix,
             1,
-            {"option_text": "Option 2", "option_value": "The second option"},
+            {
+                "option_text": "Option 2",
+                "option_value": "The second option",
+                "screening_action": "screening_disabled",
+            },
         ),
     }
 
@@ -138,11 +150,15 @@ def test_editor_helper_class_modify_question():
 
 def test_editor_helper_new_parameter():
     review = ReviewFactory()
-    unsaved_obj = ParameterCategory(review=review)
+    unsaved_obj = Parameter(review=review)
     fs_prefix = "options"
 
     data = {
-        "name": "Test parameter category",
+        "name": "Dose",
+        "description": "The administered dose",
+        "option_type": Parameter.OptionType.SELECT,
+        "units_and_reporting_instructions": "Report in mg",
+        "calculation_instructions": "Use the daily total",
         **add_prefix(
             fs_prefix,
             {"TOTAL_FORMS": 1, "INITIAL_FORMS": 0},
@@ -151,8 +167,8 @@ def test_editor_helper_new_parameter():
             fs_prefix,
             0,
             {
-                "name": "Parameter 1",
-                "description": "The first parameter",
+                "name": "Low dose",
+                "context": "Less than 10 mg",
             },
         ),
     }
@@ -164,16 +180,17 @@ def test_editor_helper_new_parameter():
     )
     editor.save()
 
-    assert ParameterCategory.objects.count() == 1
-    param = ParameterCategory.objects.first()
+    assert Parameter.objects.count() == 1
+    param = Parameter.objects.first()
 
     assert param.review == review
-    assert param.name == "Test parameter category"
+    assert param.name == "Dose"
+    assert param.option_type == Parameter.OptionType.SELECT
 
-    assert param.parameters.count() == 1
-    option1 = param.parameters.first()
-    assert option1.name == "Parameter 1"
-    assert option1.description == "The first parameter"
+    assert param.options.count() == 1
+    option1 = param.options.first()
+    assert option1.name == "Low dose"
+    assert option1.context == "Less than 10 mg"
 
 
 def test_editor_new_invalid_data():
@@ -194,6 +211,7 @@ def test_editor_new_invalid_data():
                 # missing option_text (required)
                 "option_text": "",
                 "option_value": "The first option",
+                "screening_action": "screening_disabled",
             },
         ),
     }
@@ -239,6 +257,8 @@ def test_screening_criteria_page_renders_empty_sections(
     assert "Screening columns" in body
     assert "No citation dataset yet." in body
     assert 'id="edit-screening-columns-button"' not in body
+    assert "third_party/js/alpine-3.17.2.min.js" in body
+    assert "defer" in body
 
 
 def test_screening_criteria_page_renders_existing_questions(
@@ -264,12 +284,8 @@ def test_screening_criteria_page_renders_existing_questions(
         option_text="Maybe",
         option_value="Needs review",
     )
-    parameter_question = ParameterCategoryFactory(
+    parameter_question = ParameterFactory(
         review=review,
-        name="Parameter category",
-    )
-    ParameterFactory(
-        category=parameter_question,
         name="Age",
         description="Adults only",
     )
@@ -290,7 +306,6 @@ def test_screening_criteria_page_renders_existing_questions(
         f'id="edit-l2formsetadapter-section-{l2_question.pk}-button"' in body
     )
 
-    assert "Parameter category" in body
     assert "Age" in body
     assert "Adults only" in body
     assert (
@@ -452,12 +467,20 @@ def test_add_l1_question_modal_saves_valid_data(
         **add_formset_prefix(
             "options",
             0,
-            {"option_text": "Option 1", "option_value": "The first option"},
+            {
+                "option_text": "Option 1",
+                "option_value": "The first option",
+                "screening_action": "screening_disabled",
+            },
         ),
         **add_formset_prefix(
             "options",
             1,
-            {"option_text": "Option 2", "option_value": "The second option"},
+            {
+                "option_text": "Option 2",
+                "option_value": "The second option",
+                "screening_action": "screening_disabled",
+            },
         ),
     }
 
@@ -491,7 +514,11 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
         **add_formset_prefix(
             "options",
             0,
-            {"option_text": "", "option_value": "The first option"},
+            {
+                "option_text": "",
+                "option_value": "The first option",
+                "screening_action": "screening_disabled",
+            },
         ),
     }
 
@@ -508,6 +535,24 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
     assert "This field is required." in body
 
 
+def test_parameter_modal_uses_alpine_for_option_visibility(
+    vanilla_user_client, vanilla_user
+):
+    review = ReviewFactory()
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_user_client.get(
+            reverse("add_parameter_question", args=[review.pk])
+        )
+
+    body = response.content.decode()
+    assert 'x-data="{ optionType: &#34;free_text&#34; }"' in body
+    assert 'x-model="optionType"' in body
+    assert 'x-show="optionType === &#39;select&#39;"' in body
+    assert "x-cloak" in body
+
+
 @pytest.mark.parametrize(
     "route_name, form_id, expected_texts",
     [
@@ -519,7 +564,7 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
         (
             "add_parameter_question",
             "ParameterFormsetAdapter",
-            ("Parameter category name", "Add parameter", "Save"),
+            ("Parameter name", "Add option", "Save"),
         ),
         (
             "edit_l1_question",
@@ -534,7 +579,7 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
         (
             "edit_parameter_question",
             "ParameterFormsetAdapter",
-            ("Editable parameter category", "Age", "Adults only"),
+            ("Age", "Adults only", "Add option"),
         ),
     ],
 )
@@ -575,12 +620,8 @@ def test_other_screening_criteria_modals_render(
         )
         url = reverse(route_name, args=[review.pk, question.pk])
     else:
-        question = ParameterCategoryFactory(
+        question = ParameterFactory(
             review=review,
-            name="Editable parameter category",
-        )
-        ParameterFactory(
-            category=question,
             name="Age",
             description="Adults only",
         )

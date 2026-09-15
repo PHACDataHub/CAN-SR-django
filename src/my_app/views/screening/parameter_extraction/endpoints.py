@@ -44,15 +44,48 @@ class ParameterExtractionHumanAnswerForm(
 
     class Meta:
         model = ParameterHumanAnswer
-        fields = ["found", "value", "notes"]
+        fields = ["found", "value", "selected_option", "notes"]
         labels = {
             "found": tdt("Found"),
             "value": tdt("Value"),
+            "selected_option": tdt("Value"),
             "notes": tdt("Notes"),
         }
 
+    def __init__(self, *args, question, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.question = question
+        if question.option_type == Parameter.OptionType.SELECT:
+            self.fields.pop("value")
+            self.fields["selected_option"].queryset = question.options.all()
+        else:
+            self.fields.pop("selected_option")
+
     def clean_value(self):
         return self.cleaned_data["value"] or None
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if (
+            cleaned_data.get("found")
+            and self.question.option_type == Parameter.OptionType.SELECT
+            and not cleaned_data.get("selected_option")
+        ):
+            self.add_error(
+                "selected_option",
+                tdt("Select an option when the parameter was found."),
+            )
+        return cleaned_data
+
+    def save(self, commit=True):
+        answer = super().save(commit=False)
+        if self.question.option_type == Parameter.OptionType.SELECT:
+            answer.value = None
+        else:
+            answer.selected_option = None
+        if commit:
+            answer.save()
+        return answer
 
 
 @route(
@@ -62,7 +95,7 @@ class ParameterExtractionHumanAnswerForm(
 class ParameterExtractionProcessView(DocumentCitationMixin):
     @cached_property
     def parameters(self):
-        return list(Parameter.objects.filter(category__review=self.review))
+        return list(Parameter.objects.filter(review=self.review))
 
     def post(self, request, *args, **kwargs):
         if not can_start_parameter_extraction(self.citation_row):
@@ -104,7 +137,8 @@ class ParameterExtractionHumanReviewMixin(ScreeningHumanAnswerViewMixin):
     result_select_related = (
         "citation",
         "question",
-        "question__category",
+        "question__review",
+        "selected_option",
     )
     modal_title = tdt("Your parameter answer")
 
@@ -115,10 +149,11 @@ class ParameterExtractionHumanReviewMixin(ScreeningHumanAnswerViewMixin):
         return {
             "found": self.result.found,
             "value": self.result.value,
+            "selected_option": self.result.selected_option,
         }
 
     def human_answer_form_kwargs(self):
-        return {}
+        return {"question": self.result.question}
 
 
 @route(

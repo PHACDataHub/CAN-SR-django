@@ -66,9 +66,7 @@ class RequestedDocumentPostProcessingService:
             return
 
         parameters = list(
-            Parameter.objects.filter(
-                category__review=self.citation.dataset.review
-            )
+            Parameter.objects.filter(review=self.citation.dataset.review)
         )
         EnqueueParameterExtractionService(
             rows=[self.citation],

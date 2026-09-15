@@ -42,14 +42,38 @@ class L2ScreeningQuestion(AbstractScreeningQuestion):
     )
 
 
+SCREENED_IN = "screen_id"
+SCREENED_OUT = "screen_out"
+SCREENING_DISABLED = "screening_disabled"
+
+
+class ScreeningActions(models.TextChoices):
+    ScreenIn = (SCREENED_IN, "Screen In")
+    ScreenOut = (SCREENED_OUT, "Screen Out")
+    ScreeningDisabled = (
+        SCREENING_DISABLED,
+        "Don't use this question to filter citations",
+    )
+
+
 class AbstractScreeningQuestionOption(models.Model):
     class Meta:
         abstract = True
 
     option_text = fields.CharField(
-        max_length=255, verbose_name=tdt("Option text")
+        # this is the high level label,
+        # e.g. 'yes', 'yes, primary research',
+        max_length=255,
+        verbose_name=tdt("Option text"),
     )
     option_value = fields.TextField(verbose_name=tdt("Option value"))
+
+    screening_action = fields.CharField(
+        max_length=255,
+        null=False,
+        default=ScreeningActions.ScreeningDisabled,
+        choices=ScreeningActions.choices,
+    )
 
     def __str__(self):
         return self.option_text
@@ -82,15 +106,34 @@ class L2ScreeningQuestionOption(AbstractScreeningQuestionOption):
 
 
 @add_to_admin
-class ParameterCategory(models.Model):
+class Parameter(models.Model):
+    class OptionType(models.TextChoices):
+        FREE_TEXT = ("free_text", tdt("Free text"))
+        SELECT = ("select", tdt("Select from list"))
+
     review = fields.ForeignKey(
         Review,
-        related_name="parameter_categories",
+        related_name="parameters",
         on_delete=models.CASCADE,
         verbose_name=tdt("Systematic review"),
     )
-    name = fields.CharField(
-        max_length=255, verbose_name=tdt("Parameter category name")
+    name = fields.CharField(max_length=255, verbose_name=tdt("Parameter name"))
+    description = fields.TextField(verbose_name=tdt("Parameter description"))
+    option_type = fields.CharField(
+        max_length=20,
+        choices=OptionType.choices,
+        default=OptionType.FREE_TEXT,
+        verbose_name=tdt("Answer type"),
+    )
+    units_and_reporting_instructions = fields.TextField(
+        blank=True,
+        default="",
+        verbose_name=tdt("Units and reporting instructions"),
+    )
+    calculation_instructions = fields.TextField(
+        blank=True,
+        default="",
+        verbose_name=tdt("Calculation instructions"),
     )
 
     def __str__(self):
@@ -102,15 +145,19 @@ class ParameterCategory(models.Model):
 
 
 @add_to_admin
-class Parameter(models.Model):
-    category = fields.ForeignKey(
-        ParameterCategory,
-        related_name="parameters",
+class ParameterOption(models.Model):
+    parameter = fields.ForeignKey(
+        Parameter,
+        related_name="options",
         on_delete=models.CASCADE,
-        verbose_name=tdt("Parameter category"),
+        verbose_name=tdt("Parameter"),
     )
-    name = fields.CharField(max_length=255, verbose_name=tdt("Parameter name"))
-    description = fields.TextField(verbose_name=tdt("Parameter description"))
+    name = fields.CharField(max_length=255, verbose_name=tdt("Option name"))
+    context = fields.TextField(
+        blank=True,
+        default="",
+        verbose_name=tdt("Context or guidance"),
+    )
 
     def __str__(self):
         return self.name
@@ -118,3 +165,7 @@ class Parameter(models.Model):
     @property
     def title(self):
         return self.name
+
+    @property
+    def description(self):
+        return self.context

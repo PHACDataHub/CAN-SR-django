@@ -17,7 +17,6 @@ from my_app.model_factories import (
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
     L2ScreeningResultFactory,
-    ParameterCategoryFactory,
     ParameterExtractionResultFactory,
     ParameterFactory,
     ReviewFactory,
@@ -949,7 +948,7 @@ def test_citation_document_upload_view_enables_configured_processing_options(
     row = CitationFactory(dataset=dataset, order=1)
     l2_question = L2ScreeningQuestionFactory(review=review)
     L2ScreeningQuestionOptionFactory(question=l2_question)
-    ParameterFactory(category=ParameterCategoryFactory(review=review))
+    ParameterFactory(review=review)
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(
@@ -1032,7 +1031,7 @@ def test_citation_document_upload_view_passes_processing_options_to_service(
     row = CitationFactory(dataset=dataset, order=1)
     l2_question = L2ScreeningQuestionFactory(review=review)
     L2ScreeningQuestionOptionFactory(question=l2_question)
-    ParameterFactory(category=ParameterCategoryFactory(review=review))
+    ParameterFactory(review=review)
 
     with patch_rules(can_access_review=True):
         with patch(
@@ -1084,9 +1083,7 @@ def test_citation_document_upload_view_replaces_document_and_deletes_old_data(
         question=l2_question,
         status=ScreeningResultStatus.PENDING,
     )
-    parameter_question = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter_question = ParameterFactory(review=review)
     ParameterExtractionResultFactory(
         citation=row,
         question=parameter_question,

@@ -10,10 +10,10 @@ from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
     DocumentFactory,
-    ParameterCategoryFactory,
     ParameterExtractionResultFactory,
     ParameterFactory,
     ParameterHumanAnswerFactory,
+    ParameterOptionFactory,
     ReviewFactory,
     TextExtractionResultFactory,
 )
@@ -21,6 +21,7 @@ from my_app.models import (
     DocumentFigure,
     DocumentTable,
     FigureExtractionResult,
+    Parameter,
     ParameterExtractionResult,
     ParameterHumanAnswer,
     ScreeningResultStatus,
@@ -85,8 +86,8 @@ def test_parameter_extraction_shell_can_disable_polling(vanilla_client):
 def test_parameter_extraction_component_view_renders(vanilla_client):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
-    category = ParameterCategoryFactory(review=review)
-    parameter = ParameterFactory(category=category)
+    parameter_review = review
+    parameter = ParameterFactory(review=parameter_review)
     row = CitationFactory(dataset=dataset, order=1)
     ParameterExtractionResultFactory(
         citation=row,
@@ -133,8 +134,8 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
         document=document,
         status=FigureExtractionResult.Status.COMPLETED,
     )
-    category = ParameterCategoryFactory(review=review, name="Dose")
-    parameter = ParameterFactory(category=category, name="Daily dose")
+    parameter_review = review
+    parameter = ParameterFactory(review=parameter_review, name="Daily dose")
     ParameterExtractionResultFactory(
         citation=row,
         question=parameter,
@@ -180,7 +181,6 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     assert "Parameter citation" in body
     assert "Parameter extraction results" in body
     assert "Daily dose" in body
-    assert "Dose" in body
     assert "10 mg" in body
     assert "Reported in the methods." in body
     assert "AI answer" in body
@@ -222,9 +222,7 @@ def test_parameter_extraction_validate_ai_answer_creates_human_answer(
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     row = CitationFactory(dataset=dataset, order=1)
-    parameter = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter = ParameterFactory(review=review)
     result = ParameterExtractionResultFactory(
         citation=row,
         question=parameter,
@@ -262,9 +260,7 @@ def test_parameter_extraction_human_answer_modal_saves_and_edits_values(
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     row = CitationFactory(dataset=dataset, order=1)
-    parameter = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter = ParameterFactory(review=review)
     result = ParameterExtractionResultFactory(
         citation=row,
         question=parameter,
@@ -331,6 +327,45 @@ def test_parameter_extraction_human_answer_modal_saves_and_edits_values(
     assert ParameterHumanAnswer.objects.count() == 2
 
 
+def test_parameter_extraction_human_answer_selects_parameter_option(
+    vanilla_client, vanilla_user
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset)
+    parameter = ParameterFactory(
+        review=review,
+        option_type=Parameter.OptionType.SELECT,
+    )
+    option = ParameterOptionFactory(parameter=parameter, name="High dose")
+    result = ParameterExtractionResultFactory(
+        citation=row,
+        question=parameter,
+        status=ScreeningResultStatus.COMPLETED,
+        found=True,
+        selected_option=option,
+    )
+    url = reverse(
+        "parameter_extraction_citation_human_answer",
+        args=[review.id, result.id],
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.post(
+            url,
+            {
+                "found": "True",
+                "selected_option": option.id,
+                "notes": "Matched the reported band.",
+            },
+        )
+
+    answer = ParameterHumanAnswer.objects.get(user=vanilla_user)
+    assert response.status_code == 200
+    assert answer.selected_option == option
+    assert "High dose" in response.content.decode()
+
+
 def test_parameter_extraction_process_view_enqueues_extraction_and_returns_control(
     vanilla_client,
 ):
@@ -346,9 +381,9 @@ def test_parameter_extraction_process_view_enqueues_extraction_and_returns_contr
         document=document,
         status=FigureExtractionResult.Status.COMPLETED,
     )
-    category = ParameterCategoryFactory(review=review)
-    parameter1 = ParameterFactory(category=category)
-    parameter2 = ParameterFactory(category=category)
+    parameter_review = review
+    parameter1 = ParameterFactory(review=parameter_review)
+    parameter2 = ParameterFactory(review=parameter_review)
 
     with patch_rules(can_access_review=True):
         with patch(
@@ -393,7 +428,7 @@ def test_parameter_extraction_process_view_rejects_unprocessed_document(
         document=document,
         status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
-    ParameterFactory(category=ParameterCategoryFactory(review=review))
+    ParameterFactory(review=review)
 
     with patch_rules(can_access_review=True):
         with patch(
@@ -448,9 +483,7 @@ def test_parameter_extraction_pdf_metadata_view_returns_evidence_highlights(
         pages=pages,
         coordinates=coordinates,
     )
-    parameter = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter = ParameterFactory(review=review)
     ParameterExtractionResultFactory(
         citation=row,
         question=parameter,
@@ -540,9 +573,7 @@ def test_parameter_extraction_views_require_review_access(
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
     TextExtractionResultFactory(document=document)
-    parameter = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter = ParameterFactory(review=review)
     result = ParameterExtractionResultFactory(
         citation=row,
         question=parameter,

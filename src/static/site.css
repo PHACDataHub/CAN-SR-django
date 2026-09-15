@@ -105,3 +105,8 @@ dl.custom-dl {
     top: 1rem;
     z-index: 1;
 }
+
+[x-cloak] {
+    display: none !important;
+}
+

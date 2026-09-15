@@ -7,6 +7,7 @@ from django.db.models import (
     CharField,
     Count,
     F,
+    IntegerField,
     OuterRef,
     Q,
     Subquery,
@@ -31,7 +32,6 @@ from my_app.models import (
     LanguageModel,
     Parameter,
     ParameterAnswerAgreement,
-    ParameterCategory,
     ParameterExtractionResult,
     ParameterHumanAnswer,
     Review,
@@ -67,7 +67,7 @@ def get_parameter_human_ai_agreements(review_id: int):
     )
     answers = (
         ParameterHumanAnswer.objects.filter(
-            question__category__review_id=review_id,
+            question__review_id=review_id,
             citation__dataset__review_id=review_id,
         )
         .annotate(
@@ -79,6 +79,10 @@ def get_parameter_human_ai_agreements(review_id: int):
             ai_value=Subquery(
                 ai_results.values("value")[:1],
                 output_field=TextField(),
+            ),
+            ai_selected_option_id=Subquery(
+                ai_results.values("selected_option_id")[:1],
+                output_field=IntegerField(),
             ),
         )
         .filter(ai_result_id__isnull=False)
@@ -103,6 +107,15 @@ def get_parameter_human_ai_agreements(review_id: int):
                 When(
                     found=True,
                     ai_found=True,
+                    selected_option_id__isnull=False,
+                    selected_option_id=F("ai_selected_option_id"),
+                    then=Value(ParameterAnswerAgreement.VALUE_AGREEMENT),
+                ),
+                When(
+                    found=True,
+                    ai_found=True,
+                    selected_option_id__isnull=True,
+                    ai_selected_option_id__isnull=True,
                     normalized_human_value=F("normalized_ai_value"),
                     then=Value(ParameterAnswerAgreement.VALUE_AGREEMENT),
                 ),
@@ -166,12 +179,9 @@ def is_l2_screening_defined(citation_id: int) -> bool:
 
 
 def is_parameter_extraction_defined(citation_id: int) -> bool:
-    review_filter = {"review__citation_dataset__rows__id": citation_id}
-    has_categories = ParameterCategory.objects.filter(**review_filter).exists()
-    has_parameters = Parameter.objects.filter(
-        category__review__citation_dataset__rows__id=citation_id
+    return Parameter.objects.filter(
+        review__citation_dataset__rows__id=citation_id
     ).exists()
-    return has_categories and has_parameters
 
 
 def _has_completed_document_extraction(citation_id: int) -> bool:
@@ -315,7 +325,7 @@ class ParameterExtractionStatusFetcher(ScreeningStatusFetcher):
 
     @classmethod
     def get_questions(cls, review):
-        return cls.QuestionModel.objects.filter(category__review=review)
+        return cls.QuestionModel.objects.filter(review=review)
 
 
 @dataclass(frozen=True)
@@ -475,9 +485,7 @@ class CitationParameterExtractionProgressStats:
 
 @cached_within_request
 def get_parameter_extraction_progress_stats(review_id: int):
-    parameter_count = Parameter.objects.filter(
-        category__review_id=review_id
-    ).count()
+    parameter_count = Parameter.objects.filter(review_id=review_id).count()
     citations = Citation.objects.filter(dataset__review_id=review_id)
     total_citations = citations.count()
 
