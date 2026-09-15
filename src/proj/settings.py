@@ -150,7 +150,7 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = (os.path.join("static"),)
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = Path(config("MEDIA_ROOT", default=str(BASE_DIR / "media")))
 
 MIDDLEWARE = configure_middleware(
     [
