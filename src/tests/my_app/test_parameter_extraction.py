@@ -10,8 +10,8 @@ from proj.util import MissingPreconditionError
 from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
-    ParameterCategoryFactory,
     ParameterFactory,
+    ParameterOptionFactory,
     ReviewFactory,
 )
 from my_app.models import (
@@ -83,9 +83,9 @@ def _build_parameter_extraction_context(
     else:
         text_extraction_result = None
 
-    category = ParameterCategoryFactory(review=review)
+    parameter_review = review
     parameter = ParameterFactory(
-        category=category,
+        review=parameter_review,
         name="Dose",
         description="Extract the intervention dose.",
     )
@@ -297,3 +297,31 @@ def test_process_parameter_extraction_service_raises_when_document_missing():
 
     result.refresh_from_db()
     assert result.status == ScreeningResultStatus.PENDING
+
+
+def test_process_parameter_extraction_service_persists_selected_option():
+    _, _, row, _, parameter = _build_parameter_extraction_context()
+    option = ParameterOptionFactory(parameter=parameter)
+    result = ParameterExtractionResult.objects.create(
+        citation=row,
+        question=parameter,
+        status=ScreeningResultStatus.PENDING,
+    )
+    extraction_result = SimpleNamespace(
+        found=True,
+        value=None,
+        selected_option_id=option.id,
+        explanation="The option matched.",
+        evidence_sentences=[],
+        evidence_tables=[],
+        evidence_figures=[],
+    )
+
+    with patch(
+        "my_app.services.parameter_extraction.get_parameter_extraction_results",
+        return_value=extraction_result,
+    ):
+        ProcessParameterExtractionService(result_id=result.id).perform()
+
+    result.refresh_from_db()
+    assert result.selected_option == option

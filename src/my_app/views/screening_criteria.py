@@ -1,4 +1,5 @@
 import abc
+import json
 import uuid
 from urllib.parse import urlencode
 
@@ -18,7 +19,7 @@ from my_app.models import (
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     Parameter,
-    ParameterCategory,
+    ParameterOption,
     Review,
 )
 from my_app.router import route
@@ -35,10 +36,19 @@ from shortcuts import (
     StandardFormMixin,
 )
 from shortcuts import breadcrumbs as bc
-from shortcuts import cached_property, dataclass, reverse, tdt, tm, transaction
+from shortcuts import (
+    cached_property,
+    dataclass,
+    reverse,
+    tdt,
+    tm,
+    transaction,
+)
 
-ParentType = L1ScreeningQuestion | L2ScreeningQuestion | ParameterCategory
-ChildType = L1ScreeningQuestionOption | L2ScreeningQuestionOption | Parameter
+ParentType = L1ScreeningQuestion | L2ScreeningQuestion | Parameter
+ChildType = (
+    L1ScreeningQuestionOption | L2ScreeningQuestionOption | ParameterOption
+)
 
 
 class FormsetAdapterMeta(abc.ABCMeta):
@@ -76,7 +86,17 @@ class FormsetAdapter(abc.ABC, metaclass=FormsetAdapterMeta):
 
     @staticmethod
     def child_form_renderer(form):
-        return h.div[GenericForm(form)]
+        return h.div(".formset-item-container")[GenericForm(form)]
+
+    @classmethod
+    def formset_renderer(cls, formset):
+        return InlineFormset(
+            formset,
+            add_button_text=cls.add_child_button_text,
+            form_renderer=cls.child_form_renderer,
+            can_add=True,
+            aria_list_label=cls.child_list_label,
+        )
 
     add_button_text = tdt("Add question")
     add_child_button_text = tdt("Add option")
@@ -100,7 +120,7 @@ class L1FormsetAdapter(FormsetAdapter):
     class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
             model = L1ScreeningQuestionOption
-            fields = ["option_text", "option_value"]
+            fields = ["option_text", "option_value", "screening_action"]
 
     @staticmethod
     def get_new_url(review):
@@ -124,7 +144,7 @@ class L2FormsetAdapter(FormsetAdapter):
     class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
             model = L2ScreeningQuestionOption
-            fields = ["option_text", "option_value"]
+            fields = ["option_text", "option_value", "screening_action"]
 
     @staticmethod
     def get_new_url(review):
@@ -136,19 +156,29 @@ class L2FormsetAdapter(FormsetAdapter):
 
 
 class ParameterFormsetAdapter(FormsetAdapter):
-    parent_model = ParameterCategory
-    child_model = Parameter
-    child_relation_name = "parameters"
+    parent_model = Parameter
+    child_model = ParameterOption
+    child_relation_name = "options"
 
     class FormClass(ModelForm, StandardFormMixin):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.fields["option_type"].widget.attrs["x-model"] = "optionType"
+
         class Meta:
-            model = ParameterCategory
-            fields = ["name"]
+            model = Parameter
+            fields = [
+                "name",
+                "description",
+                "units_and_reporting_instructions",
+                "calculation_instructions",
+                "option_type",
+            ]
 
     class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
-            model = Parameter
-            fields = ["name", "description"]
+            model = ParameterOption
+            fields = ["name", "context"]
 
     @staticmethod
     def get_new_url(review):
@@ -158,9 +188,21 @@ class ParameterFormsetAdapter(FormsetAdapter):
     def get_edit_url(obj):
         return reverse("edit_parameter_question", args=[obj.review_id, obj.pk])
 
-    add_button_text = tdt("Add Parameter Group")
-    add_child_button_text = tdt("Add parameter")
-    child_list_label = tdt("parameters")
+    add_button_text = tdt("Add parameter")
+    add_child_button_text = tdt("Add option")
+    child_list_label = tdt("options")
+
+    @classmethod
+    def formset_renderer(cls, formset):
+        return h.div(
+            {
+                "x-show": "optionType === 'select'",
+                "x-cloak": True,
+            }
+        )[
+            h.h3(".h6")[tdt("Parameter options")],
+            super().formset_renderer(formset),
+        ]
 
 
 class ScreeningCriteriaPageContent(HtpyComponent):
@@ -239,6 +281,13 @@ class ScreeningCriteriaPageContent(HtpyComponent):
                     h.li(".list-group-item")[
                         h.div(".d-flex.justify-content-between.mb-1")[
                             h.div[parent.title],
+                            (
+                                h.div(".small.text-secondary")[
+                                    parent.description
+                                ]
+                                if isinstance(parent, Parameter)
+                                else None
+                            ),
                             h.div[
                                 h.button(
                                     ".btn.btn-outline-primary.btn-sm",
@@ -401,23 +450,27 @@ class ChildEditor:
                 [self.child_form, *self.child_formset.forms]
             )
 
-        return h.form(
-            hx_post=post_url,
-            hx_target="this",
-            hx_swap="outerHTML",
-            hx_select=f"#{self.form_id}",
-            class_="mb-4 border p-3 rounded",
-            id=self.form_id,
-        )[
+        form_attrs = {
+            "hx-post": post_url,
+            "hx-target": "this",
+            "hx-swap": "outerHTML",
+            "hx-select": f"#{self.form_id}",
+            "class": "mb-4 border p-3 rounded",
+            "id": self.form_id,
+        }
+        if self.adapter is ParameterFormsetAdapter:
+            option_type = (
+                self.child_form["option_type"].value()
+                or Parameter.OptionType.FREE_TEXT
+            )
+            form_attrs["x-data"] = (
+                f"{{ optionType: {json.dumps(option_type)} }}"
+            )
+
+        return h.form(form_attrs)[
             error_summary,
             self.adapter.form_renderer(self.child_form),
-            InlineFormset(
-                self.child_formset,
-                add_button_text=self.adapter.add_child_button_text,
-                form_renderer=self.adapter.child_form_renderer,
-                can_add=True,
-                aria_list_label=self.adapter.child_list_label,
-            ),
+            self.adapter.formset_renderer(self.child_formset),
         ]
 
     def render_modal(self):
@@ -547,7 +600,7 @@ class EditL2ScreeningQuestionView(ChildEditorEditView):
     "reviews/<int:review_id>/parameters/add/",
     name="add_parameter_question",
 )
-class AddParameterCategoryView(ChildEditorCreateView):
+class AddParameterView(ChildEditorCreateView):
     adapter = ParameterFormsetAdapter
 
 
@@ -555,7 +608,7 @@ class AddParameterCategoryView(ChildEditorCreateView):
     "reviews/<int:review_id>/parameters/<int:parent_pk>/edit",
     name="edit_parameter_question",
 )
-class EditParameterCategoryView(ChildEditorEditView):
+class EditParameterView(ChildEditorEditView):
     adapter = ParameterFormsetAdapter
 
 

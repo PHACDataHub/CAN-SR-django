@@ -105,9 +105,7 @@ class CitationDocumentUploadView(DocumentCitationMixin):
 
     @cached_property
     def parameter_extraction_configured(self):
-        return self.review.parameter_categories.filter(
-            parameters__isnull=False
-        ).exists()
+        return self.review.parameters.exists()
 
     @cached_property
     def form(self):

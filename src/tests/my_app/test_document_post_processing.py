@@ -9,7 +9,6 @@ from my_app.model_factories import (
     DocumentFactory,
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
-    ParameterCategoryFactory,
     ParameterFactory,
 )
 from my_app.models import L2ScreeningResult, ParameterExtractionResult
@@ -25,8 +24,8 @@ def _build_citation_and_group():
     citation = CitationFactory(document=document)
     question = L2ScreeningQuestionFactory(review=citation.dataset.review)
     L2ScreeningQuestionOptionFactory(question=question)
-    category = ParameterCategoryFactory(review=citation.dataset.review)
-    parameter = ParameterFactory(category=category)
+    parameter_review = citation.dataset.review
+    parameter = ParameterFactory(review=parameter_review)
     group = TaskGroup.objects.create(key=f"process-document:{document.id}")
     return citation, question, parameter, group
 

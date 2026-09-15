@@ -75,11 +75,14 @@ def parameter_extraction_human_review_control_id(result):
     return human_review_control_id("parameter-extraction", result)
 
 
-def render_parameter_answer_values(found, value):
+def render_parameter_answer_values(found, value, selected_option=None):
     found_value = tdt("Yes") if found else tdt("No")
+    displayed_value = selected_option.name if selected_option else value
     return h.div[
         h.div(".fw-semibold")[tdt("Found"), ": ", found_value],
-        h.div(".small.text-muted")[tdt("Value"), ": ", value or tdt("None")],
+        h.div(".small.text-muted")[
+            tdt("Value"), ": ", displayed_value or tdt("None")
+        ],
     ]
 
 
@@ -119,7 +122,9 @@ def render_parameter_human_answer_row(
                 edit_button,
             ],
         ],
-        render_parameter_answer_values(answer.found, answer.value),
+        render_parameter_answer_values(
+            answer.found, answer.value, answer.selected_option
+        ),
         h.p(".small.mt-2.mb-0")[answer.notes] if answer.notes else None,
     ]
 
@@ -132,11 +137,9 @@ def render_parameter_human_review_control(
 ):
     if answers is None:
         answers = (
-            get_parameter_human_ai_agreements(
-                result.question.category.review_id
-            )
+            get_parameter_human_ai_agreements(result.question.review_id)
             .filter(citation=result.citation, question=result.question)
-            .select_related("user")
+            .select_related("user", "selected_option")
             .order_by("-updated_at", "-id")
         )
 
@@ -176,7 +179,9 @@ def render_parameter_human_review_control(
                 render_answer_timestamp(result.updated_at),
             ],
         ],
-        render_parameter_answer_values(result.found, result.value),
+        render_parameter_answer_values(
+            result.found, result.value, result.selected_option
+        ),
         (
             h.p(".small.mt-2.mb-0")[result.explanation]
             if result.explanation
@@ -316,9 +321,7 @@ class ParameterExtractionComponent:
     @cached_property
     def parameters(self):
         return list(
-            Parameter.objects.filter(category__review=self.review)
-            .select_related("category")
-            .order_by("category_id", "id")
+            Parameter.objects.filter(review=self.review).order_by("id")
         )
 
     @cached_property
@@ -534,8 +537,8 @@ class ParameterExtractionPdfPage(BasePageTemplate):
     def get_results(self, citation_row: Citation):
         return list(
             ParameterExtractionResult.objects.filter(citation=citation_row)
-            .select_related("question", "question__category")
-            .order_by("question__category_id", "question_id")
+            .select_related("question", "selected_option")
+            .order_by("question_id")
         )
 
     def get_human_answers_by_question_id(self, citation_row, results):
@@ -545,7 +548,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                 citation=citation_row,
                 question_id__in=[result.question_id for result in results],
             )
-            .select_related("user")
+            .select_related("user", "selected_option")
             .order_by("-updated_at", "-id")
         )
         grouped_answers = {}
@@ -557,7 +560,6 @@ class ParameterExtractionPdfPage(BasePageTemplate):
         return DefList.DL(
             [
                 (tdt("Parameter"), result.question.name),
-                (tdt("Category"), result.question.category.name),
                 (
                     tdt("Status"),
                     ScreeningResultStatus(result.status).label,

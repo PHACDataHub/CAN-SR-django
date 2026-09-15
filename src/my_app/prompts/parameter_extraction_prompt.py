@@ -35,6 +35,7 @@ Task (STRICT):
 Return a single valid JSON object and nothing else. The JSON MUST contain the following keys:
 - "found": a boolean (true/false) indicating whether the parameter was located or could be confidently derived.
 - "value": the extracted value as a string (or null if not found).
+- "selected_option": the exact option name selected, or null for free-text parameters and when not found.
 - "explanation": a concise explanation (1-4 sentences) describing why this value was chosen or how it was derived.
 - "evidence_sentences": an array of integers indicating the sentence indices you used as evidence (e.g. [2, 5]). If there are no supporting sentences, return an empty array.
 - "evidence_tables": an array of integers indicating table numbers used (e.g. [1, 2]) or [].
@@ -42,6 +43,7 @@ Return a single valid JSON object and nothing else. The JSON MUST contain the fo
 
 Requirements:
 - If the parameter is explicitly present, return the value exactly as found (preserve units/format) and list the sentence indices.
+- If options are provided, select exactly one of their names, return it in "selected_option", and return null for "value".
 - If the parameter must be computed or approximated, include the computed value and explain the computation in "explanation", and list the sentences used for calculation.
 - If the parameter is not present and cannot be deduced, set "found": false, "value": null, "explanation": briefly state why not found, and "evidence_sentences": [].
 - If a calculation is defined for the parameter, with a description of variables to be computed, find those variables and walk through the computation in the explanation.
@@ -49,12 +51,19 @@ Requirements:
 - If a table or figure is referenced, ensure the explanation references the table/figure number and what was extracted from it.
 
 Example valid output:
-{{"found": true, "value": "5 mg/kg", "explanation": "The Methods section explicitly lists a dose of 5 mg/kg in sentence [12].", "evidence_sentences": [12], "evidence_tables": [], "evidence_figures": []}}
+{{"found": true, "value": "5 mg/kg", "selected_option": null, "explanation": "The Methods section explicitly lists a dose of 5 mg/kg in sentence [12].", "evidence_sentences": [12], "evidence_tables": [], "evidence_figures": []}}
 
 Do not output anything besides the JSON object.
 - Parameter name: {parameter_name}
 
 - Parameter description: {parameter_description}
+
+- Units and reporting instructions: {units_and_reporting_instructions}
+
+- Calculation instructions: {calculation_instructions}
+
+- Available options (empty means this is a free-text parameter):
+{options}
 
 - Full text (numbered sentences):
 {fulltext}
@@ -80,6 +89,9 @@ class ParameterExtractionPromptBuilder:
     class ParameterExtractionPromptArgs:
         parameter_name: str
         parameter_description: str
+        units_and_reporting_instructions: str
+        calculation_instructions: str
+        options: str
         fulltext: str
         tables: str
         figures: str
@@ -94,6 +106,14 @@ class ParameterExtractionPromptBuilder:
         return self.ParameterExtractionPromptArgs(
             parameter_name=self.parameter.name,
             parameter_description=self.parameter.description,
+            units_and_reporting_instructions=(
+                self.parameter.units_and_reporting_instructions
+            ),
+            calculation_instructions=self.parameter.calculation_instructions,
+            options="\n".join(
+                f'- "{option.name}": {option.context}'
+                for option in self.parameter.options.all()
+            ),
             fulltext=sentences,
             tables=table_str,
             figures=figure_str,
@@ -105,6 +125,11 @@ class ParameterExtractionPromptBuilder:
         return PROMPT_JSON_TEMPLATE.format(
             parameter_name=prompt_args.parameter_name,
             parameter_description=prompt_args.parameter_description,
+            units_and_reporting_instructions=(
+                prompt_args.units_and_reporting_instructions
+            ),
+            calculation_instructions=prompt_args.calculation_instructions,
+            options=prompt_args.options,
             fulltext=prompt_args.fulltext,
             tables=prompt_args.tables,
             figures=prompt_args.figures,
@@ -116,6 +141,19 @@ class ParameterExtractionPromptResult(pydantic.BaseModel):
 
     found: bool
     value: str | None
+    selected_option_id: int | None = None
+    explanation: str
+    evidence_sentences: List[int]
+    evidence_tables: List[int]
+    evidence_figures: List[int]
+
+
+class RawParameterExtractionPromptResult(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid")
+
+    found: bool
+    value: str | None
+    selected_option: str | None
     explanation: str
     evidence_sentences: List[int]
     evidence_tables: List[int]
@@ -124,8 +162,28 @@ class ParameterExtractionPromptResult(pydantic.BaseModel):
 
 PARAMETER_EXTRACTION_RESPONSE_SCHEMA = LLMResponseSchema(
     name="parameter_extraction_result",
-    schema=ParameterExtractionPromptResult.model_json_schema(),
+    schema=RawParameterExtractionPromptResult.model_json_schema(),
 )
+
+
+def build_parameter_extraction_response_schema(
+    parameter: Parameter,
+) -> LLMResponseSchema:
+    schema = RawParameterExtractionPromptResult.model_json_schema()
+    if parameter.option_type == Parameter.OptionType.SELECT:
+        schema["properties"]["selected_option"] = {
+            "enum": [
+                *parameter.options.values_list("name", flat=True),
+                None,
+            ],
+            "type": ["string", "null"],
+        }
+    else:
+        schema["properties"]["selected_option"] = {"type": "null"}
+    return LLMResponseSchema(
+        name="parameter_extraction_result",
+        schema=schema,
+    )
 
 
 def get_parameter_extraction_results(
@@ -155,23 +213,52 @@ def get_parameter_extraction_results(
     images = prompt_args.figure_image_files
 
     llm_client = get_client()
+    response_schema = build_parameter_extraction_response_schema(parameter)
     if images:
         raw_response = llm_client.complete_multimodal_prompt(
             prompt,
             files=images,
             model=model,
-            response_schema=PARAMETER_EXTRACTION_RESPONSE_SCHEMA,
+            response_schema=response_schema,
         )
     else:
         raw_response = llm_client.complete_prompt(
             prompt,
             model=model,
-            response_schema=PARAMETER_EXTRACTION_RESPONSE_SCHEMA,
+            response_schema=response_schema,
         )
 
     try:
         response_dict = json.loads(raw_response)
-        return ParameterExtractionPromptResult(**response_dict)
+        raw_result = RawParameterExtractionPromptResult(**response_dict)
+        if (
+            raw_result.found
+            and parameter.option_type == Parameter.OptionType.SELECT
+            and raw_result.selected_option is None
+        ):
+            raise UnexpectedLLMOutputError(
+                "LLM did not select an option for a list parameter"
+            )
+        selected_option_id = None
+        if raw_result.selected_option is not None:
+            selected_option = parameter.options.filter(
+                name__iexact=raw_result.selected_option
+            ).first()
+            if selected_option is None:
+                raise UnexpectedLLMOutputError(
+                    "LLM selected an unknown parameter option: "
+                    f"{raw_result.selected_option}"
+                )
+            selected_option_id = selected_option.id
+        return ParameterExtractionPromptResult(
+            **raw_result.model_dump(exclude={"selected_option", "value"}),
+            value=(
+                None
+                if parameter.option_type == Parameter.OptionType.SELECT
+                else raw_result.value
+            ),
+            selected_option_id=selected_option_id,
+        )
     except json.JSONDecodeError as exc:
         raise UnexpectedLLMOutputError(
             f"Failed to parse LLM output as JSON: {raw_response}"
@@ -194,6 +281,7 @@ def get_mock_parameter_extraction_results(
         return ParameterExtractionPromptResult(
             found=False,
             value=None,
+            selected_option_id=None,
             explanation="No sentences available for extraction.",
             evidence_sentences=[],
             evidence_tables=[],
@@ -211,7 +299,16 @@ def get_mock_parameter_extraction_results(
 
     return ParameterExtractionPromptResult(
         found=True,
-        value=f"Mock value from sentence [{random_sentence_index}]",
+        value=(
+            None
+            if parameter.option_type == Parameter.OptionType.SELECT
+            else f"Mock value from sentence [{random_sentence_index}]"
+        ),
+        selected_option_id=(
+            parameter.options.values_list("id", flat=True).first()
+            if parameter.option_type == Parameter.OptionType.SELECT
+            else None
+        ),
         explanation=f"Mock explanation based on sentence [{random_sentence_index}].",
         evidence_sentences=[random_sentence_index],
         evidence_tables=[],

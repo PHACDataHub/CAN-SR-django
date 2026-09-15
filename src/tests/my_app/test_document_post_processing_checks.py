@@ -12,7 +12,6 @@ from my_app.model_factories import (
     DocumentFactory,
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
-    ParameterCategoryFactory,
     ParameterFactory,
 )
 from my_app.services.process_document import QueueProcessDocumentService
@@ -25,8 +24,8 @@ def test_queue_process_document_prepares_and_groups_extractions():
     citation = CitationFactory(document=document)
     l2_question = L2ScreeningQuestionFactory(review=citation.dataset.review)
     L2ScreeningQuestionOptionFactory(question=l2_question)
-    category = ParameterCategoryFactory(review=citation.dataset.review)
-    ParameterFactory(category=category)
+    parameter_review = citation.dataset.review
+    ParameterFactory(review=parameter_review)
 
     with (
         patch(

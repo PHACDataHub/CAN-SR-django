@@ -12,10 +12,10 @@ from my_app.model_factories import (
     L1ScreeningResultFactory,
     L2ScreeningQuestionFactory,
     L2ScreeningQuestionOptionFactory,
-    ParameterCategoryFactory,
     ParameterExtractionResultFactory,
     ParameterFactory,
     ParameterHumanAnswerFactory,
+    ParameterOptionFactory,
     ReviewFactory,
     TextExtractionResultFactory,
     UserFactory,
@@ -54,15 +54,15 @@ def test_is_l2_screening_defined_requires_a_question_and_option():
     assert is_l2_screening_defined(citation.id) is True
 
 
-def test_is_parameter_extraction_defined_requires_a_category_and_parameter():
+def test_is_parameter_extraction_defined_requires_a_parameter():
     citation = CitationFactory()
 
     assert is_parameter_extraction_defined(citation.id) is False
 
-    category = ParameterCategoryFactory(review=citation.dataset.review)
+    parameter_review = citation.dataset.review
     assert is_parameter_extraction_defined(citation.id) is False
 
-    ParameterFactory(category=category)
+    ParameterFactory(review=parameter_review)
     assert is_parameter_extraction_defined(citation.id) is True
 
 
@@ -105,8 +105,8 @@ def test_is_ready_for_parameter_extraction_requires_defined_parameters():
 
     assert is_ready_for_parameter_extraction(citation.id) is False
 
-    category = ParameterCategoryFactory(review=citation.dataset.review)
-    ParameterFactory(category=category)
+    parameter_review = citation.dataset.review
+    ParameterFactory(review=parameter_review)
     assert is_ready_for_parameter_extraction(citation.id) is True
 
 
@@ -285,8 +285,8 @@ def test_l1_screening_progress_stats_counts_review_citations_by_human_review_sta
 def test_parameter_extraction_progress_stats_counts_human_reviewed_citations():
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
-    category = ParameterCategoryFactory(review=review)
-    parameter = ParameterFactory(category=category)
+    parameter_review = review
+    parameter = ParameterFactory(review=parameter_review)
 
     incomplete_row = CitationFactory(dataset=dataset, order=1)
     completed_row = CitationFactory(dataset=dataset, order=2)
@@ -337,9 +337,7 @@ def _create_parameter_human_ai_pair(
     dataset = getattr(review, "citation_dataset", None)
     if dataset is None:
         dataset = CitationDatasetFactory(review=review)
-    parameter = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter = ParameterFactory(review=review)
     citation = CitationFactory(dataset=dataset)
     result = ParameterExtractionResultFactory(
         citation=citation,
@@ -407,6 +405,27 @@ def test_parameter_human_ai_agreement_states(
     agreement = get_parameter_human_ai_agreements(review.id).get(pk=answer.pk)
 
     assert agreement.agreement == expected
+
+
+def test_parameter_option_agreement_uses_option_identity():
+    review, result, answer = _create_parameter_human_ai_pair(
+        ai_value=None,
+        human_value=None,
+    )
+    selected_option = ParameterOptionFactory(parameter=result.question)
+    other_option = ParameterOptionFactory(parameter=result.question)
+    result.selected_option = selected_option
+    result.save(update_fields=["selected_option"])
+    answer.selected_option = other_option
+    answer.save(update_fields=["selected_option"])
+
+    agreement = get_parameter_human_ai_agreements(review.id).get(pk=answer.pk)
+    assert agreement.agreement == ParameterAnswerAgreement.VALUE_DISAGREEMENT
+
+    answer.selected_option = selected_option
+    answer.save(update_fields=["selected_option"])
+    agreement = get_parameter_human_ai_agreements(review.id).get(pk=answer.pk)
+    assert agreement.agreement == ParameterAnswerAgreement.VALUE_AGREEMENT
 
 
 def test_parameter_agreements_only_pair_completed_results_in_same_review():
