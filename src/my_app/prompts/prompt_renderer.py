@@ -11,5 +11,5 @@ def _compile_prompt(template_name: str):
     return Compiler().compile(template_path.read_text())
 
 
-def render_prompt(template_name: str, context: dict[str, Any]) -> str:
+def render_prompt(template_name: str, context: dict[str, Any] | Any) -> str:
     return _compile_prompt(template_name)(context)

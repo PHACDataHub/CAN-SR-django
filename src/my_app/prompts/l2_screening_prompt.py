@@ -2,6 +2,7 @@ import json
 import math
 import random
 import re
+from functools import cache
 from typing import BinaryIO
 
 from django.conf import settings
@@ -52,6 +53,9 @@ class L2ScreeningPromptBuilder:
         fulltext: str
         tables: str
         figures: str
+        has_tables: bool
+        has_figures: bool
+        has_tables_or_figures: bool
         figure_image_files: List[BinaryIO]
 
     def get_screening_prompt_args(
@@ -72,22 +76,15 @@ class L2ScreeningPromptBuilder:
             fulltext=sentences,
             tables=table_str,
             figures=figure_str,
+            has_tables=bool(self.tables),
+            has_figures=bool(self.figures),
+            has_tables_or_figures=bool(self.tables or self.figures),
             figure_image_files=[fig.file for fig in self.figures],
         )
 
     @staticmethod
     def build_str(prompt_args: ScreeningPromptArgs) -> str:
-        return render_prompt(
-            "l2_screening_prompt.hbs",
-            {
-                "question": prompt_args.question,
-                "options": prompt_args.options,
-                "definitions": prompt_args.definitions,
-                "fulltext": prompt_args.fulltext,
-                "tables": prompt_args.tables,
-                "figures": prompt_args.figures,
-            },
-        )
+        return render_prompt("l2_screening_prompt.hbs", prompt_args)
 
 
 class RawL2ScreeningPromptResult(pydantic.BaseModel):
@@ -97,15 +94,33 @@ class RawL2ScreeningPromptResult(pydantic.BaseModel):
     explanation: str
     confidence: pydantic.confloat(ge=0.0, le=1.0)
     evidence_sentences: List[int]
-    evidence_tables: List[int]
-    evidence_figures: List[int]
+
+
+@cache
+def build_raw_l2_result_model(
+    has_tables: bool,
+    has_figures: bool,
+) -> type[RawL2ScreeningPromptResult]:
+    fields = {}
+    if has_tables:
+        fields["evidence_tables"] = (List[int], ...)
+    if has_figures:
+        fields["evidence_figures"] = (List[int], ...)
+    return pydantic.create_model(
+        "ContextualRawL2ScreeningPromptResult",
+        __base__=RawL2ScreeningPromptResult,
+        **fields,
+    )
 
 
 def build_l2_response_schema(
     options: List[L2ScreeningQuestionOption],
+    has_tables: bool,
+    has_figures: bool,
 ) -> LLMResponseSchema:
     # expected enums are run-time determined because they come from the user
-    schema = RawL2ScreeningPromptResult.model_json_schema()
+    result_model = build_raw_l2_result_model(has_tables, has_figures)
+    schema = result_model.model_json_schema()
     schema["properties"]["selected"]["enum"] = [
         option.option_text for option in options
     ]
@@ -117,6 +132,8 @@ def build_l2_response_schema(
 class L2ScreeningPromptResult(RawL2ScreeningPromptResult):
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
     selected: L2ScreeningQuestionOption
+    evidence_tables: List[int]
+    evidence_figures: List[int]
 
 
 def get_l2_screening_results(
@@ -142,6 +159,11 @@ def get_l2_screening_results(
     prompt_args = prompt_builder.get_screening_prompt_args()
     prompt = prompt_builder.build_str(prompt_args)
     images = prompt_args.figure_image_files
+    response_schema = build_l2_response_schema(
+        options,
+        prompt_args.has_tables,
+        prompt_args.has_figures,
+    )
 
     llm_client = get_client()
     if images:
@@ -149,18 +171,22 @@ def get_l2_screening_results(
             prompt,
             files=images,
             model=model,
-            response_schema=build_l2_response_schema(options),
+            response_schema=response_schema,
         )
     else:
         raw_response = llm_client.complete_prompt(
             prompt,
             model,
-            response_schema=build_l2_response_schema(options),
+            response_schema=response_schema,
         )
 
     try:
         response_dict = json.loads(raw_response)
-        answer = RawL2ScreeningPromptResult(**response_dict)
+        result_model = build_raw_l2_result_model(
+            prompt_args.has_tables,
+            prompt_args.has_figures,
+        )
+        answer = result_model(**response_dict)
 
     except json.JSONDecodeError as exc:
         raise UnexpectedLLMOutputError(
@@ -186,8 +212,8 @@ def get_l2_screening_results(
             explanation=answer.explanation,
             confidence=answer.confidence,
             evidence_sentences=answer.evidence_sentences,
-            evidence_tables=answer.evidence_tables,
-            evidence_figures=answer.evidence_figures,
+            evidence_tables=getattr(answer, "evidence_tables", []),
+            evidence_figures=getattr(answer, "evidence_figures", []),
         )
     except pydantic.ValidationError as exc:
         raise UnexpectedLLMOutputError() from exc
