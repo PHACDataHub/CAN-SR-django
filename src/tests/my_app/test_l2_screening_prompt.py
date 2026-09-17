@@ -20,6 +20,7 @@ from my_app.models import (
 from my_app.prompts.l2_screening_prompt import (
     L2ScreeningPromptBuilder,
     UnexpectedLLMOutputError,
+    build_l2_response_schema,
     get_l2_screening_results,
 )
 
@@ -113,10 +114,20 @@ def test_screening_prompt_builder():
 
     assert prompt_args.tables == "(none)"
     assert prompt_args.figures == "(none)"
+    assert prompt_args.has_tables is False
+    assert prompt_args.has_figures is False
 
     prompt_str = prompt_builder.build_str(prompt_args)
     assert "Is this relevant?" in prompt_str
     assert "[0] First sentence." in prompt_str
+    assert "- Tables (numbered):" not in prompt_str
+    assert "- Figures (numbered;" not in prompt_str
+    assert '"evidence_tables"' not in prompt_str
+    assert '"evidence_figures"' not in prompt_str
+    assert (
+        '"evidence_sentences": [<indices of sentences used as evidence>]'
+        in (prompt_str)
+    )
 
 
 def test_screening_prompt_builder_includes_tables_and_figures(tmp_path):
@@ -159,6 +170,18 @@ def test_screening_prompt_builder_includes_tables_and_figures(tmp_path):
             "Figure [F2] caption: Participant flow (see attached image F2)"
             in prompt_args.figures
         )
+        prompt = prompt_builder.build_str(prompt_args)
+        assert "- Tables (numbered):" in prompt
+        assert "Table 1  caption: Baseline characteristics" in prompt
+        assert "- Figures (numbered;" in prompt
+        assert "Figure [F2] caption: Participant flow" in prompt
+        assert '"evidence_tables"' in prompt
+        assert '"evidence_figures"' in prompt
+        schema = build_l2_response_schema(options, True, True).schema
+        assert "evidence_tables" in schema["properties"]
+        assert "evidence_tables" in schema["required"]
+        assert "evidence_figures" in schema["properties"]
+        assert "evidence_figures" in schema["required"]
         assert len(prompt_args.figure_image_files) == 1
         assert prompt_args.figure_image_files[0].read() == b"figure bytes"
 
@@ -182,8 +205,6 @@ def test_get_l2_screening_results_returns_exact_matching_option():
             "explanation": "The citation matches the inclusion criteria.",
             "confidence": 0.88,
             "evidence_sentences": [0, 1],
-            "evidence_tables": [2],
-            "evidence_figures": [3],
         }
     )
 
@@ -204,8 +225,8 @@ def test_get_l2_screening_results_returns_exact_matching_option():
     assert result.explanation == "The citation matches the inclusion criteria."
     assert result.confidence == 0.88
     assert result.evidence_sentences == [0, 1]
-    assert result.evidence_tables == [2]
-    assert result.evidence_figures == [3]
+    assert result.evidence_tables == []
+    assert result.evidence_figures == []
     client.complete_prompt.assert_called_once()
     call = client.complete_prompt.call_args
     assert call.args[1] is sentinel.model
@@ -218,6 +239,8 @@ def test_get_l2_screening_results_returns_exact_matching_option():
     assert response_schema.schema["additionalProperties"] is False
     assert "minimum" not in response_schema.schema["properties"]["confidence"]
     assert "maximum" not in response_schema.schema["properties"]["confidence"]
+    assert "evidence_tables" not in response_schema.schema["properties"]
+    assert "evidence_figures" not in response_schema.schema["properties"]
 
 
 @override_settings(HAS_LLM=True)
@@ -249,7 +272,6 @@ def test_get_l2_screening_results_sends_figures_as_multimodal_files(tmp_path):
                 "explanation": "The figure supports inclusion.",
                 "confidence": 0.72,
                 "evidence_sentences": [0],
-                "evidence_tables": [],
                 "evidence_figures": [1],
             }
         )
@@ -272,12 +294,17 @@ def test_get_l2_screening_results_sends_figures_as_multimodal_files(tmp_path):
     assert result.evidence_figures == [1]
     client.complete_prompt.assert_not_called()
     client.complete_multimodal_prompt.assert_called_once()
-    _, kwargs = client.complete_multimodal_prompt.call_args
+    args, kwargs = client.complete_multimodal_prompt.call_args
+    assert "- Tables (numbered):" not in args[0]
+    assert "Figure [F1] caption: Outcome figure" in args[0]
     assert kwargs["files"] == [figure.file]
     assert kwargs["model"] is sentinel.model
     assert kwargs["response_schema"].schema["properties"]["selected"][
         "enum"
     ] == ["Include", "No"]
+    schema_properties = kwargs["response_schema"].schema["properties"]
+    assert "evidence_tables" not in schema_properties
+    assert "evidence_figures" in schema_properties
 
 
 @override_settings(HAS_LLM=True)
@@ -317,8 +344,6 @@ def test_get_l2_screening_results_raises_when_selected_option_does_not_match():
             "explanation": "No match.",
             "confidence": 0.1,
             "evidence_sentences": [],
-            "evidence_tables": [],
-            "evidence_figures": [],
         }
     )
 
@@ -353,8 +378,6 @@ def test_get_l2_screening_results_raises_on_pydantic_validation_error():
             "explanation": "The citation matches the inclusion criteria.",
             "confidence": 1.5,
             "evidence_sentences": [0],
-            "evidence_tables": [],
-            "evidence_figures": [],
         }
     )
 

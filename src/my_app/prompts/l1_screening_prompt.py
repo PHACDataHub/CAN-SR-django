@@ -19,37 +19,8 @@ from my_app.models import (
 )
 from shortcuts import List, dataclass, logger
 
+from .prompt_renderer import render_prompt
 from .prompt_util import build_option_definition_string, build_option_string
-
-PROMPT_JSON_TEMPLATE = """
-You are a highly critical, helpful scientific evaluator completing an academic review. Your job is to screen a citation and decide whether to 
-include or exclude it according to a single question and a fixed set of options.
-
-Answer the question "{question}" for the following citation:
-
-{citation}
-
-The available options (exact text) are:
-{options}
-
-Additional guidance to consider:
-{definitions}
-
-Output requirement:
-Respond with a JSON object containing these keys:
-- "selected": the exact option string you selected (must match one of the options above; if none fits, pick the closest option and report a low confidence score)
-- "explanation": a concise explanation (1-4 sentences) of why you selected that option
-- "confidence": a floating number between 0 and 1 (inclusive) representing your estimated confidence for the selected option
-
-JSON object format:
-{{
-  "selected": "Include", 
-  "explanation": "The study meets the inclusion criteria because ...", 
-  "confidence": 0.72
-}}
-
-Keep the response strictly as a JSON object that matches the schema above. Do not wrap the response in Markdown code fences or add language tags (e.g., ```json). Return only raw JSON starting with {{ and ending with }}.
-"""
 
 
 class L1ScreeningPromptBuilder:
@@ -88,11 +59,14 @@ class L1ScreeningPromptBuilder:
 
     def build_str(self):
         prompt_args = self.get_screening_prompt_args()
-        return PROMPT_JSON_TEMPLATE.format(
-            question=prompt_args.question,
-            citation=prompt_args.citation,
-            options=prompt_args.options,
-            definitions=prompt_args.definitions,
+        return render_prompt(
+            "l1_screening_prompt.hbs",
+            {
+                "question": prompt_args.question,
+                "citation": prompt_args.citation,
+                "options": prompt_args.options,
+                "definitions": prompt_args.definitions,
+            },
         )
 
 
