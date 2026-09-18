@@ -1,10 +1,30 @@
 from django.forms import inlineformset_factory
 from django.http import QueryDict
+from django.urls import reverse
+
+import pytest
+from phac_aspc.rules import patch_rules
 
 from proj.form_util import SoftDeleteInlineFormSet
 
-from my_app.model_factories import ParameterFactory, ReviewFactory
-from my_app.models import Parameter, Review
+from my_app.model_factories import (
+    CitationDatasetFactory,
+    CitationFactory,
+    L1HumanAnswerFactory,
+    L1ScreeningQuestionFactory,
+    L1ScreeningQuestionOptionFactory,
+    L1ScreeningResultFactory,
+    L2HumanAnswerFactory,
+    L2ScreeningQuestionFactory,
+    L2ScreeningQuestionOptionFactory,
+    L2ScreeningResultFactory,
+    ParameterExtractionResultFactory,
+    ParameterFactory,
+    ParameterHumanAnswerFactory,
+    ParameterOptionFactory,
+    ReviewFactory,
+)
+from my_app.models import Parameter, Review, ScreeningResultStatus
 
 
 def test_soft_delete_inline_formset():
@@ -107,3 +127,142 @@ def test_soft_delete_inline_formset():
     assert created_parameter.option_type == Parameter.OptionType.SELECT
     assert created_parameter.units_and_reporting_instructions == "kg"
     assert created_parameter.calculation_instructions == "Add the values"
+
+
+@pytest.mark.parametrize("deleted_relation", ["question", "option"])
+def test_l1_post_screening_page_renders_soft_deleted_answer_relations(
+    vanilla_client,
+    deleted_relation,
+):
+    review = ReviewFactory()
+    citation = CitationFactory(dataset=CitationDatasetFactory(review=review))
+    question = L1ScreeningQuestionFactory(
+        review=review,
+        question_text="Historical L1 question",
+    )
+    option = L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Historical L1 option",
+    )
+    L1ScreeningResultFactory(
+        citation=citation,
+        question=question,
+        selected_option=option,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    human_answer = L1HumanAnswerFactory(
+        citation=citation,
+        question=question,
+        selected_option=option,
+    )
+
+    soft_deleted_object = (
+        question if deleted_relation == "question" else option
+    )
+    soft_deleted_object.soft_delete()
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("l1_citation_detail", args=[review.id, citation.id])
+        )
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert question.question_text in body
+    assert option.option_text in body
+    assert "AI answer" in body
+    assert human_answer.user.username in body
+
+
+@pytest.mark.parametrize("deleted_relation", ["question", "option"])
+def test_l2_post_screening_page_renders_soft_deleted_answer_relations(
+    vanilla_client,
+    deleted_relation,
+):
+    review = ReviewFactory()
+    citation = CitationFactory(dataset=CitationDatasetFactory(review=review))
+    question = L2ScreeningQuestionFactory(
+        review=review,
+        question_text="Historical L2 question",
+    )
+    option = L2ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Historical L2 option",
+    )
+    L2ScreeningResultFactory(
+        citation=citation,
+        question=question,
+        selected_option=option,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    human_answer = L2HumanAnswerFactory(
+        citation=citation,
+        question=question,
+        selected_option=option,
+    )
+
+    soft_deleted_object = (
+        question if deleted_relation == "question" else option
+    )
+    soft_deleted_object.soft_delete()
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("l2_citation_detail", args=[review.id, citation.id])
+        )
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert question.question_text in body
+    assert option.option_text in body
+    assert "AI answer" in body
+    assert human_answer.user.username in body
+
+
+@pytest.mark.parametrize("deleted_relation", ["question", "option"])
+def test_parameter_extraction_page_renders_soft_deleted_answer_relations(
+    vanilla_client,
+    deleted_relation,
+):
+    review = ReviewFactory()
+    citation = CitationFactory(dataset=CitationDatasetFactory(review=review))
+    parameter = ParameterFactory(review=review, name="Historical parameter")
+    option = ParameterOptionFactory(
+        parameter=parameter,
+        name="Historical parameter option",
+    )
+    ParameterExtractionResultFactory(
+        citation=citation,
+        question=parameter,
+        selected_option=option,
+        found=True,
+        value="AI extracted value",
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    human_answer = ParameterHumanAnswerFactory(
+        citation=citation,
+        question=parameter,
+        selected_option=option,
+        found=True,
+        value="Human extracted value",
+    )
+
+    soft_deleted_object = (
+        parameter if deleted_relation == "question" else option
+    )
+    soft_deleted_object.soft_delete()
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse(
+                "parameter_extraction_citation_detail",
+                args=[review.id, citation.id],
+            )
+        )
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert parameter.name in body
+    assert option.name in body
+    assert "AI answer" in body
+    assert human_answer.user.username in body
