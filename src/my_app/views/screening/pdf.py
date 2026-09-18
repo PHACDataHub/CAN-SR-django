@@ -5,7 +5,10 @@ from django.http import FileResponse, HttpResponse
 from my_app.models import (
     Document,
     L1ScreeningResult,
+    L2ScreeningQuestion,
+    L2ScreeningQuestionOption,
     L2ScreeningResult,
+    Parameter,
     ParameterExtractionResult,
 )
 from my_app.router import route
@@ -99,13 +102,15 @@ class CitationDocumentUploadView(DocumentCitationMixin):
 
     @cached_property
     def l2_screening_configured(self):
-        return self.review.l2_screening_questions.filter(
-            options__isnull=False
+        return L2ScreeningQuestionOption.active_objects.filter(
+            question__review=self.review,
+            deletion_time__isnull=True,
+            question__deletion_time__isnull=True,
         ).exists()
 
     @cached_property
     def parameter_extraction_configured(self):
-        return self.review.parameters.exists()
+        return Parameter.active_objects.filter(review=self.review).exists()
 
     @cached_property
     def form(self):

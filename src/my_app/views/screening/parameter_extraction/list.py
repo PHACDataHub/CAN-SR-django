@@ -321,7 +321,7 @@ class ParameterExtractionComponent:
     @cached_property
     def parameters(self):
         return list(
-            Parameter.objects.filter(review=self.review).order_by("id")
+            Parameter.active_objects.filter(review=self.review).order_by("id")
         )
 
     @cached_property

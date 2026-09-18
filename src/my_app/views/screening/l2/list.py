@@ -91,7 +91,9 @@ class L2ScreeningComponent:
 
     @cached_property
     def screening_questions(self):
-        return list(L2ScreeningQuestion.objects.filter(review=self.review))
+        return list(
+            L2ScreeningQuestion.active_objects.filter(review=self.review)
+        )
 
     @cached_property
     def total_citations(self):

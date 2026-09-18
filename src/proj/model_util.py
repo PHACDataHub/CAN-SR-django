@@ -101,6 +101,14 @@ class SoftDeleteMixin(models.Model):
     active_filter = ACTIVE_CONDITION
     deletion_time = models.DateTimeField(null=True, blank=True)
 
+    @property
+    def is_active(self):
+        return self.deletion_time is None
+
+    @property
+    def is_deleted(self):
+        return self.deletion_time is not None
+
     class Meta:
         abstract = True
 

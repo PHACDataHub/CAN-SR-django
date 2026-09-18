@@ -174,17 +174,18 @@ def get_parameter_answer_agreement_metrics(review_id: int):
 
 def is_l2_screening_defined(citation_id: int) -> bool:
     review_filter = {"review__citation_dataset__rows__id": citation_id}
-    has_questions = L2ScreeningQuestion.objects.filter(
+    has_questions = L2ScreeningQuestion.active_objects.filter(
         **review_filter
     ).exists()
-    has_options = L2ScreeningQuestionOption.objects.filter(
-        question__review__citation_dataset__rows__id=citation_id
+    has_options = L2ScreeningQuestionOption.active_objects.filter(
+        question__deletion_time__isnull=True,
+        question__review__citation_dataset__rows__id=citation_id,
     ).exists()
     return has_questions and has_options
 
 
 def is_parameter_extraction_defined(citation_id: int) -> bool:
-    return Parameter.objects.filter(
+    return Parameter.active_objects.filter(
         review__citation_dataset__rows__id=citation_id
     ).exists()
 
@@ -382,7 +383,9 @@ def _get_screening_progress_stats(
     result_relation_name: str,
     human_answer_relation_name: str,
 ):
-    question_count = question_model.objects.filter(review_id=review_id).count()
+    question_count = question_model.active_objects.filter(
+        review_id=review_id
+    ).count()
     citations = Citation.objects.filter(dataset__review_id=review_id)
     total_citations = citations.count()
 
@@ -396,14 +399,32 @@ def _get_screening_progress_stats(
 
     status_field = f"{result_relation_name}__status"
     rows = citations.annotate(
-        result_count=Count(result_relation_name, distinct=True),
+        result_count=Count(
+            result_relation_name,
+            filter=Q(
+                **{
+                    f"{result_relation_name}__question__deletion_time__isnull": True
+                }
+            ),
+            distinct=True,
+        ),
         completed_count=Count(
             result_relation_name,
-            filter=Q(**{status_field: ScreeningResultStatus.COMPLETED}),
+            filter=Q(
+                **{
+                    status_field: ScreeningResultStatus.COMPLETED,
+                    f"{result_relation_name}__question__deletion_time__isnull": True,
+                }
+            ),
             distinct=True,
         ),
         human_reviewed_count=Count(
             f"{human_answer_relation_name}__question",
+            filter=Q(
+                **{
+                    f"{human_answer_relation_name}__question__deletion_time__isnull": True
+                }
+            ),
             distinct=True,
         ),
     ).values("result_count", "completed_count", "human_reviewed_count")
@@ -490,7 +511,9 @@ class CitationParameterExtractionProgressStats:
 
 @cached_within_request
 def get_parameter_extraction_progress_stats(review_id: int):
-    parameter_count = Parameter.objects.filter(review_id=review_id).count()
+    parameter_count = Parameter.active_objects.filter(
+        review_id=review_id
+    ).count()
     citations = Citation.objects.filter(dataset__review_id=review_id)
     total_citations = citations.count()
 
@@ -503,16 +526,26 @@ def get_parameter_extraction_progress_stats(review_id: int):
         )
 
     rows = citations.annotate(
-        result_count=Count("parameterextractionresult", distinct=True),
+        result_count=Count(
+            "parameterextractionresult",
+            filter=Q(
+                parameterextractionresult__question__deletion_time__isnull=True
+            ),
+            distinct=True,
+        ),
         completed_count=Count(
             "parameterextractionresult",
             filter=Q(
-                parameterextractionresult__status=ScreeningResultStatus.COMPLETED
+                parameterextractionresult__status=ScreeningResultStatus.COMPLETED,
+                parameterextractionresult__question__deletion_time__isnull=True,
             ),
             distinct=True,
         ),
         human_reviewed_count=Count(
             "parameterhumananswer__question",
+            filter=Q(
+                parameterhumananswer__question__deletion_time__isnull=True
+            ),
             distinct=True,
         ),
     ).values("result_count", "completed_count", "human_reviewed_count")
@@ -548,7 +581,7 @@ def get_parameter_extraction_progress_stats(review_id: int):
 
 @cached_within_request
 def options_for_question(option_class: type, question_id: int):
-    return list(option_class.objects.filter(question_id=question_id))
+    return list(option_class.active_objects.filter(question_id=question_id))
 
 
 class NonDeletedAbstractChildModelByAttrFetcher(

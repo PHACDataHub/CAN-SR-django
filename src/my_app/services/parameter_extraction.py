@@ -41,7 +41,9 @@ class EnqueueParameterExtractionService:
         overwrite_existing=False,
     ):
         self.rows = rows
-        self.questions = questions
+        self.questions = [
+            question for question in questions if question.is_active
+        ]
         self.overwrite_existing = overwrite_existing
 
     def perform(self):
