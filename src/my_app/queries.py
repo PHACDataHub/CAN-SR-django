@@ -19,12 +19,16 @@ from django.db.models.functions import Coalesce, Lower, Replace, Trim
 
 from data_fetcher import DataFetcher
 from data_fetcher.extras import cache_within_request as cached_within_request
+from data_fetcher.shorthand_fetcher_classes import (
+    AbstractChildModelByAttrFetcher,
+)
 from phac_aspc.vanilla import group_by
 
 from my_app.models import (
     Citation,
     FigureExtractionResult,
     L1ScreeningQuestion,
+    L1ScreeningQuestionOption,
     L1ScreeningResult,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
@@ -34,6 +38,7 @@ from my_app.models import (
     ParameterAnswerAgreement,
     ParameterExtractionResult,
     ParameterHumanAnswer,
+    ParameterOption,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
@@ -544,3 +549,50 @@ def get_parameter_extraction_progress_stats(review_id: int):
 @cached_within_request
 def options_for_question(option_class: type, question_id: int):
     return list(option_class.objects.filter(question_id=question_id))
+
+
+class NonDeletedAbstractChildModelByAttrFetcher(
+    AbstractChildModelByAttrFetcher
+):
+    """
+    fetch children by parent_id, then filter out deleted ones
+    """
+
+    model = None  # override this part
+    attr = None  # override this part
+
+    @classmethod
+    def batch_load(cls, attr_values):
+
+        including_deleted = super().batch_load(attr_values)
+        final_results = []
+        for children in including_deleted:
+            without_deleted = [
+                child
+                for child in children
+                if getattr(child, "deletion_time", None) is None
+            ]
+            final_results.append(without_deleted)
+
+        return final_results
+
+
+class ActiveL1OptionsByParentFetcher(
+    NonDeletedAbstractChildModelByAttrFetcher
+):
+    model = L1ScreeningQuestionOption
+    attr = "question_id"
+
+
+class ActiveL2OptionsByParentFetcher(
+    NonDeletedAbstractChildModelByAttrFetcher
+):
+    model = L2ScreeningQuestionOption
+    attr = "question_id"
+
+
+class ActiveParameterOptionByParentFetcher(
+    NonDeletedAbstractChildModelByAttrFetcher
+):
+    model = ParameterOption
+    attr = "parameter_id"

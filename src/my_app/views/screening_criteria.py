@@ -9,6 +9,7 @@ from django.views.generic import TemplateView
 
 import htpy as h
 
+from proj.form_util import SoftDeleteInlineFormSet
 from proj.htpy.form_components import ErrorSummary, InlineFormset
 from proj.htpy.modal_component import ModalComponent
 
@@ -21,6 +22,11 @@ from my_app.models import (
     Parameter,
     ParameterOption,
     Review,
+)
+from my_app.queries import (
+    ActiveL1OptionsByParentFetcher,
+    ActiveL2OptionsByParentFetcher,
+    ActiveParameterOptionByParentFetcher,
 )
 from my_app.router import route
 from my_app.views.view_utils import MustAccessReviewMixin
@@ -110,6 +116,7 @@ class FormsetAdapter(abc.ABC, metaclass=FormsetAdapterMeta):
 class L1FormsetAdapter(FormsetAdapter):
     parent_model = L1ScreeningQuestion
     child_model = L1ScreeningQuestionOption
+    option_fetcher = ActiveL1OptionsByParentFetcher
     child_relation_name = "options"
 
     class FormClass(ModelForm, StandardFormMixin):
@@ -134,6 +141,7 @@ class L1FormsetAdapter(FormsetAdapter):
 class L2FormsetAdapter(FormsetAdapter):
     parent_model = L2ScreeningQuestion
     child_model = L2ScreeningQuestionOption
+    option_fetcher = ActiveL2OptionsByParentFetcher
     child_relation_name = "options"
 
     class FormClass(ModelForm, StandardFormMixin):
@@ -158,6 +166,7 @@ class L2FormsetAdapter(FormsetAdapter):
 class ParameterFormsetAdapter(FormsetAdapter):
     parent_model = Parameter
     child_model = ParameterOption
+    option_fetcher = ActiveParameterOptionByParentFetcher
     child_relation_name = "options"
 
     class FormClass(ModelForm, StandardFormMixin):
@@ -271,9 +280,12 @@ class ScreeningCriteriaPageContent(HtpyComponent):
     def render_form_and_formset_section(self, adapter: type[FormsetAdapter]):
         review = self.review
         section_id = adapter.get_section_name()
-        parent_records = adapter.parent_model.objects.filter(
-            review=review
-        ).prefetch_related(adapter.child_relation_name)
+
+        child_model = adapter.child_model
+        child_fetcher = adapter.option_fetcher.get_instance()
+
+        parent_records = adapter.parent_model.objects.filter(review=review)
+        child_fetcher.prefetch_keys([parent.pk for parent in parent_records])
 
         if parent_records:
             parent_content = h.ul(".list-group")[
@@ -308,9 +320,7 @@ class ScreeningCriteriaPageContent(HtpyComponent):
                                         child.description
                                     ],
                                 ]
-                                for child in getattr(
-                                    parent, adapter.child_relation_name
-                                ).all()
+                                for child in child_fetcher.get(parent.pk)
                             )
                         ],
                     ]
@@ -408,7 +418,9 @@ class ChildEditor:
     @cached_property
     def child_formset(self):
 
-        child_manager = getattr(self.parent, self.adapter.child_relation_name)
+        child_manager = getattr(self.parent, self.adapter.child_relation_name)(
+            manager="active_objects"
+        )
         if self.parent.pk and child_manager.exists():
             extra = 0
         else:
@@ -418,6 +430,7 @@ class ChildEditor:
             parent_model=self.adapter.parent_model,
             model=self.adapter.child_model,
             form=self.adapter.ChildFormClass,
+            formset=SoftDeleteInlineFormSet,
             extra=extra,
             can_delete=True,
         )
