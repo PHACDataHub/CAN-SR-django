@@ -83,3 +83,27 @@ def create_history_decorator(version_base_class):
 
 
 track_versions = create_history_decorator(CustomVersionModel)
+
+
+ACTIVE_CONDITION = models.Q(deletion_time__isnull=True)
+
+
+class ActiveObjectsManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(ACTIVE_CONDITION)
+
+
+class SoftDeleteMixin(models.Model):
+    objects = models.Manager(
+        # leave "first" manager unchanged
+    )
+    active_objects = ActiveObjectsManager()
+    active_filter = ACTIVE_CONDITION
+    deletion_time = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        abstract = True
+
+    def soft_delete(self):
+        self.deletion_time = timezone.now()
+        self.save(update_fields=["deletion_time"])

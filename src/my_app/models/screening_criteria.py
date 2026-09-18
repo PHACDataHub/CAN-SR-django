@@ -2,13 +2,13 @@ from django.db import models
 
 from phac_aspc.django import fields
 
-from proj.model_util import add_to_admin
+from proj.model_util import SoftDeleteMixin, add_to_admin
 from proj.text import tdt
 
 from .review import Review
 
 
-class AbstractScreeningQuestion(models.Model):
+class AbstractScreeningQuestion(SoftDeleteMixin, models.Model):
     class Meta:
         abstract = True
 
@@ -56,7 +56,10 @@ class ScreeningActions(models.TextChoices):
     )
 
 
-class AbstractScreeningQuestionOption(models.Model):
+class AbstractScreeningQuestionOption(
+    SoftDeleteMixin,
+    models.Model,
+):
     class Meta:
         abstract = True
 
@@ -106,7 +109,7 @@ class L2ScreeningQuestionOption(AbstractScreeningQuestionOption):
 
 
 @add_to_admin
-class Parameter(models.Model):
+class Parameter(SoftDeleteMixin, models.Model):
     class OptionType(models.TextChoices):
         FREE_TEXT = ("free_text", tdt("Free text"))
         SELECT = ("select", tdt("Select from list"))
@@ -145,7 +148,7 @@ class Parameter(models.Model):
 
 
 @add_to_admin
-class ParameterOption(models.Model):
+class ParameterOption(SoftDeleteMixin, models.Model):
     parameter = fields.ForeignKey(
         Parameter,
         related_name="options",
