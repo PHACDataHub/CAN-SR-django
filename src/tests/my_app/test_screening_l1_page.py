@@ -153,6 +153,8 @@ def test_screen_l1_row_view_starts_screening_and_returns_status(
     dataset = CitationDatasetFactory(review=review)
     question1 = L1ScreeningQuestionFactory(review=review)
     question2 = L1ScreeningQuestionFactory(review=review)
+    deleted_question = L1ScreeningQuestionFactory(review=review)
+    deleted_question.soft_delete()
     row = CitationFactory(dataset=dataset, order=1)
 
     with patch_rules(can_access_review=True):
@@ -174,6 +176,10 @@ def test_screen_l1_row_view_starts_screening_and_returns_status(
         ).count()
         == 2
     )
+    assert not L1ScreeningResult.objects.filter(
+        citation=row,
+        question=deleted_question,
+    ).exists()
 
 
 def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
@@ -367,6 +373,8 @@ def test_l1_human_answer_modal_saves_question_option_and_notes(
     row = CitationFactory(dataset=dataset)
     question = L1ScreeningQuestionFactory(review=review)
     answer = L1ScreeningQuestionOptionFactory(question=question)
+    deleted_answer = L1ScreeningQuestionOptionFactory(question=question)
+    deleted_answer.soft_delete()
     other_answer = L1ScreeningQuestionOptionFactory()
     result = L1ScreeningResultFactory(citation=row, question=question)
     url = reverse("l1_citation_human_answer", args=[review.id, result.id])
@@ -378,6 +386,7 @@ def test_l1_human_answer_modal_saves_question_option_and_notes(
     assert response.status_code == 200
     assert "Your screening answer" in body
     assert answer.option_text in body
+    assert deleted_answer.option_text not in body
     assert other_answer.option_text not in body
     assert "selected_option" in body
     assert "notes" in body

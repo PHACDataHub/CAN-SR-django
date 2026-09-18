@@ -338,6 +338,11 @@ def test_parameter_extraction_human_answer_selects_parameter_option(
         option_type=Parameter.OptionType.SELECT,
     )
     option = ParameterOptionFactory(parameter=parameter, name="High dose")
+    deleted_option = ParameterOptionFactory(
+        parameter=parameter,
+        name="Deleted dose",
+    )
+    deleted_option.soft_delete()
     result = ParameterExtractionResultFactory(
         citation=row,
         question=parameter,
@@ -351,6 +356,7 @@ def test_parameter_extraction_human_answer_selects_parameter_option(
     )
 
     with patch_rules(can_access_review=True):
+        get_response = vanilla_client.get(url)
         response = vanilla_client.post(
             url,
             {
@@ -362,6 +368,8 @@ def test_parameter_extraction_human_answer_selects_parameter_option(
 
     answer = ParameterHumanAnswer.objects.get(user=vanilla_user)
     assert response.status_code == 200
+    assert "High dose" in get_response.content.decode()
+    assert "Deleted dose" not in get_response.content.decode()
     assert answer.selected_option == option
     assert "High dose" in response.content.decode()
 
@@ -384,6 +392,8 @@ def test_parameter_extraction_process_view_enqueues_extraction_and_returns_contr
     parameter_review = review
     parameter1 = ParameterFactory(review=parameter_review)
     parameter2 = ParameterFactory(review=parameter_review)
+    deleted_parameter = ParameterFactory(review=parameter_review)
+    deleted_parameter.soft_delete()
 
     with patch_rules(can_access_review=True):
         with patch(
@@ -412,6 +422,7 @@ def test_parameter_extraction_process_view_enqueues_extraction_and_returns_contr
         == 2
     )
     assert task_mock.enqueue.call_count == 2
+    assert not results.filter(question=deleted_parameter).exists()
     assert {
         call.kwargs["result_id"] for call in task_mock.enqueue.call_args_list
     } == {result.id for result in results}

@@ -335,6 +335,8 @@ def test_screen_l2_row_process_view_enqueues_screening_and_returns_control(
     )
     question1 = L2ScreeningQuestionFactory(review=review)
     question2 = L2ScreeningQuestionFactory(review=review)
+    deleted_question = L2ScreeningQuestionFactory(review=review)
+    deleted_question.soft_delete()
 
     with patch_rules(can_access_review=True):
         with patch(
@@ -362,6 +364,7 @@ def test_screen_l2_row_process_view_enqueues_screening_and_returns_control(
         == 2
     )
     assert task_mock.enqueue.call_count == 2
+    assert not results.filter(question=deleted_question).exists()
     assert {
         call.kwargs["result_id"] for call in task_mock.enqueue.call_args_list
     } == {result.id for result in results}
@@ -482,6 +485,8 @@ def test_l2_human_answer_modal_saves_question_option_and_notes(
     question = L2ScreeningQuestionFactory(review=review)
     answer = L2ScreeningQuestionOptionFactory(question=question)
     edited_answer = L2ScreeningQuestionOptionFactory(question=question)
+    deleted_answer = L2ScreeningQuestionOptionFactory(question=question)
+    deleted_answer.soft_delete()
     other_answer = L2ScreeningQuestionOptionFactory()
     result = L2ScreeningResultFactory(citation=row, question=question)
     other_reviewer_answer = L2HumanAnswerFactory(
@@ -498,6 +503,7 @@ def test_l2_human_answer_modal_saves_question_option_and_notes(
     assert response.status_code == 200
     assert "Your screening answer" in body
     assert answer.option_text in body
+    assert deleted_answer.option_text not in body
     assert other_answer.option_text not in body
     assert "selected_option" in body
     assert "notes" in body
@@ -913,6 +919,11 @@ def test_citation_document_upload_view_disables_unconfigured_processing_options(
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     row = CitationFactory(dataset=dataset, order=1)
+    question = L2ScreeningQuestionFactory(review=review)
+    option = L2ScreeningQuestionOptionFactory(question=question)
+    option.soft_delete()
+    parameter = ParameterFactory(review=review)
+    parameter.soft_delete()
 
     with patch_rules(can_access_review=True):
         response = vanilla_client.get(

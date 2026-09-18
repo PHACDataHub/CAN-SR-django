@@ -19,12 +19,16 @@ from django.db.models.functions import Coalesce, Lower, Replace, Trim
 
 from data_fetcher import DataFetcher
 from data_fetcher.extras import cache_within_request as cached_within_request
+from data_fetcher.shorthand_fetcher_classes import (
+    AbstractChildModelByAttrFetcher,
+)
 from phac_aspc.vanilla import group_by
 
 from my_app.models import (
     Citation,
     FigureExtractionResult,
     L1ScreeningQuestion,
+    L1ScreeningQuestionOption,
     L1ScreeningResult,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
@@ -34,6 +38,7 @@ from my_app.models import (
     ParameterAnswerAgreement,
     ParameterExtractionResult,
     ParameterHumanAnswer,
+    ParameterOption,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
@@ -169,17 +174,18 @@ def get_parameter_answer_agreement_metrics(review_id: int):
 
 def is_l2_screening_defined(citation_id: int) -> bool:
     review_filter = {"review__citation_dataset__rows__id": citation_id}
-    has_questions = L2ScreeningQuestion.objects.filter(
+    has_questions = L2ScreeningQuestion.active_objects.filter(
         **review_filter
     ).exists()
-    has_options = L2ScreeningQuestionOption.objects.filter(
-        question__review__citation_dataset__rows__id=citation_id
+    has_options = L2ScreeningQuestionOption.active_objects.filter(
+        question__deletion_time__isnull=True,
+        question__review__citation_dataset__rows__id=citation_id,
     ).exists()
     return has_questions and has_options
 
 
 def is_parameter_extraction_defined(citation_id: int) -> bool:
-    return Parameter.objects.filter(
+    return Parameter.active_objects.filter(
         review__citation_dataset__rows__id=citation_id
     ).exists()
 
@@ -377,7 +383,9 @@ def _get_screening_progress_stats(
     result_relation_name: str,
     human_answer_relation_name: str,
 ):
-    question_count = question_model.objects.filter(review_id=review_id).count()
+    question_count = question_model.active_objects.filter(
+        review_id=review_id
+    ).count()
     citations = Citation.objects.filter(dataset__review_id=review_id)
     total_citations = citations.count()
 
@@ -391,14 +399,32 @@ def _get_screening_progress_stats(
 
     status_field = f"{result_relation_name}__status"
     rows = citations.annotate(
-        result_count=Count(result_relation_name, distinct=True),
+        result_count=Count(
+            result_relation_name,
+            filter=Q(
+                **{
+                    f"{result_relation_name}__question__deletion_time__isnull": True
+                }
+            ),
+            distinct=True,
+        ),
         completed_count=Count(
             result_relation_name,
-            filter=Q(**{status_field: ScreeningResultStatus.COMPLETED}),
+            filter=Q(
+                **{
+                    status_field: ScreeningResultStatus.COMPLETED,
+                    f"{result_relation_name}__question__deletion_time__isnull": True,
+                }
+            ),
             distinct=True,
         ),
         human_reviewed_count=Count(
             f"{human_answer_relation_name}__question",
+            filter=Q(
+                **{
+                    f"{human_answer_relation_name}__question__deletion_time__isnull": True
+                }
+            ),
             distinct=True,
         ),
     ).values("result_count", "completed_count", "human_reviewed_count")
@@ -485,7 +511,9 @@ class CitationParameterExtractionProgressStats:
 
 @cached_within_request
 def get_parameter_extraction_progress_stats(review_id: int):
-    parameter_count = Parameter.objects.filter(review_id=review_id).count()
+    parameter_count = Parameter.active_objects.filter(
+        review_id=review_id
+    ).count()
     citations = Citation.objects.filter(dataset__review_id=review_id)
     total_citations = citations.count()
 
@@ -498,16 +526,26 @@ def get_parameter_extraction_progress_stats(review_id: int):
         )
 
     rows = citations.annotate(
-        result_count=Count("parameterextractionresult", distinct=True),
+        result_count=Count(
+            "parameterextractionresult",
+            filter=Q(
+                parameterextractionresult__question__deletion_time__isnull=True
+            ),
+            distinct=True,
+        ),
         completed_count=Count(
             "parameterextractionresult",
             filter=Q(
-                parameterextractionresult__status=ScreeningResultStatus.COMPLETED
+                parameterextractionresult__status=ScreeningResultStatus.COMPLETED,
+                parameterextractionresult__question__deletion_time__isnull=True,
             ),
             distinct=True,
         ),
         human_reviewed_count=Count(
             "parameterhumananswer__question",
+            filter=Q(
+                parameterhumananswer__question__deletion_time__isnull=True
+            ),
             distinct=True,
         ),
     ).values("result_count", "completed_count", "human_reviewed_count")
@@ -543,4 +581,51 @@ def get_parameter_extraction_progress_stats(review_id: int):
 
 @cached_within_request
 def options_for_question(option_class: type, question_id: int):
-    return list(option_class.objects.filter(question_id=question_id))
+    return list(option_class.active_objects.filter(question_id=question_id))
+
+
+class NonDeletedAbstractChildModelByAttrFetcher(
+    AbstractChildModelByAttrFetcher
+):
+    """
+    fetch children by parent_id, then filter out deleted ones
+    """
+
+    model = None  # override this part
+    attr = None  # override this part
+
+    @classmethod
+    def batch_load(cls, attr_values):
+
+        including_deleted = super().batch_load(attr_values)
+        final_results = []
+        for children in including_deleted:
+            without_deleted = [
+                child
+                for child in children
+                if getattr(child, "deletion_time", None) is None
+            ]
+            final_results.append(without_deleted)
+
+        return final_results
+
+
+class ActiveL1OptionsByParentFetcher(
+    NonDeletedAbstractChildModelByAttrFetcher
+):
+    model = L1ScreeningQuestionOption
+    attr = "question_id"
+
+
+class ActiveL2OptionsByParentFetcher(
+    NonDeletedAbstractChildModelByAttrFetcher
+):
+    model = L2ScreeningQuestionOption
+    attr = "question_id"
+
+
+class ActiveParameterOptionByParentFetcher(
+    NonDeletedAbstractChildModelByAttrFetcher
+):
+    model = ParameterOption
+    attr = "parameter_id"

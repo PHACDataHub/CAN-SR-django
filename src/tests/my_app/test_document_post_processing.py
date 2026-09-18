@@ -43,6 +43,12 @@ def _service(group, citation, **kwargs):
 
 def test_requested_post_processing_enqueues_selected_work():
     citation, question, parameter, group = _build_citation_and_group()
+    deleted_question = L2ScreeningQuestionFactory(
+        review=citation.dataset.review
+    )
+    deleted_question.soft_delete()
+    deleted_parameter = ParameterFactory(review=citation.dataset.review)
+    deleted_parameter.soft_delete()
 
     with (
         patch(

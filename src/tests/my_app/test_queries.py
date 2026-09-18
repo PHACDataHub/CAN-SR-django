@@ -50,8 +50,15 @@ def test_is_l2_screening_defined_requires_a_question_and_option():
     question = L2ScreeningQuestionFactory(review=citation.dataset.review)
     assert is_l2_screening_defined(citation.id) is False
 
-    L2ScreeningQuestionOptionFactory(question=question)
+    option = L2ScreeningQuestionOptionFactory(question=question)
     assert is_l2_screening_defined(citation.id) is True
+
+    option.soft_delete()
+    assert is_l2_screening_defined(citation.id) is False
+
+    L2ScreeningQuestionOptionFactory(question=question)
+    question.soft_delete()
+    assert is_l2_screening_defined(citation.id) is False
 
 
 def test_is_parameter_extraction_defined_requires_a_parameter():
@@ -62,8 +69,11 @@ def test_is_parameter_extraction_defined_requires_a_parameter():
     parameter_review = citation.dataset.review
     assert is_parameter_extraction_defined(citation.id) is False
 
-    ParameterFactory(review=parameter_review)
+    parameter = ParameterFactory(review=parameter_review)
     assert is_parameter_extraction_defined(citation.id) is True
+
+    parameter.soft_delete()
+    assert is_parameter_extraction_defined(citation.id) is False
 
 
 def test_is_ready_for_l2_screening_requires_successful_document_extraction():
@@ -272,6 +282,18 @@ def test_l1_screening_progress_stats_counts_review_citations_by_human_review_sta
         selected_option=answer,
         user=user,
     )
+    deleted_question = L1ScreeningQuestionFactory(review=review)
+    L1ScreeningResultFactory(
+        citation=completed_row,
+        question=deleted_question,
+        status=ScreeningResultStatus.PENDING,
+    )
+    L1ScreeningResultFactory(
+        citation=human_answered_row,
+        question=deleted_question,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    deleted_question.soft_delete()
 
     stats = get_l1_screening_progress_stats(review.id)
 
@@ -313,6 +335,18 @@ def test_parameter_extraction_progress_stats_counts_human_reviewed_citations():
         found=False,
         value=None,
     )
+    deleted_parameter = ParameterFactory(review=review)
+    ParameterExtractionResultFactory(
+        citation=completed_row,
+        question=deleted_parameter,
+        status=ScreeningResultStatus.PENDING,
+    )
+    ParameterExtractionResultFactory(
+        citation=human_reviewed_row,
+        question=deleted_parameter,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    deleted_parameter.soft_delete()
 
     stats = get_parameter_extraction_progress_stats(review.id)
 

@@ -130,6 +130,12 @@ def test_parameter_extraction_prompt_includes_instructions_and_options():
         name="High dose",
         context="At least 10 mg per day.",
     )
+    deleted_option = ParameterOption.objects.create(
+        parameter=parameter,
+        name="Deleted dose",
+        context="Must not reach the prompt.",
+    )
+    deleted_option.soft_delete()
     builder = ParameterExtractionPromptBuilder(
         parameter=parameter,
         citation=row,
@@ -143,6 +149,8 @@ def test_parameter_extraction_prompt_includes_instructions_and_options():
     assert "Report the dose band." in prompt
     assert "Use the total daily dose." in prompt
     assert '"High dose": At least 10 mg per day.' in prompt
+    assert "Deleted dose" not in prompt
+    assert "Must not reach the prompt." not in prompt
     assert "- Available options (select exactly one):" in prompt
     assert "select exactly one of the option names below" in prompt
     assert '"selected_option"' in prompt

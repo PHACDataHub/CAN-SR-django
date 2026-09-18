@@ -45,6 +45,9 @@ class L2ScreeningPromptBuilder:
     tables: List[DocumentTable]
     figures: List[DocumentFigure]
 
+    def __post_init__(self):
+        self.options = [option for option in self.options if option.is_active]
+
     @dataclass
     class ScreeningPromptArgs:
         question: str
