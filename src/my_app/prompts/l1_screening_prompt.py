@@ -31,7 +31,7 @@ class L1ScreeningPromptBuilder:
         citation: Citation,
     ):
         self.question = question
-        self.options = options
+        self.options = [option for option in options if option.is_active]
         self.citation = citation
 
     @dataclass

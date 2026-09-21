@@ -147,7 +147,7 @@ class L1ScreeningComponent:
     @cached_property
     def screening_questions(self):
         return list(
-            L1ScreeningQuestion.objects.filter(
+            L1ScreeningQuestion.active_objects.filter(
                 review=self.review
             ).prefetch_related("options")
         )

@@ -57,7 +57,9 @@ class ParameterExtractionHumanAnswerForm(
         self.question = question
         if question.option_type == Parameter.OptionType.SELECT:
             self.fields.pop("value")
-            self.fields["selected_option"].queryset = question.options.all()
+            self.fields["selected_option"].queryset = question.options.filter(
+                deletion_time__isnull=True
+            )
         else:
             self.fields.pop("selected_option")
 
@@ -95,7 +97,7 @@ class ParameterExtractionHumanAnswerForm(
 class ParameterExtractionProcessView(DocumentCitationMixin):
     @cached_property
     def parameters(self):
-        return list(Parameter.objects.filter(review=self.review))
+        return list(Parameter.active_objects.filter(review=self.review))
 
     def post(self, request, *args, **kwargs):
         if not can_start_parameter_extraction(self.citation_row):

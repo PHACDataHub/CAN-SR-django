@@ -62,7 +62,9 @@ class ParameterExtractionPromptBuilder:
         if has_options:
             options = "\n".join(
                 f'- "{option.name}": {option.context}'
-                for option in self.parameter.options.all()
+                for option in self.parameter.options.filter(
+                    deletion_time__isnull=True
+                )
             )
 
         return self.ParameterExtractionPromptArgs(

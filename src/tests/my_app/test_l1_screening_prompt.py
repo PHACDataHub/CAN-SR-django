@@ -61,6 +61,13 @@ def _build_screening_prompt_context():
 
 def test_screening_prompt_builder():
     _, _, row, question, *options = _build_screening_prompt_context()
+    deleted_option = L1ScreeningQuestionOption.objects.create(
+        question=question,
+        option_text="Deleted option",
+        option_value="deleted_def",
+    )
+    deleted_option.soft_delete()
+    options.append(deleted_option)
 
     prompt_builder = L1ScreeningPromptBuilder(
         question=question, options=options, citation=row
@@ -82,6 +89,8 @@ def test_screening_prompt_builder():
 
     assert "<Include>\nyes_def\n</Include>" in prompt_args.definitions
     assert "<No>\nno_def\n</No>" in prompt_args.definitions
+    assert "Deleted option" not in prompt_args.options
+    assert "deleted_def" not in prompt_args.definitions
 
     prompt_str = prompt_builder.build_str()
     assert "Is this relevant?" in prompt_str
