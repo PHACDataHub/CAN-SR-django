@@ -1,11 +1,11 @@
 from unittest.mock import patch
 
-from proj.db_backends.azure_postgresql.base import DatabaseWrapper
+from proj.azure.azure_postgresql import DatabaseWrapper
 
-TOKEN_PATH = "proj.db_backends.azure_postgresql.base.get_access_token"
+TOKEN_PATH = "proj.azure.azure_postgresql.get_access_token"
 
 SETTINGS_DICT = {
-    "ENGINE": "proj.db_backends.azure_postgresql",
+    "ENGINE": "proj.azure.azure_postgresql",
     "NAME": "mydb",
     "USER": "me@tenant.onmicrosoft.com",
     "PASSWORD": "",
