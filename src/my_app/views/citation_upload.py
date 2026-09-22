@@ -336,9 +336,11 @@ class CitationMappingPage(BasePageTemplate):
     "reviews/<int:review_id>/citation-upload/map/",
     name="citation_upload_mapping",
 )
-class CitationMappingView(MustAccessReviewMixin, FormView, HtpyTemplateMixin):
+class CitationMappingView(
+    MustAccessReviewMixin,
+    HtpyTemplateMixin,
+):
     template_component = CitationMappingPage
-    form_class = ColumnMappingForm
 
     @cached_property
     def source(self):
@@ -358,6 +360,15 @@ class CitationMappingView(MustAccessReviewMixin, FormView, HtpyTemplateMixin):
             return []
         return list(dataset.columns.order_by("id"))
 
+    @cached_property
+    def formset(self):
+        data = self.request.POST if self.request.method == "POST" else None
+        return ColumnMappingFormSet(
+            data,
+            initial=self.get_initial_mappings(),
+            form_kwargs={"existing_columns": self.existing_columns},
+        )
+
     def get(self, request, *args, **kwargs):
         if self.source is None:
             return HttpResponseRedirect(
@@ -370,28 +381,20 @@ class CitationMappingView(MustAccessReviewMixin, FormView, HtpyTemplateMixin):
             return HttpResponseRedirect(
                 reverse("citation_upload", args=[self.review.id])
             )
-        initial = self.get_initial_mappings()
-        formset = ColumnMappingFormSet(
-            request.POST,
-            initial=initial,
-            form_kwargs={"existing_columns": self.existing_columns},
-        )
-        if formset.total_form_count() != len(initial):
-            formset.is_valid()
-            formset._non_form_errors = formset.error_class(
+        if self.formset.total_form_count() != len(
+            self.source.get_column_names()
+        ):
+            self.formset.is_valid()
+            self.formset._non_form_errors = self.formset.error_class(
                 [
                     tdt(
                         "The uploaded columns changed. Please upload the file again."
                     )
                 ]
             )
-            return self.render_to_response(
-                self.get_context_data(formset=formset)
-            )
-        if not formset.is_valid():
-            return self.render_to_response(
-                self.get_context_data(formset=formset)
-            )
+            return self.render_to_response(self.get_context_data())
+        if not self.formset.is_valid():
+            return self.render_to_response(self.get_context_data())
 
         pending = request.session[import_session_key(self.review.id)]
         try:
@@ -399,13 +402,13 @@ class CitationMappingView(MustAccessReviewMixin, FormView, HtpyTemplateMixin):
                 self.review,
                 base64.b64decode(pending["content"]),
                 format=pending["format"],
-                mappings=[form.mapped_name for form in formset.forms],
+                mappings=[form.mapped_name for form in self.formset.forms],
             )
         except ValueError as exc:
-            formset._non_form_errors = formset.error_class([str(exc)])
-            return self.render_to_response(
-                self.get_context_data(formset=formset)
+            self.formset._non_form_errors = self.formset.error_class(
+                [str(exc)]
             )
+            return self.render_to_response(self.get_context_data())
 
         del request.session[import_session_key(self.review.id)]
         messages.success(
@@ -428,16 +431,12 @@ class CitationMappingView(MustAccessReviewMixin, FormView, HtpyTemplateMixin):
         )
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["column_names"] = self.source.get_column_names()
-        context["row_count"] = sum(1 for _ in self.source.iter_row_values())
-        context.setdefault(
-            "formset",
-            ColumnMappingFormSet(
-                initial=self.get_initial_mappings(),
-                form_kwargs={"existing_columns": self.existing_columns},
-            ),
-        )
+        context = {
+            **super().get_context_data(**kwargs),
+            "column_names": self.source.get_column_names(),
+            "row_count": self.source.get_row_count(),
+            "formset": self.formset,
+        }
         return context
 
     def get_initial_mappings(self):

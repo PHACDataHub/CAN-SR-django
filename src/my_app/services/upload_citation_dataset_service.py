@@ -28,6 +28,10 @@ class CitationDatasetImportSource(ABC):
     def iter_row_values(self) -> Iterable[tuple[str, ...]]:
         raise NotImplementedError
 
+    @abstractmethod
+    def get_row_count(self) -> int:
+        raise NotImplementedError
+
 
 class CsvCitationDatasetImportSource(CitationDatasetImportSource):
     def __init__(self, column_names, row_values):
@@ -68,6 +72,9 @@ class CsvCitationDatasetImportSource(CitationDatasetImportSource):
 
     def iter_row_values(self) -> Iterable[tuple[str, ...]]:
         return iter(self._row_values)
+
+    def get_row_count(self) -> int:
+        return len(self._row_values)
 
 
 class RisCitationDatasetImportSource(CitationDatasetImportSource):
@@ -127,6 +134,9 @@ class RisCitationDatasetImportSource(CitationDatasetImportSource):
 
     def iter_row_values(self) -> Iterable[tuple[str, ...]]:
         return iter(self._row_values)
+
+    def get_row_count(self) -> int:
+        return len(self._row_values)
 
 
 class CitationDatasetImporter:
