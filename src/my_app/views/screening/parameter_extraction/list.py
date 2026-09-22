@@ -18,6 +18,8 @@ from my_app.models import (
 )
 from my_app.queries import (
     ParameterExtractionStatusFetcher,
+    ReviewStage,
+    get_citations_for_stage,
     get_parameter_extraction_progress_stats,
     get_parameter_human_ai_agreements,
 )
@@ -326,15 +328,18 @@ class ParameterExtractionComponent:
 
     @cached_property
     def total_citations(self):
-        return Citation.objects.filter(dataset__review=self.review).count()
+        return self.citation_rows.count()
+
+    @cached_property
+    def citation_rows(self):
+        return get_citations_for_stage(
+            self.review.id, ReviewStage.PARAMETER_EXTRACTION
+        )
 
     @cached_property
     def uploaded_citations(self):
         return (
-            Citation.objects.filter(
-                dataset__review=self.review,
-                document__isnull=False,
-            )
+            self.citation_rows.filter(document__isnull=False)
             .values_list("id", flat=True)
             .distinct()
             .count()
@@ -343,8 +348,7 @@ class ParameterExtractionComponent:
     @cached_property
     def processed_citations(self):
         return (
-            Citation.objects.filter(
-                dataset__review=self.review,
+            self.citation_rows.filter(
                 document__text_extraction_result__status=TextExtractionResult.TextExtractionStatus.COMPLETED,
             )
             .values_list("id", flat=True)
@@ -356,7 +360,7 @@ class ParameterExtractionComponent:
     def extracted_citations(self):
         return (
             ParameterExtractionResult.objects.filter(
-                citation__dataset__review=self.review
+                citation__in=self.citation_rows
             )
             .values_list("citation_id", flat=True)
             .distinct()
@@ -475,6 +479,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
             progress_navigation=CitationScreeningProgressNav(
                 citation_row,
                 review,
+                stage=ReviewStage.PARAMETER_EXTRACTION,
                 detail_route_name="parameter_extraction_citation_detail",
                 progress_stats=get_parameter_extraction_progress_stats(
                     review.id
@@ -591,7 +596,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
 
 
 class ParameterExtractionBaseView(DocumentCitationListView):
-    pass
+    stage = ReviewStage.PARAMETER_EXTRACTION
 
 
 @route(

@@ -68,6 +68,7 @@ class ReviewForm(ModelForm, StandardFormMixin):
             "language_model",
             "users",
             "is_deleted",
+            "disable_filtering",
         ]
 
     def __init__(self, *args, **kwargs):

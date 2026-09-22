@@ -1,9 +1,10 @@
+from django.db.models import Q
 from django.utils import formats, timezone
 
 import htpy as h
 
 from my_app.models import ScreeningResultStatus
-from my_app.queries import get_adjacent_citation_ids
+from my_app.queries import get_adjacent_citation_ids, get_citations_for_stage
 from my_app.views.screening.util import BADGE_CLASSES
 from my_app.views.view_utils import url_with_same_params
 from shortcuts import breadcrumbs as bc
@@ -176,11 +177,13 @@ def CitationScreeningProgressNav(
     citation_row,
     review,
     *,
+    stage,
     detail_route_name,
     progress_stats,
     nav_label,
 ):
-    previous_id, next_id = get_adjacent_citation_ids(citation_row.id)
+    previous_id, next_id = get_adjacent_citation_ids(citation_row.id, stage)
+    stage_citations = get_citations_for_stage(review.id, stage)
     progress_title = (
         f"{tdt('Total citations')}: {progress_stats.total_citations}; "
         f"{tdt('Incomplete')}: {progress_stats.incomplete_citations}; "
@@ -188,10 +191,17 @@ def CitationScreeningProgressNav(
         f"{progress_stats.completed_not_human_reviewed_citations}; "
         f"{tdt('Human reviewed')}: {progress_stats.human_reviewed_citations}"
     )
-    position_label = (
-        f"{tdt('Viewing')} {citation_row.order} {tdt('of')} "
-        f"{progress_stats.total_citations}"
-    )
+    if stage_citations.filter(id=citation_row.id).exists():
+        position = stage_citations.filter(
+            Q(order__lt=citation_row.order)
+            | Q(order=citation_row.order, id__lte=citation_row.id)
+        ).count()
+        position_label = (
+            f"{tdt('Viewing')} {position} {tdt('of')} "
+            f"{progress_stats.total_citations}"
+        )
+    else:
+        position_label = tdt("Outside this stage")
 
     return h.section(".border.rounded.p-3.mb-4")[
         h.div(".row.g-3.align-items-center")[

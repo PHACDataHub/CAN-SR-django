@@ -12,6 +12,7 @@ from my_app.model_factories import (
     CitationFactory,
     DocumentFactory,
     L1ScreeningQuestionFactory,
+    L1ScreeningQuestionOptionFactory,
     L1ScreeningResultFactory,
     L2HumanAnswerFactory,
     L2ScreeningQuestionFactory,
@@ -31,6 +32,7 @@ from my_app.models import (
     L2HumanAnswer,
     L2ScreeningResult,
     ParameterExtractionResult,
+    ScreeningActions,
     ScreeningResultStatus,
     TextExtractionResult,
 )
@@ -126,6 +128,46 @@ def test_screening_l2_component_view_renders(vanilla_client):
     assert "l2-screening-progress-panel" in body
     assert "Progress" in body
     assert "Completed" in body
+
+
+def test_l2_list_filters_but_detail_allows_l1_excluded_citation(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    included = CitationFactory(
+        dataset=dataset, order=1, title="Included citation"
+    )
+    excluded = CitationFactory(
+        dataset=dataset, order=2, title="Excluded citation"
+    )
+    question = L1ScreeningQuestionFactory(review=review)
+    option = L1ScreeningQuestionOptionFactory(
+        question=question, screening_action=ScreeningActions.ScreenIn
+    )
+    L1ScreeningResultFactory(
+        citation=included,
+        question=question,
+        selected_option=option,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("l2_citations_list", args=[review.id])
+        )
+        excluded_response = vanilla_client.get(
+            reverse("l2_citation_detail", args=[review.id, excluded.id])
+        )
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "Included citation" in body
+    assert "Excluded citation" not in body
+    assert "Total citations" in body
+    assert excluded_response.status_code == 200
+    assert "Excluded citation" in excluded_response.content.decode()
+    assert "Outside this stage" in excluded_response.content.decode()
 
 
 def test_screening_l2_component_view_renders_pagination_buttons(
@@ -238,7 +280,7 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
         in body
     )
     assert reverse("l2_citation_detail", args=[review.id, next_row.id]) in body
-    assert "Viewing 1 of 3" in body
+    assert "Viewing 2 of 3" in body
     assert "Human reviewed" in body
     assert "0 / 3" in body
     assert "A full-text citation" in body
@@ -474,6 +516,31 @@ def test_l2_validation_creates_human_answer_matching_ai_answer(
     assert "Validated" in body
     assert "Your answer" in body
     assert f'id="l2-validate-answer-{result.id}"' not in body
+
+
+def test_l2_human_answer_endpoint_allows_l1_excluded_citation(vanilla_client):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    citation = CitationFactory(dataset=dataset)
+    l1_question = L1ScreeningQuestionFactory(review=review)
+    l1_out = L1ScreeningQuestionOptionFactory(
+        question=l1_question, screening_action=ScreeningActions.ScreenOut
+    )
+    L1ScreeningResultFactory(
+        citation=citation,
+        question=l1_question,
+        selected_option=l1_out,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    l2_question = L2ScreeningQuestionFactory(review=review)
+    result = L2ScreeningResultFactory(citation=citation, question=l2_question)
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse("l2_citation_human_answer", args=[review.id, result.id])
+        )
+
+    assert response.status_code == 200
 
 
 def test_l2_human_answer_modal_saves_question_option_and_notes(

@@ -242,7 +242,7 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
         in body
     )
     assert reverse("l1_citation_detail", args=[review.id, next_row.id]) in body
-    assert "Viewing 1 of 3" in body
+    assert "Viewing 2 of 3" in body
     assert "Human reviewed" in body
     assert "0 / 3" in body
     assert "Included fields" in body

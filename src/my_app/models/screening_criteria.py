@@ -42,7 +42,7 @@ class L2ScreeningQuestion(AbstractScreeningQuestion):
     )
 
 
-SCREENED_IN = "screen_id"
+SCREENED_IN = "screen_in"
 SCREENED_OUT = "screen_out"
 SCREENING_DISABLED = "screening_disabled"
 

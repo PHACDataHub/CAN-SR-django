@@ -5,6 +5,7 @@ from django.db.models import (
     BooleanField,
     Case,
     CharField,
+    Choices,
     Count,
     F,
     IntegerField,
@@ -21,15 +22,18 @@ from data_fetcher import DataFetcher
 from data_fetcher.extras import cache_within_request as cached_within_request
 from data_fetcher.shorthand_fetcher_classes import (
     AbstractChildModelByAttrFetcher,
+    PrimaryKeyFetcherFactory,
 )
 from phac_aspc.vanilla import group_by
 
 from my_app.models import (
     Citation,
     FigureExtractionResult,
+    L1HumanAnswer,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L1ScreeningResult,
+    L2HumanAnswer,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     L2ScreeningResult,
@@ -41,10 +45,19 @@ from my_app.models import (
     ParameterOption,
     Review,
     ReviewUserLink,
+    ScreeningActions,
     ScreeningResultStatus,
     TextExtractionResult,
 )
 from shortcuts import logger
+
+ReviewByIdFetcher = PrimaryKeyFetcherFactory.get_model_by_id_fetcher(Review)
+
+
+class ReviewStage(Choices):
+    L1_SCREENING = "l1_screening", "L1 Screening"
+    L2_SCREENING = "l2_screening", "L2 Screening"
+    PARAMETER_EXTRACTION = "parameter_extraction", "Parameter Extraction"
 
 
 def normalize_parameter_value(expression):
@@ -215,21 +228,132 @@ def is_ready_for_parameter_extraction(citation_id: int) -> bool:
 
 
 @cached_within_request
-def get_model_for_review(review_id):
-    review_model_id = Review.objects.values_list(
-        "language_model_id", flat=True
-    ).get(id=review_id)
+def get_review(review_id: int):
+    return ReviewByIdFetcher.get_instance().get(review_id)
+
+
+def get_citations_for_stage(review_id: int, stage: ReviewStage | None = None):
+    review = get_review(review_id)
+    all_citations = Citation.objects.filter(dataset__review__id=review_id)
+
+    if stage is None:
+        return all_citations
+
+    if review.disable_filtering:
+        return all_citations
+
+    if stage == ReviewStage.L1_SCREENING:
+        return all_citations
+
+    if stage == ReviewStage.L2_SCREENING:
+        return all_citations.filter(
+            id__in=_screened_in_citation_ids(
+                review_id,
+                L1ScreeningQuestion,
+                L1HumanAnswer,
+                L1ScreeningResult,
+            )
+        )
+
+    if stage == ReviewStage.PARAMETER_EXTRACTION:
+        return all_citations.filter(
+            id__in=_screened_in_citation_ids(
+                review_id,
+                L2ScreeningQuestion,
+                L2HumanAnswer,
+                L2ScreeningResult,
+            )
+        )
+
+
+@cached_within_request
+def _screened_in_citation_ids(
+    review_id, question_model, human_model, result_model
+):
+    question_ids = set(
+        question_model.active_objects.filter(review_id=review_id).values_list(
+            "id", flat=True
+        )
+    )
+    if not question_ids:
+        return Citation.objects.filter(
+            dataset__review_id=review_id
+        ).values_list("id", flat=True)
+
+    human_answers = human_model.objects.filter(
+        citation__dataset__review_id=review_id,
+        question_id__in=question_ids,
+    ).values_list(
+        "citation_id",
+        "question_id",
+        "selected_option__question_id",
+        "selected_option__deletion_time",
+        "selected_option__screening_action",
+    )
+    human_pairs = set()
+    passing_pairs = set()
+    failing_pairs = set()
+    passing_actions = {
+        ScreeningActions.ScreenIn,
+        ScreeningActions.ScreeningDisabled,
+    }
+    for (
+        citation_id,
+        question_id,
+        option_question_id,
+        deleted_at,
+        action,
+    ) in human_answers:
+        pair = (citation_id, question_id)
+        human_pairs.add(pair)
+        if (
+            option_question_id == question_id
+            and deleted_at is None
+            and action in passing_actions
+        ):
+            passing_pairs.add(pair)
+        else:
+            failing_pairs.add(pair)
+
+    ai_answers = result_model.objects.filter(
+        citation__dataset__review_id=review_id,
+        question_id__in=question_ids,
+        status=ScreeningResultStatus.COMPLETED,
+        selected_option__deletion_time__isnull=True,
+        selected_option__screening_action__in=passing_actions,
+    ).values_list("citation_id", "question_id", "selected_option__question_id")
+    passing_pairs.update(
+        (citation_id, question_id)
+        for citation_id, question_id, option_question_id in ai_answers
+        if option_question_id == question_id
+        and (citation_id, question_id) not in human_pairs
+    )
+    passing_pairs.difference_update(failing_pairs)
+
+    passed_counts = {}
+    for citation_id, _ in passing_pairs:
+        passed_counts[citation_id] = passed_counts.get(citation_id, 0) + 1
+    return [
+        citation_id
+        for citation_id, count in passed_counts.items()
+        if count == len(question_ids)
+    ]
+
+
+@cached_within_request
+def get_model_for_review(review_id: int):
+    language_model_id = get_review(review_id).language_model_id
     supported_models = LanguageModel.get_supported_models()
 
-    if review_model_id is not None:
-        selected_model = supported_models.filter(id=review_model_id).first()
+    if language_model_id is not None:
+        selected_model = supported_models.filter(id=language_model_id).first()
         if selected_model is not None:
             return selected_model
 
         logger.error(
             "Review id=%s has unsupported or inactive language model id=%s; falling back to the default model",
             review_id,
-            review_model_id,
+            language_model_id,
         )
 
     return supported_models.filter(is_default=True).first()
@@ -352,22 +476,31 @@ class CitationScreeningProgressStats:
 
 
 @cached_within_request
-def get_adjacent_citation_ids(citation_id: int):
+def get_adjacent_citation_ids(
+    citation_id: int, stage: ReviewStage | None = None
+):
     citation = Citation.objects.select_related("dataset").get(id=citation_id)
+    citations = get_citations_for_stage(citation.dataset.review_id, stage)
 
     previous_id = (
-        Citation.objects.filter(
+        citations.filter(
             dataset=citation.dataset,
-            order__lt=citation.order,
+        )
+        .filter(
+            Q(order__lt=citation.order)
+            | Q(order=citation.order, id__lt=citation.id)
         )
         .order_by("-order", "-id")
         .values_list("id", flat=True)
         .first()
     )
     next_id = (
-        Citation.objects.filter(
+        citations.filter(
             dataset=citation.dataset,
-            order__gt=citation.order,
+        )
+        .filter(
+            Q(order__gt=citation.order)
+            | Q(order=citation.order, id__gt=citation.id)
         )
         .order_by("order", "id")
         .values_list("id", flat=True)
@@ -382,11 +515,12 @@ def _get_screening_progress_stats(
     question_model: type,
     result_relation_name: str,
     human_answer_relation_name: str,
+    stage: ReviewStage,
 ):
     question_count = question_model.active_objects.filter(
         review_id=review_id
     ).count()
-    citations = Citation.objects.filter(dataset__review_id=review_id)
+    citations = get_citations_for_stage(review_id, stage)
     total_citations = citations.count()
 
     if question_count == 0:
@@ -465,6 +599,7 @@ def get_l1_screening_progress_stats(review_id: int):
         L1ScreeningQuestion,
         "l1screeningresult",
         "l1humananswer",
+        ReviewStage.L1_SCREENING,
     )
 
 
@@ -475,6 +610,7 @@ def get_l2_screening_progress_stats(review_id: int):
         L2ScreeningQuestion,
         "l2screeningresult",
         "l2humananswer",
+        ReviewStage.L2_SCREENING,
     )
 
 
@@ -514,7 +650,9 @@ def get_parameter_extraction_progress_stats(review_id: int):
     parameter_count = Parameter.active_objects.filter(
         review_id=review_id
     ).count()
-    citations = Citation.objects.filter(dataset__review_id=review_id)
+    citations = get_citations_for_stage(
+        review_id, ReviewStage.PARAMETER_EXTRACTION
+    )
     total_citations = citations.count()
 
     if parameter_count == 0:
