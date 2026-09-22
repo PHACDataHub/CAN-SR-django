@@ -39,6 +39,13 @@ class Review(models.Model):
     created_at = fields.DateTimeField(
         auto_now_add=True, verbose_name=tm("systematic_review_created_at")
     )
+    disable_filtering = fields.BooleanField(
+        verbose_name=tdt("Disable filtering"),
+        help_text=tdt(
+            "Useful to skip straight to fulltext screening or parameter extraction"
+        ),
+        default=False,
+    )
 
     def __str__(self):
         return self.title

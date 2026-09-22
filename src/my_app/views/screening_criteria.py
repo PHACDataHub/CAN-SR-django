@@ -113,9 +113,15 @@ class L1FormsetAdapter(FormsetAdapter):
     child_relation_name = "options"
 
     class FormClass(ModelForm, StandardFormMixin):
+        disable_screening = forms.BooleanField(
+            label=tdt("Disable screening"),
+            help_text=tdt("Do not use this question to filter citations."),
+            required=False,
+        )
+
         class Meta:
             model = L1ScreeningQuestion
-            fields = ["question_text"]
+            fields = ["question_text", "disable_screening"]
 
     class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
@@ -138,9 +144,15 @@ class L2FormsetAdapter(FormsetAdapter):
     child_relation_name = "options"
 
     class FormClass(ModelForm, StandardFormMixin):
+        disable_screening = forms.BooleanField(
+            label=tdt("Disable screening"),
+            help_text=tdt("Do not use this question to filter citations."),
+            required=False,
+        )
+
         class Meta:
             model = L2ScreeningQuestion
-            fields = ["question_text"]
+            fields = ["question_text", "disable_screening"]
 
     class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:

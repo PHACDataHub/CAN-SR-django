@@ -13,6 +13,11 @@ class AbstractScreeningQuestion(SoftDeleteMixin, models.Model):
         abstract = True
 
     question_text = fields.TextField(verbose_name=tdt("Question text"))
+    disable_screening = fields.BooleanField(
+        default=False,
+        verbose_name=tdt("Disable screening"),
+        help_text=tdt("Don't use this question's results to filter citations"),
+    )
 
     def __str__(self):
         return self.question_text
@@ -42,18 +47,13 @@ class L2ScreeningQuestion(AbstractScreeningQuestion):
     )
 
 
-SCREENED_IN = "screen_id"
+SCREENED_IN = "screen_in"
 SCREENED_OUT = "screen_out"
-SCREENING_DISABLED = "screening_disabled"
 
 
 class ScreeningActions(models.TextChoices):
     ScreenIn = (SCREENED_IN, "Screen In")
     ScreenOut = (SCREENED_OUT, "Screen Out")
-    ScreeningDisabled = (
-        SCREENING_DISABLED,
-        "Don't use this question to filter citations",
-    )
 
 
 class AbstractScreeningQuestionOption(
@@ -74,7 +74,7 @@ class AbstractScreeningQuestionOption(
     screening_action = fields.CharField(
         max_length=255,
         null=False,
-        default=ScreeningActions.ScreeningDisabled,
+        default=ScreeningActions.ScreenIn,
         choices=ScreeningActions.choices,
     )
 

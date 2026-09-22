@@ -11,7 +11,11 @@ from my_app.models import (
     Review,
     TextExtractionResult,
 )
-from my_app.queries import L2ScreeningStatusFetcher
+from my_app.queries import (
+    L2ScreeningStatusFetcher,
+    ReviewStage,
+    get_citations_for_stage,
+)
 from my_app.router import route
 from my_app.views.pdf_components import (
     DocumentWorkflowCitationRow,
@@ -76,9 +80,9 @@ class L2ScreeningComponent:
     @cached_property
     def citation_rows(self):
         return (
-            Citation.objects.filter(dataset__review=self.review)
+            get_citations_for_stage(self.review.id, ReviewStage.L2_SCREENING)
             .select_related("document", "document__text_extraction_result")
-            .order_by("order")
+            .order_by("order", "id")
         )
 
     @cached_property
@@ -102,10 +106,7 @@ class L2ScreeningComponent:
     @cached_property
     def uploaded_citations(self):
         return (
-            Citation.objects.filter(
-                dataset__review=self.review,
-                document__isnull=False,
-            )
+            self.citation_rows.filter(document__isnull=False)
             .values_list("id", flat=True)
             .distinct()
             .count()
@@ -114,8 +115,7 @@ class L2ScreeningComponent:
     @cached_property
     def processed_citations(self):
         return (
-            Citation.objects.filter(
-                dataset__review=self.review,
+            self.citation_rows.filter(
                 document__text_extraction_result__status=TextExtractionResult.TextExtractionStatus.COMPLETED,
             )
             .values_list("id", flat=True)
@@ -126,9 +126,7 @@ class L2ScreeningComponent:
     @cached_property
     def screened_citations(self):
         return (
-            L2ScreeningResult.objects.filter(
-                citation__dataset__review=self.review
-            )
+            L2ScreeningResult.objects.filter(citation__in=self.citation_rows)
             .values_list("citation_id", flat=True)
             .distinct()
             .count()
@@ -210,7 +208,7 @@ class L2ScreeningPageTemplate(BasePageTemplate):
 
 
 class L2ScreeningBaseView(DocumentCitationListView):
-    pass
+    stage = ReviewStage.L2_SCREENING
 
 
 @route("/reviews/<int:review_id>/screening_l2/", name="l2_citations_list")

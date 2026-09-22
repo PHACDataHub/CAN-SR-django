@@ -37,6 +37,10 @@ strong>span+label {
     margin-left: 0.125rem;
 }
 
+.transparent-text {
+    opacity: 0.8;
+}
+
 
 
 dl.custom-dl {

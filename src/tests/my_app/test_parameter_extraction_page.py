@@ -10,6 +10,9 @@ from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
     DocumentFactory,
+    L2ScreeningQuestionFactory,
+    L2ScreeningQuestionOptionFactory,
+    L2ScreeningResultFactory,
     ParameterExtractionResultFactory,
     ParameterFactory,
     ParameterHumanAnswerFactory,
@@ -24,6 +27,7 @@ from my_app.models import (
     Parameter,
     ParameterExtractionResult,
     ParameterHumanAnswer,
+    ScreeningActions,
     ScreeningResultStatus,
     TextExtractionResult,
 )
@@ -214,6 +218,67 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
         in body
     )
     assert "Re-extract" in body
+
+
+def test_parameter_detail_allows_l2_excluded_citation(vanilla_client):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    citation = CitationFactory(
+        dataset=dataset, title="Excluded from parameter stage"
+    )
+    l2_question = L2ScreeningQuestionFactory(review=review)
+    l2_out = L2ScreeningQuestionOptionFactory(
+        question=l2_question, screening_action=ScreeningActions.ScreenOut
+    )
+    L2ScreeningResultFactory(
+        citation=citation,
+        question=l2_question,
+        selected_option=l2_out,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse(
+                "parameter_extraction_citation_detail",
+                args=[review.id, citation.id],
+            )
+        )
+
+    assert response.status_code == 200
+    assert "Outside this stage" in response.content.decode()
+
+
+def test_parameter_human_answer_endpoint_allows_l2_excluded_citation(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    citation = CitationFactory(dataset=dataset)
+    l2_question = L2ScreeningQuestionFactory(review=review)
+    l2_out = L2ScreeningQuestionOptionFactory(
+        question=l2_question, screening_action=ScreeningActions.ScreenOut
+    )
+    L2ScreeningResultFactory(
+        citation=citation,
+        question=l2_question,
+        selected_option=l2_out,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    parameter = ParameterFactory(review=review)
+    result = ParameterExtractionResultFactory(
+        citation=citation, question=parameter
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse(
+                "parameter_extraction_citation_human_answer",
+                args=[review.id, result.id],
+            )
+        )
+
+    assert response.status_code == 200
 
 
 def test_parameter_extraction_validate_ai_answer_creates_human_answer(

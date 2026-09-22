@@ -238,6 +238,16 @@ def test_get_adjacent_citation_ids_uses_order_within_same_dataset():
     assert next_id == next_row.id
 
 
+def test_get_adjacent_citation_ids_breaks_order_ties_by_id():
+    dataset = CitationDatasetFactory()
+    first = CitationFactory(dataset=dataset, order=1)
+    second = CitationFactory(dataset=dataset, order=1)
+    third = CitationFactory(dataset=dataset, order=2)
+
+    assert get_adjacent_citation_ids(first.id) == (None, second.id)
+    assert get_adjacent_citation_ids(second.id) == (first.id, third.id)
+
+
 def test_l1_screening_progress_stats_counts_review_citations_by_human_review_status():
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
