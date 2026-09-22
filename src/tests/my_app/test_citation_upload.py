@@ -14,8 +14,9 @@ from my_app.models import (
     ReviewUserLink,
 )
 from my_app.services.upload_citation_dataset_service import (
+    CitationDatasetImporter,
     CsvCitationDatasetImportSource,
-    build_citation_dataset_from_source,
+    RisCitationDatasetImportSource,
     import_citation_dataset,
 )
 
@@ -46,6 +47,30 @@ def test_csv_source_parses_headers_and_rows():
     ]
 
 
+def test_ris_source_collects_fields_across_citations():
+    source = RisCitationDatasetImportSource.from_input(
+        b"TY  - JOUR\nTI  - First citation\nAB  - First abstract\n"
+        b"AU  - Doe, Jane\nAU  - Smith, John\nPY  - 2020\nER  - \n"
+        b"TY  - JOUR\nT1  - Second citation\nN2  - Second abstract\n"
+        b"KW  - public health\nER  - \n"
+    )
+
+    columns = source.get_column_names()
+    assert {"title", "abstract", "authors", "year", "keywords"} <= set(columns)
+    rows = [dict(zip(columns, values)) for values in source.iter_row_values()]
+    assert rows[0]["title"] == "First citation"
+    assert rows[0]["authors"] == "Doe, Jane; Smith, John"
+    assert rows[1]["title"] == "Second citation"
+    assert rows[1]["abstract"] == "Second abstract"
+    assert rows[1]["year"] == ""
+    assert rows[1]["keywords"] == "public health"
+
+
+def test_ris_source_rejects_files_without_citations():
+    with pytest.raises(ValueError, match="no citations"):
+        RisCitationDatasetImportSource.from_input("not a RIS file")
+
+
 def test_build_citation_dataset_from_source_creates_expected_records():
     review = Review.objects.create(
         title="Review",
@@ -59,7 +84,7 @@ def test_build_citation_dataset_from_source_creates_expected_records():
         ],
     )
 
-    result = build_citation_dataset_from_source(review, source)
+    result = CitationDatasetImporter(review, source).run()
 
     assert result.row_count == 2
     assert result.column_count == 1
@@ -90,7 +115,7 @@ def test_build_citation_dataset_from_source_rolls_back_on_row_length_mismatch():
     )
 
     with pytest.raises(ValueError, match="same number of values"):
-        build_citation_dataset_from_source(review, source)
+        CitationDatasetImporter(review, source).run()
 
     assert CitationDataset.objects.filter(review=review).count() == 0
 
@@ -186,7 +211,7 @@ def test_citation_upload_creates_dataset_and_redirects(
     with patch_rules(can_access_review=True):
         response = vanilla_user_client.post(
             url,
-            {"citation_file": uploaded_file},
+            {"format": "csv", "citation_file": uploaded_file},
             follow=True,
         )
 
@@ -203,6 +228,69 @@ def test_citation_upload_creates_dataset_and_redirects(
     assert rows[0].title == "First citation"
     assert rows[0].abstract == ""
     assert rows[0].data == {"year": "2020"}
+
+
+def test_citation_upload_imports_ris_fields(vanilla_user_client, vanilla_user):
+    review = Review.objects.create(
+        title="Review",
+        description="Review description",
+    )
+    ReviewUserLink.objects.create(user=vanilla_user, review=review)
+    uploaded_file = SimpleUploadedFile(
+        "citations.ris",
+        b"TY  - JOUR\nTI  - First citation\nAB  - First abstract\n"
+        b"AU  - Doe, Jane\nAU  - Smith, John\nPY  - 2020\nER  - \n"
+        b"TY  - JOUR\nTI  - Second citation\nKW  - screening\nER  - \n",
+        content_type="application/x-research-info-systems",
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_user_client.post(
+            reverse("citation_upload", args=[review.id]),
+            {"format": "ris", "citation_file": uploaded_file},
+            follow=True,
+        )
+
+    assert response.status_code == 200
+    dataset = CitationDataset.objects.get(review=review)
+    assert set(dataset.columns.values_list("name", flat=True)) == {
+        "type_of_reference",
+        "authors",
+        "year",
+        "keywords",
+    }
+    first, second = dataset.rows.order_by("order")
+    assert first.title == "First citation"
+    assert first.abstract == "First abstract"
+    assert first.data["authors"] == "Doe, Jane; Smith, John"
+    assert second.title == "Second citation"
+    assert second.data["year"] == ""
+    assert second.data["keywords"] == "screening"
+
+
+def test_citation_upload_rejects_mismatched_format(
+    vanilla_user_client, vanilla_user
+):
+    review = Review.objects.create(
+        title="Review",
+        description="Review description",
+    )
+    ReviewUserLink.objects.create(user=vanilla_user, review=review)
+    uploaded_file = SimpleUploadedFile(
+        "citations.csv", b"title\nFirst citation\n"
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_user_client.post(
+            reverse("citation_upload", args=[review.id]),
+            {"format": "ris", "citation_file": uploaded_file},
+        )
+
+    assert response.status_code == 200
+    assert (
+        b"File extension must match the selected format." in response.content
+    )
+    assert not CitationDataset.objects.filter(review=review).exists()
 
 
 def test_review_detail_disables_import_button_when_dataset_exists(

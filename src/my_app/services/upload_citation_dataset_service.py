@@ -6,6 +6,8 @@ from typing import Iterable
 
 from django.db import transaction
 
+import rispy
+
 from my_app.models import Citation, CitationDataset, CitationDatasetColumn
 
 
@@ -59,6 +61,65 @@ class CsvCitationDatasetImportSource(CitationDatasetImportSource):
             tuple(row) for row in reader if any(cell.strip() for cell in row)
         ]
         return cls(headers, row_values)
+
+    def get_column_names(self) -> list[str]:
+        return self._column_names
+
+    def iter_row_values(self) -> Iterable[tuple[str, ...]]:
+        return iter(self._row_values)
+
+
+class RisCitationDatasetImportSource(CitationDatasetImportSource):
+    def __init__(self, column_names, row_values):
+        self._column_names = column_names
+        self._row_values = row_values
+
+    @classmethod
+    def from_input(cls, ris_input):
+        content = ris_input
+        if hasattr(ris_input, "read"):
+            content = ris_input.read()
+
+        try:
+            ris_text = content
+            if isinstance(content, bytes):
+                ris_text = content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ValueError("RIS file must be UTF-8 encoded.") from exc
+
+        if not ris_text or not ris_text.strip():
+            raise ValueError("RIS file is empty.")
+
+        entries = rispy.load(io.StringIO(ris_text))
+        if not entries:
+            raise ValueError("RIS file contains no citations.")
+
+        rows = [cls._normalize_entry(entry) for entry in entries]
+        column_names = list(dict.fromkeys(key for row in rows for key in row))
+        row_values = [
+            tuple(row.get(name, "") for name in column_names) for row in rows
+        ]
+        return cls(column_names, row_values)
+
+    @staticmethod
+    def _normalize_entry(entry):
+        row = {
+            key: RisCitationDatasetImportSource._format_value(value)
+            for key, value in entry.items()
+        }
+        for alternate, canonical in (
+            ("primary_title", "title"),
+            ("notes_abstract", "abstract"),
+        ):
+            if canonical not in row and alternate in row:
+                row[canonical] = row.pop(alternate)
+        return row
+
+    @staticmethod
+    def _format_value(value):
+        if isinstance(value, list):
+            return "; ".join(value)
+        return str(value)
 
     def get_column_names(self) -> list[str]:
         return self._column_names
@@ -157,10 +218,11 @@ class CitationDatasetImporter:
         return values[index]
 
 
-def build_citation_dataset_from_source(review, source):
+def import_citation_dataset(review, citation_input, format="csv"):
+    if format == "csv":
+        source = CsvCitationDatasetImportSource.from_input(citation_input)
+    elif format == "ris":
+        source = RisCitationDatasetImportSource.from_input(citation_input)
+    else:
+        raise ValueError("Unsupported citation format.")
     return CitationDatasetImporter(review, source).run()
-
-
-def import_citation_dataset(review, csv_input):
-    source = CsvCitationDatasetImportSource.from_input(csv_input)
-    return build_citation_dataset_from_source(review, source)

@@ -26,11 +26,31 @@ from shortcuts import (
 
 
 class CitationUploadForm(StandardFormMixin):
-    citation_file = forms.FileField(
-        label=tdt("Citation dataset CSV"),
-        validators=[FileExtensionValidator(["csv"])],
-        widget=forms.FileInput(attrs={"accept": ".csv,text/csv"}),
+    format = forms.ChoiceField(
+        label=tdt("Format"),
+        choices=[("csv", "CSV"), ("ris", "RIS")],
     )
+    citation_file = forms.FileField(
+        label=tdt("Citation dataset file"),
+        validators=[FileExtensionValidator(["csv", "ris", "txt"])],
+        widget=forms.FileInput(attrs={"accept": ".csv,.ris,text/csv,.txt"}),
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        citation_file = cleaned_data.get("citation_file")
+        selected_format = cleaned_data.get("format")
+        if citation_file and selected_format:
+            extension = citation_file.name.rsplit(".", 1)[-1].lower()
+            if extension == "txt":
+                # they like to use .txt for RIS files
+                extension = "ris"
+            if extension != selected_format:
+                self.add_error(
+                    "citation_file",
+                    tdt("File extension must match the selected format."),
+                )
+        return cleaned_data
 
 
 class CitationUploadPage(BasePageTemplate):
@@ -43,7 +63,7 @@ class CitationUploadPage(BasePageTemplate):
         return [
             h.h1[tdt("Import citation dataset")],
             h.p(".text-muted")[
-                tdt("Upload a CSV file to create a citation dataset.")
+                tdt("Upload a CSV or RIS file to create a citation dataset.")
             ],
             h.form(
                 method="post",
@@ -79,6 +99,7 @@ class CitationUploadView(MustAccessReviewMixin, FormView, HtpyTemplateMixin):
             result = import_citation_dataset(
                 self.review,
                 form.cleaned_data["citation_file"],
+                format=form.cleaned_data["format"],
             )
         except ValueError as exc:
             form.add_error("citation_file", str(exc))
