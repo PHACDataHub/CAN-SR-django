@@ -53,7 +53,7 @@ def test_editor_helper_class_new_question():
             {
                 "option_text": "Option 1",
                 "option_value": "The first option",
-                "screening_action": "screening_disabled",
+                "screening_action": "screen_in",
             },
         ),
         **add_formset_prefix(
@@ -62,7 +62,7 @@ def test_editor_helper_class_new_question():
             {
                 "option_text": "Option 2",
                 "option_value": "The second option",
-                "screening_action": "screening_disabled",
+                "screening_action": "screen_in",
             },
         ),
     }
@@ -89,6 +89,46 @@ def test_editor_helper_class_new_question():
     assert option2.option_value == "The second option"
 
 
+@pytest.mark.parametrize(
+    "adapter,question_model",
+    [
+        (L1FormsetAdapter, L1ScreeningQuestion),
+        (L2FormsetAdapter, L2ScreeningQuestion),
+    ],
+)
+def test_question_editor_saves_disable_screening(adapter, question_model):
+    review = ReviewFactory()
+    editor = ChildEditor(
+        parent=question_model(review=review),
+        data={
+            "question_text": "Should this question affect filtering?",
+            "disable_screening": "on",
+            **add_prefix("options", {"TOTAL_FORMS": 1, "INITIAL_FORMS": 0}),
+            **add_formset_prefix(
+                "options",
+                0,
+                {
+                    "option_text": "No",
+                    "option_value": "Exclude",
+                    "screening_action": "screen_out",
+                },
+            ),
+        },
+        adapter=adapter,
+    )
+
+    editor.save()
+
+    question = question_model.objects.get(review=review)
+    assert question.disable_screening is True
+
+    edit_form = adapter.FormClass(
+        {"question_text": question.question_text}, instance=question
+    )
+    assert edit_form.is_valid()
+    assert edit_form.save().disable_screening is False
+
+
 def test_editor_helper_class_modify_question():
     review = ReviewFactory()
     question_obj = L1ScreeningQuestion.objects.create(review=review)
@@ -111,7 +151,7 @@ def test_editor_helper_class_modify_question():
                 "id": question_option1.id,
                 "option_text": "Modified Option 1",
                 "option_value": "Modified value 1",
-                "screening_action": "screening_disabled",
+                "screening_action": "screen_in",
             },
         ),
         **add_formset_prefix(
@@ -120,7 +160,7 @@ def test_editor_helper_class_modify_question():
             {
                 "option_text": "Option 2",
                 "option_value": "The second option",
-                "screening_action": "screening_disabled",
+                "screening_action": "screen_in",
             },
         ),
     }
@@ -211,7 +251,7 @@ def test_editor_new_invalid_data():
                 # missing option_text (required)
                 "option_text": "",
                 "option_value": "The first option",
-                "screening_action": "screening_disabled",
+                "screening_action": "screen_in",
             },
         ),
     }
@@ -470,7 +510,7 @@ def test_add_l1_question_modal_saves_valid_data(
             {
                 "option_text": "Option 1",
                 "option_value": "The first option",
-                "screening_action": "screening_disabled",
+                "screening_action": "screen_in",
             },
         ),
         **add_formset_prefix(
@@ -479,7 +519,7 @@ def test_add_l1_question_modal_saves_valid_data(
             {
                 "option_text": "Option 2",
                 "option_value": "The second option",
-                "screening_action": "screening_disabled",
+                "screening_action": "screen_in",
             },
         ),
     }
@@ -517,7 +557,7 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
             {
                 "option_text": "",
                 "option_value": "The first option",
-                "screening_action": "screening_disabled",
+                "screening_action": "screen_in",
             },
         ),
     }

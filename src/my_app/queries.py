@@ -271,9 +271,9 @@ def _screened_in_citation_ids(
     review_id, question_model, human_model, result_model
 ):
     question_ids = set(
-        question_model.active_objects.filter(review_id=review_id).values_list(
-            "id", flat=True
-        )
+        question_model.active_objects.filter(
+            review_id=review_id, disable_screening=False
+        ).values_list("id", flat=True)
     )
     if not question_ids:
         return Citation.objects.filter(
@@ -293,10 +293,6 @@ def _screened_in_citation_ids(
     human_pairs = set()
     passing_pairs = set()
     failing_pairs = set()
-    passing_actions = {
-        ScreeningActions.ScreenIn,
-        ScreeningActions.ScreeningDisabled,
-    }
     for (
         citation_id,
         question_id,
@@ -309,7 +305,7 @@ def _screened_in_citation_ids(
         if (
             option_question_id == question_id
             and deleted_at is None
-            and action in passing_actions
+            and action == ScreeningActions.ScreenIn
         ):
             passing_pairs.add(pair)
         else:
@@ -320,7 +316,7 @@ def _screened_in_citation_ids(
         question_id__in=question_ids,
         status=ScreeningResultStatus.COMPLETED,
         selected_option__deletion_time__isnull=True,
-        selected_option__screening_action__in=passing_actions,
+        selected_option__screening_action=ScreeningActions.ScreenIn,
     ).values_list("citation_id", "question_id", "selected_option__question_id")
     passing_pairs.update(
         (citation_id, question_id)

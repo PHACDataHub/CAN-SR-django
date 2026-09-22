@@ -223,36 +223,64 @@ def test_stage_filter_ignores_deleted_questions_and_their_answers(
     assert list(get_citations_for_stage(review.id, layer.stage)) == [included]
 
 
-def test_stage_filter_screening_disabled_answers_pass_without_exclusion(
+def test_stage_filter_disabled_question_ignores_missing_and_excluding_answers(
     screening_layer,
 ):
     layer = screening_layer
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
-    human_citation = CitationFactory(dataset=dataset, order=1)
-    ai_citation = CitationFactory(dataset=dataset, order=2)
-    unanswered_citation = CitationFactory(dataset=dataset, order=3)
-    question = layer.question_factory(review=review)
-    disabled_option = layer.option_factory(
-        question=question,
-        screening_action=ScreeningActions.ScreeningDisabled,
+    no_disabled_answer = CitationFactory(dataset=dataset, order=1)
+    human_excluded = CitationFactory(dataset=dataset, order=2)
+    ai_excluded = CitationFactory(dataset=dataset, order=3)
+    missing_active_answer = CitationFactory(dataset=dataset, order=4)
+    active_question = layer.question_factory(review=review)
+    disabled_question = layer.question_factory(
+        review=review, disable_screening=True
     )
+    active_in = layer.option_factory(
+        question=active_question, screening_action=ScreeningActions.ScreenIn
+    )
+    disabled_out = layer.option_factory(
+        question=disabled_question, screening_action=ScreeningActions.ScreenOut
+    )
+    for citation in (no_disabled_answer, human_excluded, ai_excluded):
+        layer.human_factory(
+            citation=citation,
+            question=active_question,
+            selected_option=active_in,
+        )
     layer.human_factory(
-        citation=human_citation,
-        question=question,
-        selected_option=disabled_option,
+        citation=human_excluded,
+        question=disabled_question,
+        selected_option=disabled_out,
     )
     layer.result_factory(
-        citation=ai_citation,
-        question=question,
-        selected_option=disabled_option,
+        citation=ai_excluded,
+        question=disabled_question,
+        selected_option=disabled_out,
         status=ScreeningResultStatus.COMPLETED,
     )
 
     assert list(get_citations_for_stage(review.id, layer.stage)) == [
-        human_citation,
-        ai_citation,
+        no_disabled_answer,
+        human_excluded,
+        ai_excluded,
     ]
+
+
+def test_stage_filter_all_disabled_questions_include_every_citation(
+    screening_layer,
+):
+    layer = screening_layer
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    citations = [
+        CitationFactory(dataset=dataset, order=1),
+        CitationFactory(dataset=dataset, order=2),
+    ]
+    layer.question_factory(review=review, disable_screening=True)
+
+    assert list(get_citations_for_stage(review.id, layer.stage)) == citations
 
 
 def test_stage_filter_requires_completed_ai_result(screening_layer):
