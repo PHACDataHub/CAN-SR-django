@@ -134,3 +134,8 @@ dl.custom-dl {
         opacity: 0.5;
     }
 }
+
+.citation-column-mapping-omitted [data-column-existing],
+.citation-column-mapping-omitted [data-column-name] {
+    opacity: 0.5;
+}
