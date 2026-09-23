@@ -163,6 +163,7 @@ Alternatively, from `src/`, run `../venv/bin/python -m pytest -m selenium tests/
 The browser tests use a transactional test database so requests from the browser
 see records created through the ORM. Run them separately from regular tests,
 especially when using PostgreSQL and a reused test database.
+CI runs this suite as a separate Selenium job against PostgreSQL.
 
 ## Calculating code coverage 
 
