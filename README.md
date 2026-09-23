@@ -147,6 +147,23 @@ AZURE_OPENAI_ENDPOINT=https://example.openai.azure.com
 
 You can check LLM configuration and connection by running `python -m manage check_llm` which will attempt to make a test call to the configured LLM
 
+## Live browser tests
+
+Browser tests live in `src/tests/selenium/` and are excluded from normal pytest runs.
+They use Chrome in headless mode and a live Django server. Install the optional
+dependency and have Chrome available, then run from the repository root:
+
+```bash
+./venv/bin/python -m pip install -r requirements_selenium.txt
+cd src
+../venv/bin/python manage.py test --selenium tests/selenium/
+```
+
+Alternatively, from `src/`, run `../venv/bin/python -m pytest -m selenium tests/selenium/`.
+The browser tests use a transactional test database so requests from the browser
+see records created through the ORM. Run them separately from regular tests,
+especially when using PostgreSQL and a reused test database.
+
 ## Calculating code coverage 
 
 From the `src/` directory run the following
