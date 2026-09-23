@@ -110,6 +110,13 @@ jobs:
   selenium-postgres:
     name: Selenium (postgres)
     runs-on: ubuntu-24.04
+    concurrency:
+      group: selenium-visual-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     services:
       postgres:
         image: postgres:16
@@ -170,12 +177,24 @@ jobs:
         run: python manage.py test --selenium tests/selenium/
 
       - name: Upload visual regression diffs
+        id: visual_artifact
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: visual-regression-diffs
           path: test-results/visual/
           if-no-files-found: ignore
+
+      - name: Comment on visual regressions
+        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && steps.visual_artifact.outputs.artifact-url != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VISUAL_REGRESSION_TOKEN: ${{ secrets.VISUAL_REGRESSION_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          VISUAL_ARTIFACT_URL: ${{ steps.visual_artifact.outputs.artifact-url }}
+        run: python tests/selenium/report_visual_failures.py
 
   format:
     name: Format check

@@ -181,6 +181,15 @@ a pixel counts as different if any RGB channel differs by more than 20 levels.
 Different image dimensions always fail. On failure, `test-results/visual/`
 contains the expected, actual, and highlighted diff images; the Selenium CI
 job uploads them as the `visual-regression-diffs` Actions artifact.
+On same-repository pull requests, failed comparisons also update one bot comment
+with the count and artifact link. For up to eight failures it can preview five
+diffs; for more than eight, the comment points to the complete artifact. To
+enable inline previews, configure the `VISUAL_REGRESSION_TOKEN` Actions secret
+with a PAT from a bot account that has write access to this repository. GitHub's
+default Actions token can post the summary but cannot upload images through
+`gh pr comment --attach`. Fork pull requests retain the artifact without a bot
+comment, because write credentials are not exposed to their workflows. The
+same artifact-only behavior applies to Dependabot pull requests.
 
 ## Calculating code coverage 
 
