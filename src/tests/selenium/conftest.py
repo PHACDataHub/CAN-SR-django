@@ -10,6 +10,16 @@ from django.contrib.sessions.backends.db import SessionStore
 
 import pytest
 
+from tests.selenium.visual_comparison_utils import compare_screenshot
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--update-visual-baselines",
+        action="store_true",
+        help="Write visual baselines instead of comparing screenshots",
+    )
+
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items):
@@ -55,3 +65,18 @@ def force_login(driver, live_server):
         )
 
     return login
+
+
+@pytest.fixture
+def assert_screenshot_matches(request):
+    def assert_match(driver, baseline_name, threshold=0.005):
+        compare_screenshot(
+            driver,
+            baseline_name=baseline_name,
+            threshold=threshold,
+            update_baseline=request.config.getoption(
+                "--update-visual-baselines"
+            ),
+        )
+
+    return assert_match

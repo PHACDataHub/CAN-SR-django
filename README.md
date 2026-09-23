@@ -165,6 +165,23 @@ see records created through the ORM. Run them separately from regular tests,
 especially when using PostgreSQL and a reused test database.
 CI runs this suite as a separate Selenium job against PostgreSQL.
 
+Visual baselines are committed in `src/tests/selenium/baselines/`. To run the
+visual test locally, from `src/` use:
+
+```bash
+../venv/bin/python -m pytest -m selenium tests/selenium/test_visual.py
+```
+
+To intentionally replace a baseline, run the same command with
+`--update-visual-baselines`, or use
+`../venv/bin/python manage.py test --selenium --update-visual-baselines tests/selenium/test_visual.py`,
+then commit the new PNG. This flag is disabled in CI.
+The default threshold of `0.005` allows up to 0.5% of pixels to differ, where
+a pixel counts as different if any RGB channel differs by more than 20 levels.
+Different image dimensions always fail. On failure, `test-results/visual/`
+contains the expected, actual, and highlighted diff images; the Selenium CI
+job uploads them as the `visual-regression-diffs` Actions artifact.
+
 ## Calculating code coverage 
 
 From the `src/` directory run the following
