@@ -96,11 +96,6 @@ LLM_MODE=local
 GROBID_URL=dev
 
 USE_IMMEDIATE_TASKS=1
-
-# Optional Azure Blob media storage
-# MEDIA_STORAGE_MODE=azure
-# AZURE_STORAGE_ACCOUNT_NAME=exampleaccount
-# AZURE_STORAGE_MEDIA_CONTAINER=media
 ```
 
 # Configuration of advanced features 
@@ -162,15 +157,8 @@ Configuration:
 ```env
 MEDIA_STORAGE_MODE=azure
 AZURE_STORAGE_ACCOUNT_NAME=<storage-account-name>
-AZURE_STORAGE_MEDIA_CONTAINER=media
+AZURE_STORAGE_MEDIA_CONTAINER=<storage-account-container-name>
 ```
-
-Notes:
-
-1. The blob container must already exist. `django-storages` will not create it.
-2. Grant `Storage Blob Data Contributor` on the storage account to the App Service managed identity. For local development with `az login`, grant the same role to your user.
-3. The app keeps using normal Django `FileField`s. PDFs are still streamed to the browser through Django routes, and background workers read the files through the same storage backend, so the container can stay private.
-4. Like every other Entra-authenticated feature here, this uses `DefaultAzureCredential`. If the host has more than one user-assigned managed identity attached, set `AZURE_CLIENT_ID` to the one to use; it applies to Postgres, Blob storage, OpenAI and Document Intelligence alike.
 
 ## Calculating code coverage 
 
