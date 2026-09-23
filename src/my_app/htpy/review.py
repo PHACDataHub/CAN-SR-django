@@ -236,8 +236,18 @@ class ReviewDetailPage(BasePageTemplate):
             tdt(
                 "Upload citation files, define eligibility criteria and review settings"
             ),
-            h.a(
-                href=reverse("citation_dataset_detail", args=[review.id]),
-                class_="btn btn-success",
-            )[f"✓ ", tdt("View dataset")],
+            h.div(".d-flex.gap-2")[
+                [
+                    h.a(
+                        href=reverse("citation_upload", args=[review.id]),
+                        class_="btn btn-primary",
+                    )[tdt("Upload more citations")],
+                    h.a(
+                        href=reverse(
+                            "citation_dataset_detail", args=[review.id]
+                        ),
+                        class_="btn btn-success",
+                    )[f"✓ ", tdt("View dataset")],
+                ]
+            ],
         )
