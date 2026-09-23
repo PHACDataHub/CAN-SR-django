@@ -166,8 +166,6 @@ AZURE_STORAGE_MEDIA_CONTAINER = config(
     "AZURE_STORAGE_MEDIA_CONTAINER", default="media"
 )
 
-# django replaces STORAGES wholesale, it isn't merged with the defaults,
-# so the staticfiles entry has to be spelled out alongside the media one
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
