@@ -14,6 +14,7 @@ import os
 import sys
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse_lazy
 
 from decouple import Csv, config
@@ -23,6 +24,7 @@ from phac_aspc.django.settings.utils import (
     configure_middleware,
 )
 
+from .azure.azure_auth import get_azure_credential
 from .logging import configure_project_logging
 
 GROBID_URL = config("GROBID_URL", default="")
@@ -149,7 +151,49 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = (os.path.join("static"),)
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_ROOT = Path(config("MEDIA_ROOT", default=str(BASE_DIR / "media")))
+
+
+# media storage settings
+
+MEDIA_STORAGE_MODE = config(
+    # 'local' or 'azure'
+    "MEDIA_STORAGE_MODE",
+    default="local",
+)
+AZURE_STORAGE_ACCOUNT_NAME = config("AZURE_STORAGE_ACCOUNT_NAME", default="")
+AZURE_STORAGE_MEDIA_CONTAINER = config(
+    "AZURE_STORAGE_MEDIA_CONTAINER", default="media"
+)
+
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+    },
+}
+
+if MEDIA_STORAGE_MODE == "azure":
+    assert (
+        AZURE_STORAGE_ACCOUNT_NAME
+    ), "AZURE_STORAGE_ACCOUNT_NAME must be set when MEDIA_STORAGE_MODE is 'azure'"
+    assert (
+        AZURE_STORAGE_MEDIA_CONTAINER
+    ), "AZURE_STORAGE_MEDIA_CONTAINER must be set when MEDIA_STORAGE_MODE is 'azure'"
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.azure_storage.AzureStorage",
+        "OPTIONS": {
+            "token_credential": get_azure_credential(),
+            "account_name": AZURE_STORAGE_ACCOUNT_NAME,
+            "azure_container": AZURE_STORAGE_MEDIA_CONTAINER,
+        },
+    }
+elif MEDIA_STORAGE_MODE != "local":
+    raise ValueError(
+        f"Invalid MEDIA_STORAGE_MODE: {MEDIA_STORAGE_MODE}. Must be 'local' or 'azure'"
+    )
+
+# END media storage settings
 
 MIDDLEWARE = configure_middleware(
     [
@@ -210,6 +254,9 @@ WSGI_APPLICATION = "proj.wsgi.application"
 
 
 USE_SQLITE = config("USE_SQLITE", default=False, cast=bool)
+
+DB_AUTH_MODE = config("DB_AUTH_MODE", default="local")
+
 if USE_SQLITE:
     DATABASES = {
         "default": {
@@ -234,6 +281,12 @@ else:
             },
         }
     }
+
+    if DB_AUTH_MODE == "azure":
+        DATABASES["default"]["ENGINE"] = "proj.azure.azure_postgresql"
+        DATABASES["default"]["PASSWORD"] = ""
+        DATABASES["default"]["TEST"]["ENGINE"] = "proj.azure.azure_postgresql"
+
 
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
@@ -278,3 +331,5 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())

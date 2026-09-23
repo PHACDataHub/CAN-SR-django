@@ -147,6 +147,19 @@ AZURE_OPENAI_ENDPOINT=https://example.openai.azure.com
 
 You can check LLM configuration and connection by running `python -m manage check_llm` which will attempt to make a test call to the configured LLM
 
+## Azure Blob media storage
+
+Uploaded PDFs and extracted figure files can be stored in Azure Blob Storage
+with `django-storages`, authenticated via Microsoft Entra ID.
+
+Configuration:
+
+```env
+MEDIA_STORAGE_MODE=azure
+AZURE_STORAGE_ACCOUNT_NAME=<storage-account-name>
+AZURE_STORAGE_MEDIA_CONTAINER=<storage-account-container-name>
+```
+
 ## Calculating code coverage 
 
 From the `src/` directory run the following
