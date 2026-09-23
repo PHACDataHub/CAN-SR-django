@@ -18,6 +18,7 @@ class LoginPageTemplate(BasePageTemplate):
             ".container.p-0.d-flex.justify-content-center",
             id="login-container",
         )[
+            h.div(".alert.alert-info")["NEW TEXT HERE CAN'T IGNORE ME"],
             h.div(".col-md-6.col-sm-12")[
                 h.form(
                     method="post",
