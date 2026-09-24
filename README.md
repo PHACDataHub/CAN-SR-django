@@ -147,6 +147,50 @@ AZURE_OPENAI_ENDPOINT=https://example.openai.azure.com
 
 You can check LLM configuration and connection by running `python -m manage check_llm` which will attempt to make a test call to the configured LLM
 
+## Live browser tests
+
+Browser tests live in `src/tests/selenium/` and are excluded from normal pytest runs.
+They use Chrome in headless mode and a live Django server. Install the optional
+dependency and have Chrome available, then run from the repository root:
+
+```bash
+./venv/bin/python -m pip install -r requirements_selenium.txt
+cd src
+../venv/bin/python manage.py test --selenium tests/selenium/
+```
+
+Alternatively, from `src/`, run `../venv/bin/python -m pytest -m selenium tests/selenium/`.
+The browser tests use a transactional test database so requests from the browser
+see records created through the ORM. Run them separately from regular tests,
+especially when using PostgreSQL and a reused test database.
+CI runs this suite as a separate Selenium job against PostgreSQL.
+
+Visual baselines are committed in `src/tests/selenium/baselines/`. To run the
+visual test locally, from `src/` use:
+
+```bash
+../venv/bin/python -m pytest -m selenium tests/selenium/test_visual.py
+```
+
+To intentionally replace a baseline, run the same command with
+`--update-visual-baselines`, or use
+`../venv/bin/python manage.py test --selenium --update-visual-baselines tests/selenium/test_visual.py`,
+then commit the new PNG. This flag is disabled in CI.
+The default threshold of `0.005` allows up to 0.5% of pixels to differ, where
+a pixel counts as different if any RGB channel differs by more than 20 levels.
+Different image dimensions always fail. On failure, `test-results/visual/`
+contains the expected, actual, and highlighted diff images; the Selenium CI
+job uploads them as the `visual-regression-diffs` Actions artifact.
+On same-repository pull requests, failed comparisons also update one bot comment
+with the count and artifact link. For up to eight failures it can preview five
+diffs; for more than eight, the comment points to the complete artifact. To
+enable inline previews, configure the `VISUAL_REGRESSION_TOKEN` Actions secret
+with a PAT from a bot account that has write access to this repository. GitHub's
+default Actions token can post the summary but cannot upload images through
+`gh pr comment --attach`. Fork pull requests retain the artifact without a bot
+comment, because write credentials are not exposed to their workflows. The
+same artifact-only behavior applies to Dependabot pull requests.
+
 ## Calculating code coverage 
 
 From the `src/` directory run the following
