@@ -4,7 +4,7 @@ import uuid
 from urllib.parse import urlencode
 
 from django import forms
-from django.http import HttpResponseBadRequest
+from django.http import Http404, HttpResponseBadRequest
 from django.views.generic import TemplateView
 
 import htpy as h
@@ -42,7 +42,14 @@ from shortcuts import (
     StandardFormMixin,
 )
 from shortcuts import breadcrumbs as bc
-from shortcuts import cached_property, dataclass, reverse, tdt, tm, transaction
+from shortcuts import (
+    cached_property,
+    dataclass,
+    reverse,
+    tdt,
+    tm,
+    transaction,
+)
 
 ParentType = L1ScreeningQuestion | L2ScreeningQuestion | Parameter
 ChildType = (
@@ -123,10 +130,28 @@ class L1FormsetAdapter(FormsetAdapter):
             model = L1ScreeningQuestion
             fields = ["question_text", "disable_screening"]
 
+        def save(self, commit=True):
+            question = super().save(commit=commit)
+            if commit:
+                question.sync_to_l2()
+            return question
+
     class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
             model = L1ScreeningQuestionOption
             fields = ["option_text", "option_value", "screening_action"]
+
+        def save(self, commit=True):
+            option = super().save(commit=commit)
+            if commit:
+                option.sync_to_l2()
+            return option
+
+    class FormSetClass(SoftDeleteInlineFormSet):
+        def delete_existing(self, obj, commit=True):
+            super().delete_existing(obj, commit=commit)
+            if commit:
+                obj.sync_to_l2()
 
     @staticmethod
     def get_new_url(review):
@@ -289,7 +314,12 @@ class ScreeningCriteriaPageContent(HtpyComponent):
         child_model = adapter.child_model
         child_fetcher = adapter.option_fetcher.get_instance()
 
-        parent_records = adapter.parent_model.objects.filter(review=review)
+        parent_records = adapter.parent_model.active_objects.filter(
+            review=review
+        )
+        if adapter is L2FormsetAdapter:
+            # filter out 'mirrored' questions
+            parent_records = parent_records.filter(l1_question__isnull=True)
         child_fetcher.prefetch_keys([parent.pk for parent in parent_records])
 
         if parent_records:
@@ -431,11 +461,14 @@ class ChildEditor:
         else:
             extra = 1
 
+        formset_class = getattr(
+            self.adapter, "FormSetClass", SoftDeleteInlineFormSet
+        )
         FormSetCls = forms.models.inlineformset_factory(
             parent_model=self.adapter.parent_model,
             model=self.adapter.child_model,
             form=self.adapter.ChildFormClass,
-            formset=SoftDeleteInlineFormSet,
+            formset=formset_class,
             extra=extra,
             can_delete=True,
         )
@@ -570,9 +603,15 @@ class ChildEditorEditView(ChildEditorModalFormView):
         parent_id = self.kwargs["parent_pk"]
 
         try:
-            parent = self.adapter.parent_model.objects.get(pk=parent_id)
+            parent = self.adapter.parent_model.active_objects.get(
+                pk=parent_id, review=self.review
+            )
         except self.adapter.parent_model.DoesNotExist:
-            raise ValueError("Invalid parent ID")
+            raise Http404
+
+        if isinstance(parent, L2ScreeningQuestion) and parent.l1_question_id:
+            # mirrored L2 questions can't be edited through forms
+            raise Http404
 
         editor = ChildEditor(
             parent=parent,
