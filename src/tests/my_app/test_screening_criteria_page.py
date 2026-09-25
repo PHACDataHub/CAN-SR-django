@@ -88,6 +88,19 @@ def test_editor_helper_class_new_question():
     assert option2.option_text == "Option 2"
     assert option2.option_value == "The second option"
 
+    # check the mirroring L2 question is also created w/ same options
+    l2_question = L2ScreeningQuestion.objects.get(l1_question=question)
+    assert l2_question.question_text == question.question_text
+    assert l2_question.disable_screening == question.disable_screening
+    assert list(
+        l2_question.options.order_by("id").values_list(
+            "option_text", flat=True
+        )
+    ) == [
+        "Option 1",
+        "Option 2",
+    ]
+
 
 @pytest.mark.parametrize(
     "adapter,question_model",
@@ -186,6 +199,155 @@ def test_editor_helper_class_modify_question():
 
     assert option2.option_text == "Option 2"
     assert option2.option_value == "The second option"
+
+    l2_copy = L2ScreeningQuestion.objects.get(l1_question=question)
+    assert l2_copy.question_text == question.question_text
+    assert (
+        l2_copy.options.get(l1_option=option1).option_value
+        == "Modified value 1"
+    )
+    assert (
+        l2_copy.options.get(l1_option=option2).option_value
+        == "The second option"
+    )
+
+
+def test_l1_question_sync_to_l2_creates_mirror():
+    question = L1ScreeningQuestionFactory(
+        question_text="L1 question", disable_screening=True
+    )
+
+    mirror = question.sync_to_l2()
+
+    assert mirror == L2ScreeningQuestion.objects.get(l1_question=question)
+    assert mirror.review == question.review
+    assert mirror.question_text == question.question_text
+    assert mirror.disable_screening == question.disable_screening
+    assert mirror.deletion_time is None
+    assert question.deletion_time is None
+
+
+def test_l1_option_sync_to_l2_creates_mirror():
+    question = L1ScreeningQuestionFactory()
+    l2_question = question.sync_to_l2()
+    option = L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="L1 option",
+        option_value="L1 value",
+        screening_action="screen_out",
+    )
+
+    mirror = option.sync_to_l2()
+
+    assert mirror == L2ScreeningQuestionOption.objects.get(l1_option=option)
+    assert mirror.question == l2_question
+    assert mirror.option_text == option.option_text
+    assert mirror.option_value == option.option_value
+    assert mirror.screening_action == option.screening_action
+    assert mirror.deletion_time is None
+    assert option.deletion_time is None
+
+
+def test_edit_l1_question_updates_existing_l2_mirror():
+    review = ReviewFactory()
+    question = L1ScreeningQuestionFactory(
+        review=review, question_text="Original L1 question"
+    )
+    option = L1ScreeningQuestionOptionFactory(
+        question=question,
+        option_text="Original L1 option",
+        option_value="Original value",
+    )
+    l2_question = question.sync_to_l2()
+    l2_option = option.sync_to_l2()
+
+    editor = ChildEditor(
+        parent=question,
+        adapter=L1FormsetAdapter,
+        data={
+            "question_text": "Updated question",
+            "disable_screening": "on",
+            **add_prefix("options", {"TOTAL_FORMS": 1, "INITIAL_FORMS": 1}),
+            **add_formset_prefix(
+                "options",
+                0,
+                {
+                    "id": option.pk,
+                    "option_text": "Updated option",
+                    "option_value": "Updated value",
+                    "screening_action": "screen_out",
+                },
+            ),
+        },
+    )
+    assert editor.is_valid()
+    editor.save()
+
+    l2_question.refresh_from_db()
+    l2_option.refresh_from_db()
+    assert (
+        L2ScreeningQuestion.objects.get(l1_question=question).pk
+        == l2_question.pk
+    )
+    assert l2_question.question_text == "Updated question"
+    assert l2_question.disable_screening is True
+    assert (
+        L2ScreeningQuestionOption.objects.get(l1_option=option).pk
+        == l2_option.pk
+    )
+    assert l2_option.question == l2_question
+    assert l2_option.option_text == "Updated option"
+    assert l2_option.option_value == "Updated value"
+    assert l2_option.screening_action == "screen_out"
+
+
+def test_l1_option_soft_deletion_syncs_to_l2():
+    review = ReviewFactory()
+    question = L1ScreeningQuestionFactory(review=review)
+    option = L1ScreeningQuestionOptionFactory(question=question)
+    editor = ChildEditor(
+        parent=question,
+        adapter=L1FormsetAdapter,
+        data={
+            "question_text": question.question_text,
+            **add_prefix("options", {"TOTAL_FORMS": 1, "INITIAL_FORMS": 1}),
+            **add_formset_prefix(
+                "options",
+                0,
+                {
+                    "id": option.pk,
+                    "option_text": option.option_text,
+                    "option_value": option.option_value,
+                    "screening_action": option.screening_action,
+                    "DELETE": "on",
+                },
+            ),
+        },
+    )
+    assert editor.is_valid()
+    editor.save()
+
+    option.refresh_from_db()
+    copy = L2ScreeningQuestionOption.objects.get(l1_option=option)
+    assert option.deletion_time is not None
+    assert (
+        copy.deletion_time - option.deletion_time
+    ).total_seconds() == pytest.approx(0, abs=0.1)
+
+
+def test_l1_question_soft_deletion_syncs_to_l2():
+    question = L1ScreeningQuestionFactory()
+    form = L1FormsetAdapter.FormClass(
+        {"question_text": question.question_text}, instance=question
+    )
+    assert form.is_valid()
+    form.save()
+    question.soft_delete()
+
+    copy = L2ScreeningQuestion.objects.get(l1_question=question)
+    assert (
+        copy.deletion_time - question.deletion_time
+    ).total_seconds() == pytest.approx(0, abs=0.1)
 
 
 def test_editor_helper_new_parameter():
@@ -352,6 +514,44 @@ def test_screening_criteria_page_renders_existing_questions(
         f'id="edit-parameterformsetadapter-section-{parameter_question.pk}-button"'
         in body
     )
+
+
+def test_mirrored_l2_question_is_hidden_and_cannot_be_edited(
+    vanilla_user_client, vanilla_user
+):
+    review = ReviewFactory()
+    ReviewUserLinkFactory(user=vanilla_user, review=review)
+    l1_question = L1ScreeningQuestionFactory(
+        review=review, question_text="L1 source question"
+    )
+    mirrored_question = L2ScreeningQuestionFactory(
+        review=review,
+        l1_question=l1_question,
+        question_text="Mirrored L2 question",
+    )
+    L2ScreeningQuestionOptionFactory(
+        question=mirrored_question, option_text="Mirrored L2 option"
+    )
+
+    body = _get_page_body(vanilla_user_client, review)
+    assert "L1 source question" in body
+    assert "Mirrored L2 question" not in body
+    assert "Mirrored L2 option" not in body
+
+    url = reverse("edit_l2_question", args=[review.pk, mirrored_question.pk])
+    with patch_rules(can_access_review=True):
+        assert vanilla_user_client.get(url).status_code == 404
+        response = vanilla_user_client.post(
+            url,
+            {
+                "question_text": "Changed",
+                "options-TOTAL_FORMS": 0,
+                "options-INITIAL_FORMS": 0,
+            },
+        )
+    assert response.status_code == 404
+    mirrored_question.refresh_from_db()
+    assert mirrored_question.question_text == "Mirrored L2 question"
 
 
 def test_screening_criteria_page_renders_screening_columns(

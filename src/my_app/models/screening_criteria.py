@@ -36,15 +36,52 @@ class L1ScreeningQuestion(AbstractScreeningQuestion):
         verbose_name=tdt("Systematic review"),
     )
 
+    def sync_to_l2(self):
+        question, _ = L2ScreeningQuestion.objects.update_or_create(
+            l1_question=self,
+            defaults={
+                "review": self.review,
+                "question_text": self.question_text,
+                "disable_screening": self.disable_screening,
+                "deletion_time": self.deletion_time,
+            },
+        )
+        return question
+
+    def soft_delete(self):
+        super().soft_delete()
+        mirrored_questions = L2ScreeningQuestion.objects.filter(
+            l1_question=self
+        )
+        for question in mirrored_questions:
+            question.soft_delete()
+
 
 @add_to_admin
 class L2ScreeningQuestion(AbstractScreeningQuestion):
+    l1_question = fields.ForeignKey(
+        # When this is set, the L2 questions is a
+        # 'redundant' or 'mirrored' question
+        # hidden from forms, and automatically managed based on the L1 question
+        L1ScreeningQuestion,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="l2_copies",
+    )
     review = fields.ForeignKey(
         Review,
         related_name="l2_screening_questions",
         on_delete=models.CASCADE,
         verbose_name=tdt("Systematic review"),
     )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["l1_question"], name="unique_l2_l1_question"
+            )
+        ]
 
 
 SCREENED_IN = "screen_in"
@@ -98,14 +135,54 @@ class L1ScreeningQuestionOption(AbstractScreeningQuestionOption):
         verbose_name=tdt("Screening question"),
     )
 
+    def sync_to_l2(self):
+        l2_question = L2ScreeningQuestion.objects.get(
+            l1_question=self.question
+        )
+        option, _ = L2ScreeningQuestionOption.objects.update_or_create(
+            l1_option=self,
+            defaults={
+                "question": l2_question,
+                "option_text": self.option_text,
+                "option_value": self.option_value,
+                "screening_action": self.screening_action,
+                "deletion_time": self.deletion_time,
+            },
+        )
+        return option
+
+    def soft_delete(self):
+        super().soft_delete()
+        mirrored_options = L2ScreeningQuestionOption.objects.filter(
+            l1_option=self
+        )
+        for option in mirrored_options:
+            option.soft_delete()
+
 
 class L2ScreeningQuestionOption(AbstractScreeningQuestionOption):
+    l1_option = fields.ForeignKey(
+        # like the parent question, when this is set, the option mirrors
+        # an L1 option, and will be hidden from forms, managed automatically
+        L1ScreeningQuestionOption,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="l2_copies",
+    )
     question = fields.ForeignKey(
         L2ScreeningQuestion,
         related_name="options",
         on_delete=models.CASCADE,
         verbose_name=tdt("Screening question"),
     )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["l1_option"], name="unique_l2_l1_option"
+            )
+        ]
 
 
 @add_to_admin
