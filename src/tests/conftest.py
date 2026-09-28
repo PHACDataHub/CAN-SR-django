@@ -1,9 +1,14 @@
+import importlib
+import os
+from unittest.mock import MagicMock, patch
+
 from django.db import transaction
 from django.test.client import Client
 
 import pytest
 from phac_aspc.django.settings.utils import configure_settings_for_tests
 
+import proj.settings
 from proj.models import User
 
 # Modify django settings to skip axes authentication backend
@@ -88,3 +93,24 @@ def vanilla_client(vanilla_user):
 @pytest.fixture
 def vanilla_user_client(vanilla_client):
     return vanilla_client
+
+
+@pytest.fixture
+def fake_azure_credential():
+    AZURE_CREDENTIAL_PATH = "proj.azure.azure_auth.get_azure_credential"
+    credential = MagicMock(name="FakeAzureCredential")
+    with patch(AZURE_CREDENTIAL_PATH, return_value=credential):
+        yield credential
+
+
+@pytest.fixture
+def reloaded_settings():
+    """Re-run settings.py with given env vars, then restore the real values."""
+
+    def _reload(**env):
+        with patch.dict(os.environ, env):
+            importlib.reload(proj.settings)
+        return proj.settings
+
+    yield _reload
+    importlib.reload(proj.settings)
