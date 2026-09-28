@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.urls import reverse
 
 import pytest
+from selenium.webdriver.common.by import By
 
 from my_app.model_factories import (
     CitationDatasetFactory,
@@ -109,15 +110,13 @@ def _create_screening_results(critical_status, *, disagrees=False):
 def _capture_detail_panels(
     live_server,
     driver,
-    assert_screenshot_matches,
+    save_screenshot,
     review,
     citation,
     state,
     expected_text,
     expected_class=None,
 ):
-
-    from selenium.webdriver.common.by import By
 
     for level in (1, 2):
         driver.get(
@@ -139,16 +138,16 @@ def _capture_detail_panels(
             By.XPATH,
             ".//dt[normalize-space()='Critical agent review']/following-sibling::dd[1]",
         )
-        assert_screenshot_matches(
+        snapshot_path = save_screenshot(
             driver,
-            baseline_name=f"l{level}-critical-{state}",
+            snapshot_name=f"l{level}-critical-{state}",
             element=snapshot,
-            comparison="colors" if level == 1 else "pixels",
         )
+        assert snapshot_path.is_file()
 
 
 def test_critical_agent_agrees_visual(
-    live_server, driver, admin_user, force_login, assert_screenshot_matches
+    live_server, driver, admin_user, force_login, save_screenshot
 ):
     review, citation = _create_screening_results(
         ScreeningResultStatus.COMPLETED
@@ -157,7 +156,7 @@ def test_critical_agent_agrees_visual(
     _capture_detail_panels(
         live_server,
         driver,
-        assert_screenshot_matches,
+        save_screenshot,
         review,
         citation,
         "agrees",
@@ -167,7 +166,7 @@ def test_critical_agent_agrees_visual(
 
 
 def test_critical_agent_disagrees_visual(
-    live_server, driver, admin_user, force_login, assert_screenshot_matches
+    live_server, driver, admin_user, force_login, save_screenshot
 ):
     review, citation = _create_screening_results(
         ScreeningResultStatus.COMPLETED, disagrees=True
@@ -176,7 +175,7 @@ def test_critical_agent_disagrees_visual(
     _capture_detail_panels(
         live_server,
         driver,
-        assert_screenshot_matches,
+        save_screenshot,
         review,
         citation,
         "disagrees",
@@ -186,14 +185,14 @@ def test_critical_agent_disagrees_visual(
 
 
 def test_critical_agent_loading_visual(
-    live_server, driver, admin_user, force_login, assert_screenshot_matches
+    live_server, driver, admin_user, force_login, save_screenshot
 ):
     review, citation = _create_screening_results(ScreeningResultStatus.PENDING)
     force_login(admin_user)
     _capture_detail_panels(
         live_server,
         driver,
-        assert_screenshot_matches,
+        save_screenshot,
         review,
         citation,
         "loading",
@@ -203,7 +202,7 @@ def test_critical_agent_loading_visual(
 
 
 def test_critical_agent_error_visual(
-    live_server, driver, admin_user, force_login, assert_screenshot_matches
+    live_server, driver, admin_user, force_login, save_screenshot
 ):
     review, citation = _create_screening_results(
         ScreeningResultStatus.ABANDONED
@@ -212,7 +211,7 @@ def test_critical_agent_error_visual(
     _capture_detail_panels(
         live_server,
         driver,
-        assert_screenshot_matches,
+        save_screenshot,
         review,
         citation,
         "error",

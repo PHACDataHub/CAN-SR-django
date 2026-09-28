@@ -4,6 +4,8 @@ from io import BytesIO
 from pathlib import Path
 from shutil import copyfile
 
+from PIL import Image, ImageChops, ImageOps
+
 BASELINE_DIR = Path(__file__).parent / "baselines"
 RESULT_DIR = Path(__file__).resolve().parents[3] / "test-results" / "visual"
 CHANNEL_TOLERANCE = 20
@@ -31,8 +33,7 @@ def _prepare_page(driver):
             "&& Array.from(document.images).every(image => image.complete)"
         )
     )
-    driver.execute_script(
-        """
+    driver.execute_script("""
         document.activeElement.blur();
         window.scrollTo(0, 0);
         const style = document.createElement('style');
@@ -42,12 +43,10 @@ def _prepare_page(driver):
             caret-color: transparent !important;
         } html, body { scroll-behavior: auto !important; }`;
         document.head.appendChild(style);
-        """
-    )
+        """)
 
 
 def _difference(expected, actual):
-    from PIL import Image, ImageChops, ImageOps
 
     width = max(expected.width, actual.width)
     height = max(expected.height, actual.height)
@@ -76,62 +75,8 @@ def _difference(expected, actual):
     return fraction, diff
 
 
-def _color_signature(image):
-    pixels = image.width * image.height
-    colors = image.getcolors(pixels)
-    background = max(colors, key=lambda item: item[0])[1]
-    text_colors = [
-        color
-        for count, color in colors
-        if count >= max(10, pixels * 0.005) and sum(color) / 3 < 225
-    ]
-    if not text_colors:
-        return None
-    text = min(text_colors, key=sum)
-    return background, text
-
-
-def _same_colors(expected, actual, tolerance=8):
-    expected_signature = _color_signature(expected)
-    actual_signature = _color_signature(actual)
-    if expected_signature is None or actual_signature is None:
-        return False
-    return all(
-        abs(expected_channel - actual_channel) <= tolerance
-        for expected_color, actual_color in zip(
-            expected_signature, actual_signature
-        )
-        for expected_channel, actual_channel in zip(
-            expected_color, actual_color
-        )
-    )
-
-
-def compare_screenshot(
-    driver,
-    baseline_name,
-    threshold=0.005,
-    update_baseline=False,
-    element=None,
-    comparison="pixels",
-):
+def _capture_screenshot(driver, element=None):
     from PIL import Image
-
-    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", baseline_name):
-        raise ValueError(
-            "baseline_name must contain only letters, digits, - or _"
-        )
-    if not 0 <= threshold <= 1:
-        raise ValueError("threshold must be between 0 and 1")
-    if comparison not in {"pixels", "colors"}:
-        raise ValueError("comparison must be 'pixels' or 'colors'")
-    if update_baseline and os.environ.get("CI"):
-        raise RuntimeError("Visual baselines cannot be updated in CI")
-
-    baseline_path = BASELINE_DIR / f"{baseline_name}.png"
-    result_path = RESULT_DIR / baseline_name
-    for name in ("expected.png", "actual.png", "diff.png"):
-        (result_path / name).unlink(missing_ok=True)
 
     try:
         _prepare_page(driver)
@@ -164,6 +109,44 @@ def compare_screenshot(
             ).convert("RGB")
     finally:
         driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
+    return actual
+
+
+def save_screenshot(driver, snapshot_name, element=None):
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", snapshot_name):
+        raise ValueError(
+            "snapshot_name must contain only letters, digits, - or _"
+        )
+    output_path = RESULT_DIR / "snapshots" / f"{snapshot_name}.png"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _capture_screenshot(driver, element).save(output_path)
+    return output_path
+
+
+def compare_screenshot(
+    driver,
+    baseline_name,
+    threshold=0.005,
+    update_baseline=False,
+    element=None,
+):
+    from PIL import Image
+
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", baseline_name):
+        raise ValueError(
+            "baseline_name must contain only letters, digits, - or _"
+        )
+    if not 0 <= threshold <= 1:
+        raise ValueError("threshold must be between 0 and 1")
+    if update_baseline and os.environ.get("CI"):
+        raise RuntimeError("Visual baselines cannot be updated in CI")
+
+    baseline_path = BASELINE_DIR / f"{baseline_name}.png"
+    result_path = RESULT_DIR / baseline_name
+    for name in ("expected.png", "actual.png", "diff.png"):
+        (result_path / name).unlink(missing_ok=True)
+
+    actual = _capture_screenshot(driver, element)
 
     if update_baseline:
         baseline_path.parent.mkdir(parents=True, exist_ok=True)
@@ -180,14 +163,8 @@ def compare_screenshot(
 
     with Image.open(baseline_path) as image:
         expected = image.convert("RGB")
-    if comparison == "colors" and _same_colors(expected, actual):
-        return
     difference, diff = _difference(expected, actual)
-    if (
-        comparison == "pixels"
-        and difference <= threshold
-        and expected.size == actual.size
-    ):
+    if difference <= threshold and expected.size == actual.size:
         return
 
     result_path.mkdir(parents=True, exist_ok=True)
@@ -198,11 +175,6 @@ def compare_screenshot(
     if expected.size != actual.size:
         dimensions = (
             f"; dimensions {expected.size} expected, {actual.size} actual"
-        )
-    if comparison == "colors":
-        raise AssertionError(
-            f"Visual colors differ for {baseline_name}{dimensions}. "
-            f"See {result_path}."
         )
     raise AssertionError(
         f"Visual difference for {baseline_name}: {difference:.2%} "

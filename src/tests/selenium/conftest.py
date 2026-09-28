@@ -11,6 +11,9 @@ from django.contrib.sessions.backends.db import SessionStore
 import pytest
 
 from tests.selenium.visual_comparison_utils import compare_screenshot
+from tests.selenium.visual_comparison_utils import (
+    save_screenshot as save_visual_screenshot,
+)
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -61,22 +64,20 @@ def force_login(driver, live_server):
 
 @pytest.fixture
 def assert_screenshot_matches(request):
-    def assert_match(
-        driver,
-        baseline_name,
-        threshold=0.005,
-        element=None,
-        comparison="pixels",
-    ):
+    def assert_match(driver, baseline_name, threshold=0.005, element=None):
         compare_screenshot(
             driver,
             baseline_name=baseline_name,
             threshold=threshold,
             element=element,
-            comparison=comparison,
             update_baseline=request.config.getoption(
                 "--update-visual-baselines"
             ),
         )
 
     return assert_match
+
+
+@pytest.fixture
+def save_screenshot():
+    return save_visual_screenshot
