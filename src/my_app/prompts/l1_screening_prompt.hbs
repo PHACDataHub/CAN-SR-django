@@ -12,16 +12,25 @@ The available options (exact text) are:
 Additional guidance to consider:
 {{{definitions}}}
 
+{{#if is_critical}}
+The first model answered: "{{{answer_to_critique}}}", You are NOT allowed to choose the original answer.
+Choose "None of the above" if you agree with the first model's answer. Otherwise choose one of the remaining options.
+{{/if}}
+
 Output requirement:
 Respond with a JSON object containing these keys:
-- "selected": the exact option string you selected (must match one of the options above; if none fits, pick the closest option and report a low confidence score)
+- "selected": the exact option string you selected (must match one of the options above{{#unless is_critical}}; if none fits, pick the closest option and report a low confidence score{{/unless}})
+{{#unless is_critical}}
 - "explanation": a concise explanation (1-4 sentences) of why you selected that option
+{{/unless}}
 - "confidence": a floating number between 0 and 1 (inclusive) representing your estimated confidence for the selected option
 
 JSON object format:
 {
-  "selected": "Include",
+  "selected": "{{#if is_critical}}<one of the provided options>{{else}}Include{{/if}}",
+{{#unless is_critical}}
   "explanation": "The study meets the inclusion criteria because ...",
+{{/unless}}
   "confidence": 0.72
 }
 

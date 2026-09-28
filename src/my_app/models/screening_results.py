@@ -181,3 +181,52 @@ class ParameterExtractionResult(CitationQueryResult):
 
     class Meta:
         unique_together = ("citation", "question")
+
+
+class CriticalScreeningResult(models.Model):
+    """A completed result with no selected option agrees with the first model."""
+
+    class Meta:
+        abstract = True
+
+    language_model = models.ForeignKey(
+        "LanguageModel", on_delete=models.SET_NULL, null=True, blank=True
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=ScreeningResultStatus.choices,
+        default=ScreeningResultStatus.PENDING,
+    )
+    confidence = models.FloatField(null=True, blank=True)
+    error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    abandoned_at = models.DateTimeField(null=True, blank=True)
+
+
+class L1CriticalScreeningResult(CriticalScreeningResult):
+    initial_result = models.OneToOneField(
+        "L1ScreeningResult",
+        on_delete=models.CASCADE,
+        related_name="critical_result",
+    )
+    selected_option = models.ForeignKey(
+        "L1ScreeningQuestionOption",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
+
+
+class L2CriticalScreeningResult(CriticalScreeningResult):
+    initial_result = models.OneToOneField(
+        "L2ScreeningResult",
+        on_delete=models.CASCADE,
+        related_name="critical_result",
+    )
+    selected_option = models.ForeignKey(
+        "L2ScreeningQuestionOption",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+    )
