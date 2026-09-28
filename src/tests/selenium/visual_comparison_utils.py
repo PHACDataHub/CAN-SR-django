@@ -76,12 +76,44 @@ def _difference(expected, actual):
     return fraction, diff
 
 
+def _color_signature(image):
+    pixels = image.width * image.height
+    colors = image.getcolors(pixels)
+    background = max(colors, key=lambda item: item[0])[1]
+    text_colors = [
+        color
+        for count, color in colors
+        if count >= max(10, pixels * 0.005) and sum(color) / 3 < 225
+    ]
+    if not text_colors:
+        return None
+    text = min(text_colors, key=sum)
+    return background, text
+
+
+def _same_colors(expected, actual, tolerance=8):
+    expected_signature = _color_signature(expected)
+    actual_signature = _color_signature(actual)
+    if expected_signature is None or actual_signature is None:
+        return False
+    return all(
+        abs(expected_channel - actual_channel) <= tolerance
+        for expected_color, actual_color in zip(
+            expected_signature, actual_signature
+        )
+        for expected_channel, actual_channel in zip(
+            expected_color, actual_color
+        )
+    )
+
+
 def compare_screenshot(
     driver,
     baseline_name,
     threshold=0.005,
     update_baseline=False,
     element=None,
+    comparison="pixels",
 ):
     from PIL import Image
 
@@ -91,6 +123,8 @@ def compare_screenshot(
         )
     if not 0 <= threshold <= 1:
         raise ValueError("threshold must be between 0 and 1")
+    if comparison not in {"pixels", "colors"}:
+        raise ValueError("comparison must be 'pixels' or 'colors'")
     if update_baseline and os.environ.get("CI"):
         raise RuntimeError("Visual baselines cannot be updated in CI")
 
@@ -146,8 +180,14 @@ def compare_screenshot(
 
     with Image.open(baseline_path) as image:
         expected = image.convert("RGB")
+    if comparison == "colors" and _same_colors(expected, actual):
+        return
     difference, diff = _difference(expected, actual)
-    if difference <= threshold and expected.size == actual.size:
+    if (
+        comparison == "pixels"
+        and difference <= threshold
+        and expected.size == actual.size
+    ):
         return
 
     result_path.mkdir(parents=True, exist_ok=True)
@@ -158,6 +198,11 @@ def compare_screenshot(
     if expected.size != actual.size:
         dimensions = (
             f"; dimensions {expected.size} expected, {actual.size} actual"
+        )
+    if comparison == "colors":
+        raise AssertionError(
+            f"Visual colors differ for {baseline_name}{dimensions}. "
+            f"See {result_path}."
         )
     raise AssertionError(
         f"Visual difference for {baseline_name}: {difference:.2%} "

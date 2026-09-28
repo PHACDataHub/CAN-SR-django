@@ -143,6 +143,7 @@ def _capture_detail_panels(
             driver,
             baseline_name=f"l{level}-critical-{state}",
             element=snapshot,
+            comparison="colors" if level == 1 else "pixels",
         )
 
 
