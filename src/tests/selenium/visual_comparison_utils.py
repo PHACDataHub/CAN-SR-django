@@ -33,7 +33,8 @@ def _prepare_page(driver):
             "&& Array.from(document.images).every(image => image.complete)"
         )
     )
-    driver.execute_script("""
+    driver.execute_script(
+        """
         document.activeElement.blur();
         window.scrollTo(0, 0);
         const style = document.createElement('style');
@@ -43,7 +44,8 @@ def _prepare_page(driver):
             caret-color: transparent !important;
         } html, body { scroll-behavior: auto !important; }`;
         document.head.appendChild(style);
-        """)
+        """
+    )
 
 
 def _difference(expected, actual):
