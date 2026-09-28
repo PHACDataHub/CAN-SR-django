@@ -47,7 +47,7 @@ class RequestedDocumentPostProcessingService:
             return
 
         questions = list(
-            L2ScreeningQuestion.objects.filter(
+            L2ScreeningQuestion.active_objects.filter(
                 review=self.citation.dataset.review
             )
         )
@@ -66,8 +66,8 @@ class RequestedDocumentPostProcessingService:
             return
 
         parameters = list(
-            Parameter.objects.filter(
-                category__review=self.citation.dataset.review
+            Parameter.active_objects.filter(
+                review=self.citation.dataset.review
             )
         )
         EnqueueParameterExtractionService(

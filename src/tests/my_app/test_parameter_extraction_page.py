@@ -10,10 +10,13 @@ from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
     DocumentFactory,
-    ParameterCategoryFactory,
+    L2ScreeningQuestionFactory,
+    L2ScreeningQuestionOptionFactory,
+    L2ScreeningResultFactory,
     ParameterExtractionResultFactory,
     ParameterFactory,
     ParameterHumanAnswerFactory,
+    ParameterOptionFactory,
     ReviewFactory,
     TextExtractionResultFactory,
 )
@@ -21,8 +24,10 @@ from my_app.models import (
     DocumentFigure,
     DocumentTable,
     FigureExtractionResult,
+    Parameter,
     ParameterExtractionResult,
     ParameterHumanAnswer,
+    ScreeningActions,
     ScreeningResultStatus,
     TextExtractionResult,
 )
@@ -85,8 +90,8 @@ def test_parameter_extraction_shell_can_disable_polling(vanilla_client):
 def test_parameter_extraction_component_view_renders(vanilla_client):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
-    category = ParameterCategoryFactory(review=review)
-    parameter = ParameterFactory(category=category)
+    parameter_review = review
+    parameter = ParameterFactory(review=parameter_review)
     row = CitationFactory(dataset=dataset, order=1)
     ParameterExtractionResultFactory(
         citation=row,
@@ -133,8 +138,8 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
         document=document,
         status=FigureExtractionResult.Status.COMPLETED,
     )
-    category = ParameterCategoryFactory(review=review, name="Dose")
-    parameter = ParameterFactory(category=category, name="Daily dose")
+    parameter_review = review
+    parameter = ParameterFactory(review=parameter_review, name="Daily dose")
     ParameterExtractionResultFactory(
         citation=row,
         question=parameter,
@@ -180,7 +185,6 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     assert "Parameter citation" in body
     assert "Parameter extraction results" in body
     assert "Daily dose" in body
-    assert "Dose" in body
     assert "10 mg" in body
     assert "Reported in the methods." in body
     assert "AI answer" in body
@@ -216,15 +220,74 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     assert "Re-extract" in body
 
 
+def test_parameter_detail_allows_l2_excluded_citation(vanilla_client):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    citation = CitationFactory(
+        dataset=dataset, title="Excluded from parameter stage"
+    )
+    l2_question = L2ScreeningQuestionFactory(review=review)
+    l2_out = L2ScreeningQuestionOptionFactory(
+        question=l2_question, screening_action=ScreeningActions.ScreenOut
+    )
+    L2ScreeningResultFactory(
+        citation=citation,
+        question=l2_question,
+        selected_option=l2_out,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse(
+                "parameter_extraction_citation_detail",
+                args=[review.id, citation.id],
+            )
+        )
+
+    assert response.status_code == 200
+    assert "Outside this stage" in response.content.decode()
+
+
+def test_parameter_human_answer_endpoint_allows_l2_excluded_citation(
+    vanilla_client,
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    citation = CitationFactory(dataset=dataset)
+    l2_question = L2ScreeningQuestionFactory(review=review)
+    l2_out = L2ScreeningQuestionOptionFactory(
+        question=l2_question, screening_action=ScreeningActions.ScreenOut
+    )
+    L2ScreeningResultFactory(
+        citation=citation,
+        question=l2_question,
+        selected_option=l2_out,
+        status=ScreeningResultStatus.COMPLETED,
+    )
+    parameter = ParameterFactory(review=review)
+    result = ParameterExtractionResultFactory(
+        citation=citation, question=parameter
+    )
+
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse(
+                "parameter_extraction_citation_human_answer",
+                args=[review.id, result.id],
+            )
+        )
+
+    assert response.status_code == 200
+
+
 def test_parameter_extraction_validate_ai_answer_creates_human_answer(
     vanilla_client, vanilla_user
 ):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     row = CitationFactory(dataset=dataset, order=1)
-    parameter = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter = ParameterFactory(review=review)
     result = ParameterExtractionResultFactory(
         citation=row,
         question=parameter,
@@ -262,9 +325,7 @@ def test_parameter_extraction_human_answer_modal_saves_and_edits_values(
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     row = CitationFactory(dataset=dataset, order=1)
-    parameter = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter = ParameterFactory(review=review)
     result = ParameterExtractionResultFactory(
         citation=row,
         question=parameter,
@@ -331,6 +392,53 @@ def test_parameter_extraction_human_answer_modal_saves_and_edits_values(
     assert ParameterHumanAnswer.objects.count() == 2
 
 
+def test_parameter_extraction_human_answer_selects_parameter_option(
+    vanilla_client, vanilla_user
+):
+    review = ReviewFactory()
+    dataset = CitationDatasetFactory(review=review)
+    row = CitationFactory(dataset=dataset)
+    parameter = ParameterFactory(
+        review=review,
+        option_type=Parameter.OptionType.SELECT,
+    )
+    option = ParameterOptionFactory(parameter=parameter, name="High dose")
+    deleted_option = ParameterOptionFactory(
+        parameter=parameter,
+        name="Deleted dose",
+    )
+    deleted_option.soft_delete()
+    result = ParameterExtractionResultFactory(
+        citation=row,
+        question=parameter,
+        status=ScreeningResultStatus.COMPLETED,
+        found=True,
+        selected_option=option,
+    )
+    url = reverse(
+        "parameter_extraction_citation_human_answer",
+        args=[review.id, result.id],
+    )
+
+    with patch_rules(can_access_review=True):
+        get_response = vanilla_client.get(url)
+        response = vanilla_client.post(
+            url,
+            {
+                "found": "True",
+                "selected_option": option.id,
+                "notes": "Matched the reported band.",
+            },
+        )
+
+    answer = ParameterHumanAnswer.objects.get(user=vanilla_user)
+    assert response.status_code == 200
+    assert "High dose" in get_response.content.decode()
+    assert "Deleted dose" not in get_response.content.decode()
+    assert answer.selected_option == option
+    assert "High dose" in response.content.decode()
+
+
 def test_parameter_extraction_process_view_enqueues_extraction_and_returns_control(
     vanilla_client,
 ):
@@ -346,9 +454,11 @@ def test_parameter_extraction_process_view_enqueues_extraction_and_returns_contr
         document=document,
         status=FigureExtractionResult.Status.COMPLETED,
     )
-    category = ParameterCategoryFactory(review=review)
-    parameter1 = ParameterFactory(category=category)
-    parameter2 = ParameterFactory(category=category)
+    parameter_review = review
+    parameter1 = ParameterFactory(review=parameter_review)
+    parameter2 = ParameterFactory(review=parameter_review)
+    deleted_parameter = ParameterFactory(review=parameter_review)
+    deleted_parameter.soft_delete()
 
     with patch_rules(can_access_review=True):
         with patch(
@@ -377,6 +487,7 @@ def test_parameter_extraction_process_view_enqueues_extraction_and_returns_contr
         == 2
     )
     assert task_mock.enqueue.call_count == 2
+    assert not results.filter(question=deleted_parameter).exists()
     assert {
         call.kwargs["result_id"] for call in task_mock.enqueue.call_args_list
     } == {result.id for result in results}
@@ -393,7 +504,7 @@ def test_parameter_extraction_process_view_rejects_unprocessed_document(
         document=document,
         status=TextExtractionResult.TextExtractionStatus.COMPLETED,
     )
-    ParameterFactory(category=ParameterCategoryFactory(review=review))
+    ParameterFactory(review=review)
 
     with patch_rules(can_access_review=True):
         with patch(
@@ -448,9 +559,7 @@ def test_parameter_extraction_pdf_metadata_view_returns_evidence_highlights(
         pages=pages,
         coordinates=coordinates,
     )
-    parameter = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter = ParameterFactory(review=review)
     ParameterExtractionResultFactory(
         citation=row,
         question=parameter,
@@ -540,9 +649,7 @@ def test_parameter_extraction_views_require_review_access(
     document = DocumentFactory()
     row = CitationFactory(dataset=dataset, order=1, document=document)
     TextExtractionResultFactory(document=document)
-    parameter = ParameterFactory(
-        category=ParameterCategoryFactory(review=review)
-    )
+    parameter = ParameterFactory(review=review)
     result = ParameterExtractionResultFactory(
         citation=row,
         question=parameter,

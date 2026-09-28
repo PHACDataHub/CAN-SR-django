@@ -30,7 +30,7 @@ class ScreeningHumanAnswerForm(forms.ModelForm, StandardFormMixin):
         self.fields["selected_option"].queryset = (
             self._meta.model._meta.get_field(
                 "selected_option"
-            ).remote_field.model.objects.filter(question=question)
+            ).remote_field.model.active_objects.filter(question=question)
         )
 
 

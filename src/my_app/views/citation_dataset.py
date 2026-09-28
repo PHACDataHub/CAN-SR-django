@@ -52,9 +52,13 @@ class CitationDatasetDetailPage(BasePageTemplate):
             h.h1[tdt("Dataset")],
             h.div(".d-flex.gap-2.justify-content-end.mb-3")[
                 h.a(
+                    href=reverse("citation_upload", args=[review.id]),
+                    class_="btn btn-primary",
+                )[tdt("Upload more citations")],
+                h.a(
                     href=delete_url,
                     class_="btn btn-outline-danger",
-                )[tdt("Delete dataset")]
+                )[tdt("Delete dataset")],
             ],
             h.div(".border.rounded.p-3.h-100")[
                 h.h2(".h5")[tdt("Dataset summary")],

@@ -11,6 +11,16 @@ class PytestTestRunner:
             "--select",
             help="remaps to -k test-selection argument in pytest",
         )
+        parser.add_argument(
+            "--selenium",
+            action="store_true",
+            help="run only live browser tests",
+        )
+        parser.add_argument(
+            "--update-visual-baselines",
+            action="store_true",
+            help="write visual baselines instead of comparing screenshots",
+        )
 
     def __init__(
         self,
@@ -18,12 +28,16 @@ class PytestTestRunner:
         failfast=False,
         keepdb=True,
         select=None,
+        selenium=False,
+        update_visual_baselines=False,
         **kwargs,
     ):
         self.verbosity = verbosity
         self.failfast = failfast
         self.keepdb = keepdb
         self.select = select
+        self.selenium = selenium
+        self.update_visual_baselines = update_visual_baselines
 
     def run_tests(self, test_labels):
         """Run pytest and return the exitcode.
@@ -45,6 +59,10 @@ class PytestTestRunner:
             argv.append("--exitfirst")
         if self.keepdb:
             argv.append("--reuse-db")
+        if self.selenium:
+            argv.extend(["-m", "selenium"])
+        if self.update_visual_baselines:
+            argv.append("--update-visual-baselines")
 
         argv.extend(test_labels)
         return pytest.main(argv)

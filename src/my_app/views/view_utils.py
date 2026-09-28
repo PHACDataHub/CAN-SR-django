@@ -1,12 +1,16 @@
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.http import HttpResponse
+from django.views.generic.base import ContextMixin
 
 from my_app.models import Review
 from shortcuts import MustPassRuleMixin, View, cached_property, test_rule
 
 
-class ReviewMixin(View):
+class ReviewMixin(
+    ContextMixin,
+    View,
+):
     @cached_property
     def review(self):
         return Review.objects.get(pk=self.kwargs["review_id"])
@@ -18,7 +22,10 @@ class ReviewMixin(View):
         }
 
 
-class MustAccessReviewMixin(MustPassRuleMixin, ReviewMixin):
+class MustAccessReviewMixin(
+    MustPassRuleMixin,
+    ReviewMixin,
+):
     def check_rule(self, user):
         return test_rule(
             "can_access_review",

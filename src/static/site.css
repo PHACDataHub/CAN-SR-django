@@ -37,6 +37,10 @@ strong>span+label {
     margin-left: 0.125rem;
 }
 
+.transparent-text {
+    opacity: 0.8;
+}
+
 
 
 dl.custom-dl {
@@ -74,17 +78,18 @@ dl.custom-dl {
 }
 
 @container custom-dl (max-width: 34rem) {
-    dl.custom-dl > dt,
-    dl.custom-dl > dd {
+
+    dl.custom-dl>dt,
+    dl.custom-dl>dd {
         grid-column: 1 / -1;
     }
 
-    dl.custom-dl > dt {
+    dl.custom-dl>dt {
         padding-bottom: 0;
         border-bottom: 0;
     }
 
-    dl.custom-dl > dd {
+    dl.custom-dl>dd {
         padding-left: 0;
         padding-bottom: 0.75rem;
     }
@@ -104,4 +109,33 @@ dl.custom-dl {
     position: sticky;
     top: 1rem;
     z-index: 1;
+}
+
+[x-cloak] {
+    display: none !important;
+}
+
+.formset-item-container:not(:last-of-type) {
+    border-bottom: 1px solid #ccc;
+}
+
+
+.formset-item-container:has(input[type="checkbox"][name$="-DELETE"]:checked) {
+
+    input,
+    select,
+    textarea {
+        &:not([name$="-DELETE"]) {
+            opacity: 0.5;
+        }
+    }
+
+    label:not(:has([for$="-DELETE"])):not([for$="-DELETE"]) {
+        opacity: 0.5;
+    }
+}
+
+.citation-column-mapping-omitted [data-column-existing],
+.citation-column-mapping-omitted [data-column-name] {
+    opacity: 0.5;
 }

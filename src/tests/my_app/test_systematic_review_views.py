@@ -117,6 +117,22 @@ def test_create_review_creates_link_and_redirects(
     assert "Cancel" not in body
 
 
+def test_create_review_can_enable_disable_filtering(vanilla_user_client):
+    response = vanilla_user_client.post(
+        reverse("create_review"),
+        {
+            "title": "Review without stage filtering",
+            "description": "Description",
+            "disable_filtering": "on",
+        },
+    )
+
+    assert response.status_code == 302
+    assert Review.objects.get(
+        title="Review without stage filtering"
+    ).disable_filtering
+
+
 def test_create_review_saves_selected_users_and_creator(
     vanilla_user_client, vanilla_user
 ):

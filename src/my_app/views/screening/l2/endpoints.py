@@ -61,7 +61,9 @@ class L2HumanAnswerView(L2HumanReviewMixin, HumanAnswerFormView):
 class L2PdfScreeningProcessView(DocumentCitationMixin):
     @cached_property
     def screening_questions(self):
-        return list(L2ScreeningQuestion.objects.filter(review=self.review))
+        return list(
+            L2ScreeningQuestion.active_objects.filter(review=self.review)
+        )
 
     def post(self, request, *args, **kwargs):
         if not can_start_l2_screening(self.citation_row):

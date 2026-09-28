@@ -10,6 +10,7 @@ from my_app.models import (
 )
 from my_app.queries import (
     L1ScreeningStatusFetcher,
+    ReviewStage,
     get_l1_screening_progress_stats,
 )
 from my_app.router import route
@@ -165,6 +166,7 @@ class L1CitationScreeningPage(BasePageTemplate):
             CitationScreeningProgressNav(
                 self.citation_row,
                 review,
+                stage=ReviewStage.L1_SCREENING,
                 detail_route_name="l1_citation_detail",
                 progress_stats=get_l1_screening_progress_stats(review.id),
                 nav_label=tdt("L1 citation navigation"),
@@ -327,5 +329,5 @@ class L1CitationScreeningView(
             Citation.objects.filter(dataset__review=self.review)
             .select_related("dataset")
             .prefetch_related("dataset__screening_columns")
-            .order_by("order")
+            .order_by("order", "id")
         )

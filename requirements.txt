@@ -23,11 +23,13 @@ htpy==25.12.0
 httpx==0.28.1
 ipython==8.10.0
 openai==2.43.0
+pybars3==0.9.7
 psycopg[binary,pool]==3.2.3
 python-decouple==3.8
 pydantic==2.13.4
 pytz==2024.1
 requests==2.32.4
 rules==3.3
+rispy==0.10.0
 whitenoise==6.4.0
 PyYAML==6.0.3

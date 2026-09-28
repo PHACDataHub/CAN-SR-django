@@ -1,4 +1,9 @@
 # .coveragerc
+[run]
+omit =
+    # pybars3 compiles templates into synthetic, non-filesystem modules.
+    */_templates/*
+
 [report]
 show_missing = False
 omit =

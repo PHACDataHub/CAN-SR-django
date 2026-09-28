@@ -1,6 +1,7 @@
 from django.http import Http404, JsonResponse
 
 from my_app.models import Citation, DocumentFigure, DocumentTable
+from my_app.queries import get_citations_for_stage
 from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
     DetailView,
@@ -11,23 +12,25 @@ from shortcuts import (
 )
 
 
-def document_citations_for_review(review):
-    return (
-        Citation.objects.filter(dataset__review=review)
-        .select_related(
-            "document",
-            "document__text_extraction_result",
-            "document__figure_extraction_result",
-        )
-        .order_by("order")
-    )
+def document_citations_for_review(review, stage=None):
+    if stage is None:
+        citations = Citation.objects.filter(dataset__review=review)
+    else:
+        citations = get_citations_for_stage(review.id, stage)
+
+    return citations.select_related(
+        "document",
+        "document__text_extraction_result",
+        "document__figure_extraction_result",
+    ).order_by("order", "id")
 
 
 class DocumentCitationListView(MustAccessReviewMixin, ListView):
     paginate_by = 10
+    stage = None
 
     def get_queryset(self):
-        return document_citations_for_review(self.review)
+        return document_citations_for_review(self.review, self.stage)
 
 
 class DocumentCitationDetailView(

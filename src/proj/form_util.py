@@ -1,6 +1,8 @@
 from django import forms
 from django.forms import widgets
+from django.forms.models import BaseInlineFormSet
 
+from proj.model_util import ACTIVE_CONDITION
 from proj.text import tm
 
 # TODO: this mixin isn't easily overriden.
@@ -220,3 +222,15 @@ class StandardFormMixin(
     DisableAutocompleteMixin,
 ):
     pass
+
+
+class SoftDeleteInlineFormSet(BaseInlineFormSet):
+
+    def get_queryset(self):
+        return super().get_queryset().filter(ACTIVE_CONDITION)
+
+    def delete_existing(self, obj, commit=True):
+        if not commit:
+            return
+
+        obj.soft_delete()

@@ -40,6 +40,9 @@ from shortcuts import (
 
 
 class ReviewForm(ModelForm, StandardFormMixin):
+    disable_filtering = forms.BooleanField(
+        label=tdt("Disable filtering"), required=False
+    )
     is_deleted = forms.BooleanField(
         label=tdt("Is deleted"),
         help_text=tdt(
@@ -68,6 +71,7 @@ class ReviewForm(ModelForm, StandardFormMixin):
             "language_model",
             "users",
             "is_deleted",
+            "disable_filtering",
         ]
 
     def __init__(self, *args, **kwargs):

@@ -11,6 +11,7 @@ from my_app.models import (
 )
 from my_app.queries import (
     L2ScreeningStatusFetcher,
+    ReviewStage,
     get_l2_screening_progress_stats,
 )
 from my_app.router import route
@@ -102,6 +103,7 @@ class L2PdfScreeningPage(BasePageTemplate):
             progress_navigation=CitationScreeningProgressNav(
                 citation_row,
                 review,
+                stage=ReviewStage.L2_SCREENING,
                 detail_route_name="l2_citation_detail",
                 progress_stats=get_l2_screening_progress_stats(review.id),
                 nav_label=tdt("L2 citation navigation"),

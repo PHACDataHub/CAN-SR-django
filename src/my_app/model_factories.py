@@ -17,9 +17,9 @@ from my_app.models import (
     L2ScreeningQuestionOption,
     L2ScreeningResult,
     Parameter,
-    ParameterCategory,
     ParameterExtractionResult,
     ParameterHumanAnswer,
+    ParameterOption,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
@@ -138,21 +138,22 @@ class L2ScreeningQuestionOptionFactory(factory.django.DjangoModelFactory):
     option_value = factory.Faker("sentence")
 
 
-class ParameterCategoryFactory(factory.django.DjangoModelFactory):
-    class Meta:
-        model = ParameterCategory
-
-    review = factory.SubFactory(ReviewFactory)
-    name = factory.Sequence(lambda n: f"Parameter category {n + 1}")
-
-
 class ParameterFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Parameter
 
-    category = factory.SubFactory(ParameterCategoryFactory)
+    review = factory.SubFactory(ReviewFactory)
     name = factory.Sequence(lambda n: f"Parameter {n + 1}")
     description = factory.Faker("sentence")
+
+
+class ParameterOptionFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = ParameterOption
+
+    parameter = factory.SubFactory(ParameterFactory)
+    name = factory.Sequence(lambda n: f"Parameter option {n + 1}")
+    context = factory.Faker("sentence")
 
 
 class L1ScreeningResultFactory(factory.django.DjangoModelFactory):
@@ -220,7 +221,7 @@ class ParameterExtractionResultFactory(factory.django.DjangoModelFactory):
     citation = factory.SubFactory(CitationFactory)
     question = factory.SubFactory(
         ParameterFactory,
-        category__review=factory.SelfAttribute("..citation.dataset.review"),
+        review=factory.SelfAttribute("..citation.dataset.review"),
     )
     status = ScreeningResultStatus.PENDING
 
@@ -232,6 +233,6 @@ class ParameterHumanAnswerFactory(factory.django.DjangoModelFactory):
     citation = factory.SubFactory(CitationFactory)
     question = factory.SubFactory(
         ParameterFactory,
-        category__review=factory.SelfAttribute("...citation.dataset.review"),
+        review=factory.SelfAttribute("..citation.dataset.review"),
     )
     user = factory.SubFactory(UserFactory)

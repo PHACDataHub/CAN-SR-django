@@ -133,7 +133,7 @@ class L1ScreeningComponent:
     @cached_property
     def citation_rows(self):
         return Citation.objects.filter(dataset__review=self.review).order_by(
-            "order"
+            "order", "id"
         )
 
     @cached_property
@@ -147,7 +147,7 @@ class L1ScreeningComponent:
     @cached_property
     def screening_questions(self):
         return list(
-            L1ScreeningQuestion.objects.filter(
+            L1ScreeningQuestion.active_objects.filter(
                 review=self.review
             ).prefetch_related("options")
         )
@@ -241,7 +241,7 @@ class L1ScreeningBaseView(MustAccessReviewMixin, ListView):
 
     def get_queryset(self):
         return Citation.objects.filter(dataset__review=self.review).order_by(
-            "order"
+            "order", "id"
         )
 
 

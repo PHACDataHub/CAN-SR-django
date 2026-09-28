@@ -183,6 +183,10 @@ class BasePageTemplate(HtpyComponent):
             h.script(src=static("third_party/js/idiomorph-ext.min.js")),
             h.script(src=static("third_party/js/bootstrap.bundle.min.js")),
             h.script(src=static("dynamic_formsets.js")),
+            h.script(
+                {"defer": True},
+                src=static("third_party/js/alpine-3.17.2.min.js"),
+            ),
             Markup(django_htmx_script()) if is_debug else None,
             self.head_medias(),
             self.head_extra_scripts_css(),

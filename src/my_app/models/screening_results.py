@@ -7,11 +7,7 @@ from proj.model_util import add_to_admin
 from proj.text import tdt
 
 from .review import Review
-from .screening_criteria import (
-    L1ScreeningQuestion,
-    L2ScreeningQuestion,
-    ParameterCategory,
-)
+from .screening_criteria import L1ScreeningQuestion, L2ScreeningQuestion
 
 
 class ScreeningResultStatus(models.TextChoices):
@@ -151,12 +147,24 @@ class ParameterHumanAnswer(HumanAnswer):
     question = models.ForeignKey("Parameter", on_delete=models.CASCADE)
     found = models.BooleanField(default=False)
     value = models.TextField(null=True, blank=True)
+    selected_option = models.ForeignKey(
+        "ParameterOption",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
 
 
 class ParameterExtractionResult(CitationQueryResult):
     question = models.ForeignKey("Parameter", on_delete=models.CASCADE)
     found = models.BooleanField(default=False)
     value = models.TextField(null=True, blank=True)
+    selected_option = models.ForeignKey(
+        "ParameterOption",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
     explanation = models.TextField(null=True, blank=True)
     evidence_sentences = models.JSONField(
         default=list,
