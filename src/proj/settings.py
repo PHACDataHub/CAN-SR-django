@@ -153,9 +153,6 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(config("MEDIA_ROOT", default=str(BASE_DIR / "media")))
 
-
-# media storage settings
-
 MEDIA_STORAGE_MODE = config(
     # 'local' or 'azure'
     "MEDIA_STORAGE_MODE",
@@ -193,7 +190,6 @@ elif MEDIA_STORAGE_MODE != "local":
         f"Invalid MEDIA_STORAGE_MODE: {MEDIA_STORAGE_MODE}. Must be 'local' or 'azure'"
     )
 
-# END media storage settings
 
 MIDDLEWARE = configure_middleware(
     [
