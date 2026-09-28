@@ -40,7 +40,7 @@ def _prepare_page(driver):
             animation: none !important;
             transition: none !important;
             caret-color: transparent !important;
-        }`;
+        } html, body { scroll-behavior: auto !important; }`;
         document.head.appendChild(style);
         """
     )
@@ -77,7 +77,11 @@ def _difference(expected, actual):
 
 
 def compare_screenshot(
-    driver, baseline_name, threshold=0.005, update_baseline=False
+    driver,
+    baseline_name,
+    threshold=0.005,
+    update_baseline=False,
+    element=None,
 ):
     from PIL import Image
 
@@ -97,9 +101,33 @@ def compare_screenshot(
 
     try:
         _prepare_page(driver)
-        actual = Image.open(BytesIO(driver.get_screenshot_as_png())).convert(
-            "RGB"
-        )
+        if element is not None:
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});",
+                element,
+            )
+            bounds = driver.execute_script(
+                """const rect = arguments[0].getBoundingClientRect();
+                return [rect.left, rect.top, rect.right, rect.bottom];""",
+                element,
+            )
+            viewport = Image.open(
+                BytesIO(driver.get_screenshot_as_png())
+            ).convert("RGB")
+            if (
+                bounds[0] < 0
+                or bounds[1] < 0
+                or bounds[2] > viewport.width
+                or bounds[3] > viewport.height
+            ):
+                raise AssertionError(
+                    f"Snapshot element is outside the viewport: {bounds}"
+                )
+            actual = viewport.crop(tuple(round(edge) for edge in bounds))
+        else:
+            actual = Image.open(
+                BytesIO(driver.get_screenshot_as_png())
+            ).convert("RGB")
     finally:
         driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
 

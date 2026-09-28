@@ -69,11 +69,12 @@ def force_login(driver, live_server):
 
 @pytest.fixture
 def assert_screenshot_matches(request):
-    def assert_match(driver, baseline_name, threshold=0.005):
+    def assert_match(driver, baseline_name, threshold=0.005, element=None):
         compare_screenshot(
             driver,
             baseline_name=baseline_name,
             threshold=threshold,
+            element=element,
             update_baseline=request.config.getoption(
                 "--update-visual-baselines"
             ),
