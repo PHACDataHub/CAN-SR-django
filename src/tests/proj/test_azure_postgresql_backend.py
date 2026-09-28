@@ -5,10 +5,10 @@ from proj.azure.azure_postgresql.base import DatabaseWrapper
 TOKEN_PATH = "proj.azure.azure_postgresql.base.get_access_token"
 
 SETTINGS_DICT = {
-    "NAME": "mydb",
-    "USER": "me@tenant.onmicrosoft.com",
+    "NAME": "appdb",
+    "USER": "app",
     "PASSWORD": "",
-    "HOST": "myhost.postgres.database.azure.com",
+    "HOST": "server.postgres.database.azure.com",
     "PORT": "5432",
     "OPTIONS": {},
     "TIME_ZONE": None,
@@ -25,7 +25,7 @@ def test_access_token_used_as_password():
         params = get_params()
 
     assert params["password"] == "fake-token"
-    assert params["user"] == "me@tenant.onmicrosoft.com"
+    assert params["user"] == "app"
     assert params["sslmode"] == "require"
     assert mock_token.call_count == 1
 

@@ -14,7 +14,6 @@ import os
 import sys
 from pathlib import Path
 
-from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse_lazy
 
 from decouple import Csv, config
