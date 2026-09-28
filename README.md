@@ -191,6 +191,8 @@ default Actions token can post the summary but cannot upload images through
 comment, because write credentials are not exposed to their workflows. The
 same artifact-only behavior applies to Dependabot pull requests.
 
+When authoring selenium tests, make sure not to import selenium at the top level, this will break environments that don't support selenium, like the regular CI jobs. 
+
 ## Calculating code coverage 
 
 From the `src/` directory run the following

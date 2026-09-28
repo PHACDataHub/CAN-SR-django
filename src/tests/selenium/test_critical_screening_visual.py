@@ -6,7 +6,6 @@ from unittest.mock import patch
 from django.urls import reverse
 
 import pytest
-from selenium.webdriver.common.by import By
 
 from my_app.model_factories import (
     CitationDatasetFactory,
@@ -117,6 +116,9 @@ def _capture_detail_panels(
     expected_text,
     expected_class=None,
 ):
+
+    from selenium.webdriver.common.by import By
+
     for level in (1, 2):
         driver.get(
             live_server.url
