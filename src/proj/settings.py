@@ -240,8 +240,6 @@ AUTHENTICATION_BACKENDS = [
 ]
 AUTH_USER_MODEL = "proj.User"
 
-TEST_RUNNER = "tests.pytest_test_runner.PytestTestRunner"
-
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
 

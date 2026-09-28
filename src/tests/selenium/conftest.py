@@ -13,14 +13,6 @@ import pytest
 from tests.selenium.visual_comparison_utils import compare_screenshot
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--update-visual-baselines",
-        action="store_true",
-        help="Write visual baselines instead of comparing screenshots",
-    )
-
-
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(items):
     selenium_dir = Path(__file__).parent
