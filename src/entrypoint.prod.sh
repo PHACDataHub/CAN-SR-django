@@ -13,8 +13,13 @@ if [ -n "${DB_HOST:-}" ] && [ -n "${DB_PORT:-}" ]; then
         sleep 0.1
     done
 
-    echo "Applying database migrations..."
-    gosu app567 python manage.py migrate --noinput
+    # Sidecars must set RUN_MIGRATIONS=False; main container defaults to True.
+    if [ "${RUN_MIGRATIONS:-True}" = "False" ]; then
+        echo "Skipping database migrations (RUN_MIGRATIONS=False)."
+    else
+        echo "Applying database migrations..."
+        gosu app567 python manage.py migrate --noinput
+    fi
 fi
 
 # Make App Service environment variables available in SSH login shells.
