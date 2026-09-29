@@ -174,7 +174,15 @@ jobs:
           "$CHROMEWEBDRIVER/chromedriver" --version
 
       - name: Run browser tests
-        run: python manage.py test --selenium tests/selenium/
+        run: python -m pytest -m selenium tests/selenium/
+
+      - name: Upload Selenium snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-snapshots
+          path: test-results/visual/snapshots/
+          if-no-files-found: ignore
 
       - name: Upload visual regression diffs
         id: visual_artifact

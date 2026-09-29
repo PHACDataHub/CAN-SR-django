@@ -1,5 +1,6 @@
 import importlib
 import os
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from django.db import transaction
@@ -13,6 +14,16 @@ from proj.models import User
 
 # Modify django settings to skip axes authentication backend
 configure_settings_for_tests()
+
+
+def pytest_ignore_collect(collection_path, config):
+    # Marker deselection happens after imports, so skip optional browser tests first.
+    if config.getoption("markexpr") != "not selenium":
+        return None
+    selenium_dir = Path(__file__).parent / "selenium"
+    if collection_path.is_relative_to(selenium_dir):
+        return True
+    return None
 
 
 @pytest.fixture(autouse=True)

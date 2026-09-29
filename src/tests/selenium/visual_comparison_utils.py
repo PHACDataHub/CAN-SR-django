@@ -4,6 +4,8 @@ from io import BytesIO
 from pathlib import Path
 from shutil import copyfile
 
+from PIL import Image, ImageChops, ImageOps
+
 BASELINE_DIR = Path(__file__).parent / "baselines"
 RESULT_DIR = Path(__file__).resolve().parents[3] / "test-results" / "visual"
 CHANNEL_TOLERANCE = 20
@@ -40,14 +42,13 @@ def _prepare_page(driver):
             animation: none !important;
             transition: none !important;
             caret-color: transparent !important;
-        }`;
+        } html, body { scroll-behavior: auto !important; }`;
         document.head.appendChild(style);
         """
     )
 
 
 def _difference(expected, actual):
-    from PIL import Image, ImageChops, ImageOps
 
     width = max(expected.width, actual.width)
     height = max(expected.height, actual.height)
@@ -76,8 +77,60 @@ def _difference(expected, actual):
     return fraction, diff
 
 
+def _capture_screenshot(driver, element=None):
+    from PIL import Image
+
+    try:
+        _prepare_page(driver)
+        if element is not None:
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});",
+                element,
+            )
+            bounds = driver.execute_script(
+                """const rect = arguments[0].getBoundingClientRect();
+                return [rect.left, rect.top, rect.right, rect.bottom];""",
+                element,
+            )
+            viewport = Image.open(
+                BytesIO(driver.get_screenshot_as_png())
+            ).convert("RGB")
+            if (
+                bounds[0] < 0
+                or bounds[1] < 0
+                or bounds[2] > viewport.width
+                or bounds[3] > viewport.height
+            ):
+                raise AssertionError(
+                    f"Snapshot element is outside the viewport: {bounds}"
+                )
+            actual = viewport.crop(tuple(round(edge) for edge in bounds))
+        else:
+            actual = Image.open(
+                BytesIO(driver.get_screenshot_as_png())
+            ).convert("RGB")
+    finally:
+        driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
+    return actual
+
+
+def save_screenshot(driver, snapshot_name, element=None):
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", snapshot_name):
+        raise ValueError(
+            "snapshot_name must contain only letters, digits, - or _"
+        )
+    output_path = RESULT_DIR / "snapshots" / f"{snapshot_name}.png"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _capture_screenshot(driver, element).save(output_path)
+    return output_path
+
+
 def compare_screenshot(
-    driver, baseline_name, threshold=0.005, update_baseline=False
+    driver,
+    baseline_name,
+    threshold=0.005,
+    update_baseline=False,
+    element=None,
 ):
     from PIL import Image
 
@@ -95,13 +148,7 @@ def compare_screenshot(
     for name in ("expected.png", "actual.png", "diff.png"):
         (result_path / name).unlink(missing_ok=True)
 
-    try:
-        _prepare_page(driver)
-        actual = Image.open(BytesIO(driver.get_screenshot_as_png())).convert(
-            "RGB"
-        )
-    finally:
-        driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
+    actual = _capture_screenshot(driver, element)
 
     if update_baseline:
         baseline_path.parent.mkdir(parents=True, exist_ok=True)

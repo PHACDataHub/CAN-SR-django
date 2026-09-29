@@ -3,12 +3,54 @@ from django.utils import formats, timezone
 
 import htpy as h
 
+from proj.htpy.components import PercentFormatter
+
 from my_app.models import ScreeningResultStatus
 from my_app.queries import get_adjacent_citation_ids, get_citations_for_stage
 from my_app.views.screening.util import BADGE_CLASSES
 from my_app.views.view_utils import url_with_same_params
 from shortcuts import breadcrumbs as bc
 from shortcuts import reverse, tdt
+
+
+def CriticalAgentDefinitionItems(result):
+    if result.status != ScreeningResultStatus.COMPLETED:
+        return []
+
+    critical_result = getattr(result, "critical_result", None)
+    if critical_result is None:
+        return []
+
+    if critical_result.status == ScreeningResultStatus.ABANDONED:
+        review = h.span(".text-danger", role="alert")[
+            tdt("Critical agent review could not be completed.")
+        ]
+    elif critical_result.status != ScreeningResultStatus.COMPLETED:
+        review = h.span(".text-muted", role="status")[
+            tdt("Critical agent review is loading.")
+        ]
+    elif critical_result.selected_option_id is None:
+        review = h.div(".alert.alert-success.py-2.mb-0")[
+            tdt("Critical agent agrees"),
+            " (",
+            tdt("confidence"),
+            " ",
+            PercentFormatter(critical_result.confidence),
+            ")",
+        ]
+    else:
+        review = h.div(".alert.alert-danger.py-2.mb-0")[
+            tdt("Critical agent disagrees"),
+            " — ",
+            critical_result.selected_option.option_text,
+            " (",
+            tdt("confidence"),
+            " ",
+            PercentFormatter(critical_result.confidence),
+            ")",
+        ]
+
+    return [(tdt("Critical agent review"), review)]
 
 
 def Badge(label, class_name, badge_id=None):

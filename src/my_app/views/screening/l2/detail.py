@@ -23,7 +23,10 @@ from my_app.views.pdf_components import (
     PdfWorkflowPageContent,
     WorkflowResultsPanel,
 )
-from my_app.views.screening.components import CitationScreeningProgressNav
+from my_app.views.screening.components import (
+    CitationScreeningProgressNav,
+    CriticalAgentDefinitionItems,
+)
 from my_app.views.screening.document_util_components import (
     DocumentCitationDetailView,
 )
@@ -167,6 +170,7 @@ class L2PdfScreeningPage(BasePageTemplate):
             .select_related(
                 "question",
                 "selected_option",
+                "critical_result__selected_option",
             )
             .order_by("question_id")
         )
@@ -206,6 +210,7 @@ class L2PdfScreeningPage(BasePageTemplate):
                     ),
                 ),
                 (tdt("Confidence"), PercentFormatter(result.confidence)),
+                *CriticalAgentDefinitionItems(result),
                 *EvidenceDefinitionItems(result),
             ]
         )

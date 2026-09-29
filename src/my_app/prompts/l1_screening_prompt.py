@@ -1,5 +1,6 @@
 import json
 import random
+from functools import cache
 
 from django.conf import settings
 
@@ -21,6 +22,12 @@ from shortcuts import List, dataclass, logger
 
 from .prompt_renderer import render_prompt
 from .prompt_util import build_option_definition_string, build_option_string
+from .screening_response import (
+    NONE_OF_THE_ABOVE,
+    response_option_strings,
+    result_model_without_fields,
+    screening_options,
+)
 
 
 class L1ScreeningPromptBuilder:
@@ -29,9 +36,11 @@ class L1ScreeningPromptBuilder:
         question: L1ScreeningQuestion,
         options: List[L1ScreeningQuestionOption],
         citation: Citation,
+        answer_to_critique: L1ScreeningQuestionOption | None = None,
     ):
         self.question = question
-        self.options = [option for option in options if option.is_active]
+        self.answer_to_critique = answer_to_critique
+        self.options = screening_options(options, answer_to_critique)
         self.citation = citation
 
     @dataclass
@@ -49,6 +58,8 @@ class L1ScreeningPromptBuilder:
 
         option_info_string = build_option_definition_string(self.options)
         option_string = build_option_string(self.options)
+        if self.answer_to_critique is not None:
+            option_string += f"\n'{NONE_OF_THE_ABOVE}'"
 
         return self.ScreeningPromptArgs(
             question=self.question.question_text,
@@ -59,6 +70,9 @@ class L1ScreeningPromptBuilder:
 
     def build_str(self):
         prompt_args = self.get_screening_prompt_args()
+        answer_to_critique = ""
+        if self.answer_to_critique is not None:
+            answer_to_critique = self.answer_to_critique.option_text
         return render_prompt(
             "l1_screening_prompt.hbs",
             {
@@ -66,6 +80,8 @@ class L1ScreeningPromptBuilder:
                 "citation": prompt_args.citation,
                 "options": prompt_args.options,
                 "definitions": prompt_args.definitions,
+                "is_critical": self.answer_to_critique is not None,
+                "answer_to_critique": answer_to_critique,
             },
         )
 
@@ -73,19 +89,33 @@ class L1ScreeningPromptBuilder:
 class RawL1ScreeningPromptResult(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
 
+    # Removed for critical reviews, which only return selected and confidence.
     explanation: str
     confidence: pydantic.confloat(ge=0.0, le=1.0)
     selected: str
 
 
+@cache
+def build_raw_l1_result_model(
+    is_critical: bool = False,
+) -> type[pydantic.BaseModel]:
+    excluded = set()
+    if is_critical:
+        excluded.add("explanation")
+    return result_model_without_fields(RawL1ScreeningPromptResult, excluded)
+
+
 def build_l1_response_schema(
     options: List[L1ScreeningQuestionOption],
+    answer_to_critique: L1ScreeningQuestionOption | None = None,
 ) -> LLMResponseSchema:
     # expected enums are run-time determined because they come from the user
-    schema = RawL1ScreeningPromptResult.model_json_schema()
-    schema["properties"]["selected"]["enum"] = [
-        option.option_text for option in options
-    ]
+    schema = build_raw_l1_result_model(
+        answer_to_critique is not None
+    ).model_json_schema()
+    schema["properties"]["selected"]["enum"] = response_option_strings(
+        options, answer_to_critique
+    )
     schema["properties"]["confidence"].pop("minimum")
     schema["properties"]["confidence"].pop("maximum")
     return LLMResponseSchema(name="l1_screening_result", schema=schema)
@@ -93,7 +123,8 @@ def build_l1_response_schema(
 
 class L1ScreeningPromptResult(RawL1ScreeningPromptResult):
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
-    selected: L1ScreeningQuestionOption
+    selected: L1ScreeningQuestionOption | None
+    explanation: str | None = None
 
 
 def get_l1_screening_results(
@@ -101,27 +132,35 @@ def get_l1_screening_results(
     options: List[L1ScreeningQuestionOption],
     citation: Citation,
     model: LanguageModel,
+    answer_to_critique: L1ScreeningQuestionOption | None = None,
 ):
     if not settings.HAS_LLM:
         logger.warning(
             "LLM is not available, using mock results for L1 screening"
         )
-        return get_mock_l1_screening_results(question, options, citation)
+        return get_mock_l1_screening_results(
+            question, options, citation, answer_to_critique=answer_to_critique
+        )
 
+    options = screening_options(options, answer_to_critique)
     logger.info("LLM is available, using real LLM results for L1 screening")
-    prompt_builder = L1ScreeningPromptBuilder(question, options, citation)
+    prompt_builder = L1ScreeningPromptBuilder(
+        question, options, citation, answer_to_critique
+    )
     prompt = prompt_builder.build_str()
 
     llm_client = get_client()
     raw_answer = llm_client.complete_prompt(
         prompt,
         model,
-        response_schema=build_l1_response_schema(options),
+        response_schema=build_l1_response_schema(options, answer_to_critique),
     )
 
     try:
         json_answer = json.loads(raw_answer)
-        answer = RawL1ScreeningPromptResult(**json_answer)
+        answer = build_raw_l1_result_model(
+            answer_to_critique is not None
+        ).model_validate(json_answer)
     except json.JSONDecodeError as exc:
         raise UnexpectedLLMOutputError(
             f"LLM returned invalid JSON: {raw_answer}"
@@ -135,7 +174,12 @@ def get_l1_screening_results(
         (opt for opt in options if opt.option_text == answer.selected),
         None,
     )
-    if selected_option is None:
+    agrees = (
+        answer_to_critique is not None and answer.selected == NONE_OF_THE_ABOVE
+    )
+    if agrees:
+        selected_option = None
+    if selected_option is None and not agrees:
         raise UnexpectedLLMOutputError(
             f"LLM returned option doesn't match available options for question {question.id}"
         )
@@ -143,7 +187,7 @@ def get_l1_screening_results(
     try:
         typed_result = L1ScreeningPromptResult(
             selected=selected_option,
-            explanation=answer.explanation,
+            explanation=getattr(answer, "explanation", None),
             confidence=answer.confidence,
         )
     except pydantic.ValidationError as exc:
@@ -156,7 +200,13 @@ def get_mock_l1_screening_results(
     question: L1ScreeningQuestion,
     options: List[L1ScreeningQuestionOption],
     citation: Citation,
+    answer_to_critique: L1ScreeningQuestionOption | None = None,
 ):
+    options = screening_options(options, answer_to_critique)
+    if answer_to_critique is not None:
+        return L1ScreeningPromptResult(
+            selected=random.choice([*options, None]), confidence=0.5
+        )
 
     selected_option = random.choice(options)
     confidence = random.uniform(0.5, 1.0)
