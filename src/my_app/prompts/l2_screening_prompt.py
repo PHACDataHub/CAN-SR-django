@@ -24,7 +24,6 @@ from my_app.models import (
     LanguageModel,
     TextExtractionResult,
 )
-from my_app.queries import options_for_question
 from shortcuts import List, dataclass, logger
 
 from .prompt_renderer import render_prompt
@@ -33,6 +32,12 @@ from .prompt_util import (
     build_option_definition_string,
     build_option_string,
     build_table_substring,
+)
+from .screening_response import (
+    NONE_OF_THE_ABOVE,
+    response_option_strings,
+    result_model_without_fields,
+    screening_options,
 )
 
 
@@ -44,9 +49,10 @@ class L2ScreeningPromptBuilder:
     text_extraction_result: TextExtractionResult
     tables: List[DocumentTable]
     figures: List[DocumentFigure]
+    answer_to_critique: L2ScreeningQuestionOption | None = None
 
     def __post_init__(self):
-        self.options = [option for option in self.options if option.is_active]
+        self.options = screening_options(self.options, self.answer_to_critique)
 
     @dataclass
     class ScreeningPromptArgs:
@@ -60,6 +66,8 @@ class L2ScreeningPromptBuilder:
         has_figures: bool
         has_tables_or_figures: bool
         figure_image_files: List[BinaryIO]
+        is_critical: bool = False
+        answer_to_critique: str = ""
 
     def get_screening_prompt_args(
         self,
@@ -68,11 +76,18 @@ class L2ScreeningPromptBuilder:
 
         option_info_string = build_option_definition_string(self.options)
         option_string = build_option_string(self.options)
+        if self.answer_to_critique is not None:
+            option_string += f"\n'{NONE_OF_THE_ABOVE}'"
 
         table_str = build_table_substring(self.tables)
         figure_str = build_figure_substring(self.figures)
 
+        answer_to_critique = ""
+        if self.answer_to_critique is not None:
+            answer_to_critique = self.answer_to_critique.option_text
         return self.ScreeningPromptArgs(
+            is_critical=self.answer_to_critique is not None,
+            answer_to_critique=answer_to_critique,
             question=self.question.question_text,
             options=option_string,
             definitions=option_info_string,
@@ -94,39 +109,52 @@ class RawL2ScreeningPromptResult(pydantic.BaseModel):
     model_config = pydantic.ConfigDict(extra="forbid")
 
     selected: str
+    # Explanation and all evidence fields are removed for critical reviews.
     explanation: str
     confidence: pydantic.confloat(ge=0.0, le=1.0)
     evidence_sentences: List[int]
+    # Removed when the corresponding source material is absent.
+    evidence_tables: List[int]
+    evidence_figures: List[int]
 
 
 @cache
 def build_raw_l2_result_model(
     has_tables: bool,
     has_figures: bool,
-) -> type[RawL2ScreeningPromptResult]:
-    fields = {}
-    if has_tables:
-        fields["evidence_tables"] = (List[int], ...)
-    if has_figures:
-        fields["evidence_figures"] = (List[int], ...)
-    return pydantic.create_model(
-        "ContextualRawL2ScreeningPromptResult",
-        __base__=RawL2ScreeningPromptResult,
-        **fields,
-    )
+    is_critical: bool = False,
+) -> type[pydantic.BaseModel]:
+    excluded = set()
+    if is_critical:
+        excluded.update(
+            {
+                "explanation",
+                "evidence_sentences",
+                "evidence_tables",
+                "evidence_figures",
+            }
+        )
+    if not has_tables:
+        excluded.add("evidence_tables")
+    if not has_figures:
+        excluded.add("evidence_figures")
+    return result_model_without_fields(RawL2ScreeningPromptResult, excluded)
 
 
 def build_l2_response_schema(
     options: List[L2ScreeningQuestionOption],
     has_tables: bool,
     has_figures: bool,
+    answer_to_critique: L2ScreeningQuestionOption | None = None,
 ) -> LLMResponseSchema:
     # expected enums are run-time determined because they come from the user
-    result_model = build_raw_l2_result_model(has_tables, has_figures)
+    result_model = build_raw_l2_result_model(
+        has_tables, has_figures, answer_to_critique is not None
+    )
     schema = result_model.model_json_schema()
-    schema["properties"]["selected"]["enum"] = [
-        option.option_text for option in options
-    ]
+    schema["properties"]["selected"]["enum"] = response_option_strings(
+        options, answer_to_critique
+    )
     schema["properties"]["confidence"].pop("minimum")
     schema["properties"]["confidence"].pop("maximum")
     return LLMResponseSchema(name="l2_screening_result", schema=schema)
@@ -134,9 +162,8 @@ def build_l2_response_schema(
 
 class L2ScreeningPromptResult(RawL2ScreeningPromptResult):
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
-    selected: L2ScreeningQuestionOption
-    evidence_tables: List[int]
-    evidence_figures: List[int]
+    selected: L2ScreeningQuestionOption | None
+    explanation: str | None = None
 
 
 def get_l2_screening_results(
@@ -147,16 +174,28 @@ def get_l2_screening_results(
     tables: List[DocumentTable],
     figures: List[DocumentFigure],
     model: LanguageModel,
+    answer_to_critique: L2ScreeningQuestionOption | None = None,
 ) -> L2ScreeningPromptResult:
     if not settings.HAS_LLM:
         logger.warning("LLM is not available, using mock results.")
         return get_mock_l2_screening_results(
-            question, options, citation, text_extraction_result
+            question,
+            options,
+            citation,
+            text_extraction_result,
+            answer_to_critique=answer_to_critique,
         )
 
+    options = screening_options(options, answer_to_critique)
     logger.info("LLM is available, using real LLM results for L2 screening")
     prompt_builder = L2ScreeningPromptBuilder(
-        question, options, citation, text_extraction_result, tables, figures
+        question,
+        options,
+        citation,
+        text_extraction_result,
+        tables,
+        figures,
+        answer_to_critique,
     )
 
     prompt_args = prompt_builder.get_screening_prompt_args()
@@ -166,6 +205,7 @@ def get_l2_screening_results(
         options,
         prompt_args.has_tables,
         prompt_args.has_figures,
+        answer_to_critique,
     )
 
     llm_client = get_client()
@@ -188,8 +228,9 @@ def get_l2_screening_results(
         result_model = build_raw_l2_result_model(
             prompt_args.has_tables,
             prompt_args.has_figures,
+            answer_to_critique is not None,
         )
-        answer = result_model(**response_dict)
+        answer = result_model.model_validate(response_dict)
 
     except json.JSONDecodeError as exc:
         raise UnexpectedLLMOutputError(
@@ -204,7 +245,12 @@ def get_l2_screening_results(
         (opt for opt in options if opt.option_text == answer.selected),
         None,
     )
-    if selected_option is None:
+    agrees = (
+        answer_to_critique is not None and answer.selected == NONE_OF_THE_ABOVE
+    )
+    if agrees:
+        selected_option = None
+    if selected_option is None and not agrees:
         raise UnexpectedLLMOutputError(
             f"LLM returned option doesn't match available options for question {question.id}"
         )
@@ -212,9 +258,9 @@ def get_l2_screening_results(
     try:
         typed_result = L2ScreeningPromptResult(
             selected=selected_option,
-            explanation=answer.explanation,
+            explanation=getattr(answer, "explanation", None),
             confidence=answer.confidence,
-            evidence_sentences=answer.evidence_sentences,
+            evidence_sentences=getattr(answer, "evidence_sentences", []),
             evidence_tables=getattr(answer, "evidence_tables", []),
             evidence_figures=getattr(answer, "evidence_figures", []),
         )
@@ -229,7 +275,18 @@ def get_mock_l2_screening_results(
     options: List[L2ScreeningQuestionOption],
     citation: Citation,
     text_extraction_result: TextExtractionResult,
+    answer_to_critique: L2ScreeningQuestionOption | None = None,
 ) -> L2ScreeningPromptResult:
+    options = screening_options(options, answer_to_critique)
+    if answer_to_critique is not None:
+        return L2ScreeningPromptResult(
+            selected=random.choice([*options, None]),
+            confidence=0.5,
+            evidence_sentences=[],
+            evidence_tables=[],
+            evidence_figures=[],
+        )
+
     selected_option = random.choice(options)
 
     fulltext = text_extraction_result.get_sentences()

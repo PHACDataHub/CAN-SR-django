@@ -16,6 +16,7 @@ from my_app.queries import (
 from my_app.router import route
 from my_app.views.screening.components import (
     CitationScreeningProgressNav,
+    CriticalAgentDefinitionItems,
     human_review_control_id,
     render_human_review_control,
 )
@@ -118,6 +119,7 @@ class L1CitationScreeningPage(BasePageTemplate):
             .select_related(
                 "question",
                 "selected_option",
+                "critical_result__selected_option",
             )
             .order_by("question_id")
         )
@@ -309,6 +311,7 @@ class L1CitationScreeningPage(BasePageTemplate):
                     ),
                 ),
                 (tdt("Confidence"), PercentFormatter(result.confidence)),
+                *CriticalAgentDefinitionItems(result),
             ]
         )
 

@@ -156,10 +156,9 @@ dependency and have Chrome available, then run from the repository root:
 ```bash
 ./venv/bin/python -m pip install -r requirements_selenium.txt
 cd src
-../venv/bin/python manage.py test --selenium tests/selenium/
+../venv/bin/python -m pytest -m selenium tests/selenium/
 ```
 
-Alternatively, from `src/`, run `../venv/bin/python -m pytest -m selenium tests/selenium/`.
 The browser tests use a transactional test database so requests from the browser
 see records created through the ORM. Run them separately from regular tests,
 especially when using PostgreSQL and a reused test database.
@@ -173,9 +172,7 @@ visual test locally, from `src/` use:
 ```
 
 To intentionally replace a baseline, run the same command with
-`--update-visual-baselines`, or use
-`../venv/bin/python manage.py test --selenium --update-visual-baselines tests/selenium/test_visual.py`,
-then commit the new PNG. This flag is disabled in CI.
+`--update-visual-baselines`, then commit the new PNG. This flag is disabled in CI.
 The default threshold of `0.005` allows up to 0.5% of pixels to differ, where
 a pixel counts as different if any RGB channel differs by more than 20 levels.
 Different image dimensions always fail. On failure, `test-results/visual/`
@@ -190,6 +187,8 @@ default Actions token can post the summary but cannot upload images through
 `gh pr comment --attach`. Fork pull requests retain the artifact without a bot
 comment, because write credentials are not exposed to their workflows. The
 same artifact-only behavior applies to Dependabot pull requests.
+
+When authoring selenium tests, make sure not to import selenium at the top level, this will break environments that don't support selenium, like the regular CI jobs. 
 
 ## Calculating code coverage 
 

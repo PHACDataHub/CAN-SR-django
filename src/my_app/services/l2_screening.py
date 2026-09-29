@@ -7,6 +7,7 @@ from proj.llm_client import ClientFailureError
 
 from my_app.models import (
     Citation,
+    L2CriticalScreeningResult,
     L2ScreeningQuestion,
     L2ScreeningQuestionOption,
     L2ScreeningResult,
@@ -160,6 +161,9 @@ class ProcessL2ScreeningService:
             "citation__document__text_extraction_result",
             "citation__document__figure_extraction_result",
         ).get(id=self.result_id)
+        L2CriticalScreeningResult.objects.filter(
+            initial_result=result
+        ).delete()
         question = result.question
         citation = result.citation
         text_extraction_result = get_text_extraction_result_for_citation(
@@ -212,3 +216,16 @@ class ProcessL2ScreeningService:
 
         with transaction.atomic():
             result.save()
+            critical_result = L2CriticalScreeningResult.objects.create(
+                initial_result=result,
+                language_model=result.language_model,
+            )
+            from my_app.tasks.l2_screening import (
+                process_l2_critical_screening_task,
+            )
+
+            transaction.on_commit(
+                lambda: process_l2_critical_screening_task.enqueue(
+                    result_id=critical_result.pk
+                )
+            )

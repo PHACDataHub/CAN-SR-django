@@ -7,6 +7,7 @@ from proj.llm_client import ClientFailureError
 
 from my_app.models import (
     Citation,
+    L1CriticalScreeningResult,
     L1ScreeningQuestion,
     L1ScreeningQuestionOption,
     L1ScreeningResult,
@@ -143,6 +144,12 @@ class ProcessL1ScreeningService:
         result = L1ScreeningResult.objects.select_related(
             "question", "citation", "language_model"
         ).get(id=self.result_id)
+
+        # we must also reset any existing critical screening results
+        # for this initial result
+        L1CriticalScreeningResult.objects.filter(
+            initial_result=result
+        ).delete()
         question = result.question
         citation = result.citation
 
@@ -188,3 +195,16 @@ class ProcessL1ScreeningService:
 
         with transaction.atomic():
             result.save()
+            critical_result = L1CriticalScreeningResult.objects.create(
+                initial_result=result,
+                language_model=result.language_model,
+            )
+            from my_app.tasks.l1_screening import (
+                process_l1_critical_screening_task,
+            )
+
+            transaction.on_commit(
+                lambda: process_l1_critical_screening_task.enqueue(
+                    result_id=critical_result.pk
+                )
+            )
