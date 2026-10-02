@@ -76,6 +76,28 @@ def test_review_form_only_includes_is_deleted_field_when_editing():
     assert not field.required
 
 
+def test_review_confidence_is_optional_and_bounded():
+    field = ReviewForm().fields["confidence"]
+    assert not field.required
+    assert field.widget.input_type == "number"
+    assert "Defaults to 0.9" in field.help_text
+
+    assert field.clean("") is None
+    for value in ("0", "0.9", "1"):
+        assert field.clean(value) == float(value)
+
+    for value in ("-0.1", "1.1"):
+        form = ReviewForm(
+            {
+                "title": "Review",
+                "description": "Description",
+                "confidence": value,
+            }
+        )
+        assert not form.is_valid()
+        assert "confidence" in form.errors
+
+
 def test_review_form_initially_selects_non_admin_creator(vanilla_user):
     with patch_rules(is_admin=False):
         form = ReviewForm(request_user=vanilla_user)
@@ -131,6 +153,20 @@ def test_create_review_can_enable_disable_filtering(vanilla_user_client):
     assert Review.objects.get(
         title="Review without stage filtering"
     ).disable_filtering
+
+
+def test_create_review_saves_confidence(vanilla_user_client):
+    response = vanilla_user_client.post(
+        reverse("create_review"),
+        {
+            "title": "Review with confidence",
+            "description": "Description",
+            "confidence": "0.8",
+        },
+    )
+
+    assert response.status_code == 302
+    assert Review.objects.get(title="Review with confidence").confidence == 0.8
 
 
 def test_create_review_saves_selected_users_and_creator(

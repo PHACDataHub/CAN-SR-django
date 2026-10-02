@@ -142,6 +142,37 @@ def test_question_editor_saves_disable_screening(adapter, question_model):
     assert edit_form.save().disable_screening is False
 
 
+@pytest.mark.parametrize(
+    "adapter,question_model",
+    [
+        (L1FormsetAdapter, L1ScreeningQuestion),
+        (L2FormsetAdapter, L2ScreeningQuestion),
+    ],
+)
+def test_question_confidence_is_optional_bounded_and_saved(
+    adapter, question_model
+):
+    form_class = adapter.FormClass
+    field = form_class().fields["confidence"]
+    assert not field.required
+    assert field.widget.input_type == "number"
+    assert "review-level confidence, which defaults to 0.9" in field.help_text
+
+    form = form_class(
+        {"question_text": "Question", "confidence": "0.75"},
+        instance=question_model(review=ReviewFactory()),
+    )
+    assert form.is_valid()
+    assert form.save().confidence == 0.75
+
+    for value in ("-0.1", "1.1"):
+        invalid_form = form_class(
+            {"question_text": "Question", "confidence": value}
+        )
+        assert not invalid_form.is_valid()
+        assert "confidence" in invalid_form.errors
+
+
 def test_editor_helper_class_modify_question():
     review = ReviewFactory()
     question_obj = L1ScreeningQuestion.objects.create(review=review)
@@ -214,7 +245,7 @@ def test_editor_helper_class_modify_question():
 
 def test_l1_question_sync_to_l2_creates_mirror():
     question = L1ScreeningQuestionFactory(
-        question_text="L1 question", disable_screening=True
+        question_text="L1 question", disable_screening=True, confidence=0.7
     )
 
     mirror = question.sync_to_l2()
@@ -223,6 +254,7 @@ def test_l1_question_sync_to_l2_creates_mirror():
     assert mirror.review == question.review
     assert mirror.question_text == question.question_text
     assert mirror.disable_screening == question.disable_screening
+    assert mirror.confidence == question.confidence
     assert mirror.deletion_time is None
     assert question.deletion_time is None
 

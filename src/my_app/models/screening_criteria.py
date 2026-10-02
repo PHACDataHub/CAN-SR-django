@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from phac_aspc.django import fields
@@ -17,6 +18,16 @@ class AbstractScreeningQuestion(SoftDeleteMixin, models.Model):
         default=False,
         verbose_name=tdt("Disable screening"),
         help_text=tdt("Don't use this question's results to filter citations"),
+    )
+    confidence = fields.FloatField(
+        null=True,
+        blank=True,
+        default=None,
+        validators=[MinValueValidator(0), MaxValueValidator(1)],
+        verbose_name=tdt("Confidence Threshold"),
+        help_text=tdt(
+            "Defaults to the review-level confidence, which defaults to 0.9."
+        ),
     )
 
     def __str__(self):
@@ -43,6 +54,7 @@ class L1ScreeningQuestion(AbstractScreeningQuestion):
                 "review": self.review,
                 "question_text": self.question_text,
                 "disable_screening": self.disable_screening,
+                "confidence": self.confidence,
                 "deletion_time": self.deletion_time,
             },
         )
