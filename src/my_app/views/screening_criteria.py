@@ -121,7 +121,7 @@ class L1FormsetAdapter(FormsetAdapter):
 
         class Meta:
             model = L1ScreeningQuestion
-            fields = ["question_text", "disable_screening"]
+            fields = ["question_text", "disable_screening", "confidence"]
 
         def save(self, commit=True):
             question = super().save(commit=commit)
@@ -170,7 +170,7 @@ class L2FormsetAdapter(FormsetAdapter):
 
         class Meta:
             model = L2ScreeningQuestion
-            fields = ["question_text", "disable_screening"]
+            fields = ["question_text", "disable_screening", "confidence"]
 
     class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
