@@ -60,6 +60,184 @@ class ReviewStage(Choices):
     PARAMETER_EXTRACTION = "parameter_extraction", "Parameter Extraction"
 
 
+@dataclass
+class ScreeningMetric:
+    true_positives: int = 0
+    false_negatives: int = 0
+    false_positives: int = 0
+    true_negatives: int = 0
+    exact_agreements: int = 0
+    observations: int = 0
+    missing: int = 0
+
+    def add_observation(self, exact_agreement, human_include, ai_include):
+        self.observations += 1
+        if exact_agreement:
+            self.exact_agreements += 1
+
+        if ai_include and human_include:
+            self.true_positives += 1
+        elif ai_include and not human_include:
+            self.false_negatives += 1
+        elif not ai_include and human_include:
+            self.false_positives += 1
+        elif not ai_include and not human_include:
+            self.true_negatives += 1
+        else:
+            raise ValueError("this is logically impossible")
+
+    def add_missing(self):
+        self.missing += 1
+
+    @staticmethod
+    def _ratio(numerator, denominator):
+        if denominator == 0:
+            return None
+        return numerator / denominator
+
+    @property
+    def accuracy(self):
+        return self._ratio(self.exact_agreements, self.observations)
+
+    @property
+    def precision(self):
+        return self._ratio(
+            self.true_positives, self.true_positives + self.false_positives
+        )
+
+    @property
+    def recall(self):
+        return self._ratio(
+            self.true_positives, self.true_positives + self.false_negatives
+        )
+
+    @property
+    def f1(self):
+        return self._ratio(
+            2 * self.true_positives,
+            2 * self.true_positives
+            + self.false_positives
+            + self.false_negatives,
+        )
+
+    @property
+    def npv(self):
+        return self._ratio(
+            self.true_negatives, self.true_negatives + self.false_negatives
+        )
+
+
+def get_screening_answer_metrics(review_id: int, stage: ReviewStage):
+    """Return per-question and overall metrics for one screening stage."""
+    stage_models = {
+        ReviewStage.L1_SCREENING: (
+            L1ScreeningQuestion,
+            L1ScreeningResult,
+            L1HumanAnswer,
+        ),
+        ReviewStage.L2_SCREENING: (
+            L2ScreeningQuestion,
+            L2ScreeningResult,
+            L2HumanAnswer,
+        ),
+    }
+    if stage not in stage_models:
+        raise ValueError(f"Unsupported screening stage: {stage}")
+
+    question_model, result_model, human_model = stage_models[stage]
+    question_ids = list(
+        question_model.active_objects.filter(
+            review_id=review_id, disable_screening=False
+        ).values_list("id", flat=True)
+    )
+    question_metrics = {
+        question_id: ScreeningMetric() for question_id in question_ids
+    }
+    overall_metric = ScreeningMetric()
+    if not question_ids:
+        return question_metrics, overall_metric
+
+    citation_ids = list(
+        Citation.objects.filter(dataset__review_id=review_id).values_list(
+            "id", flat=True
+        )
+    )
+    if not citation_ids:
+        return question_metrics, overall_metric
+
+    answer_filters = {
+        "question_id__in": question_ids,
+        "citation__dataset__review_id": review_id,
+        "selected_option__deletion_time__isnull": True,
+        "selected_option__question_id": F("question_id"),
+    }
+    ai_answers = {
+        (question_id, citation_id): (option_id, screening_action)
+        for question_id, citation_id, option_id, screening_action in (
+            result_model.objects.filter(
+                **answer_filters,
+                status=ScreeningResultStatus.COMPLETED,
+            ).values_list(
+                "question_id",
+                "citation_id",
+                "selected_option_id",
+                "selected_option__screening_action",
+            )
+        )
+    }
+
+    human_answers = {}
+    for (
+        question_id,
+        citation_id,
+        option_id,
+        screening_action,
+        updated_at,
+        answer_id,
+    ) in human_model.objects.filter(**answer_filters).values_list(
+        "question_id",
+        "citation_id",
+        "selected_option_id",
+        "selected_option__screening_action",
+        "updated_at",
+        "id",
+    ):
+        key = (question_id, citation_id)
+        # Use the most recently updated eligible human answer for now.
+        # Break timestamp ties by id; the selection policy may change later.
+        previous = human_answers.get(key)
+        if previous is None or (updated_at, answer_id) > (
+            previous[0],
+            previous[1],
+        ):
+            human_answers[key] = (
+                updated_at,
+                answer_id,
+                option_id,
+                screening_action,
+            )
+
+    for question_id, metric in question_metrics.items():
+        for citation_id in citation_ids:
+            key = (question_id, citation_id)
+            ai_answer = ai_answers.get(key)
+            human_answer = human_answers.get(key)
+            if ai_answer is None or human_answer is None:
+                metric.add_missing()
+                overall_metric.add_missing()
+                continue
+
+            exact_agreement = ai_answer[0] == human_answer[2]
+            human_include = human_answer[3] == ScreeningActions.ScreenIn
+            ai_include = ai_answer[1] == ScreeningActions.ScreenIn
+            metric.add_observation(exact_agreement, human_include, ai_include)
+            overall_metric.add_observation(
+                exact_agreement, human_include, ai_include
+            )
+
+    return question_metrics, overall_metric
+
+
 def normalize_parameter_value(expression):
     normalized = Coalesce(
         expression,
