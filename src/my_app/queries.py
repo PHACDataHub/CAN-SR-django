@@ -28,6 +28,7 @@ from phac_aspc.vanilla import group_by
 
 from my_app.models import (
     Citation,
+    CitationStatus,
     FigureExtractionResult,
     L1HumanAnswer,
     L1ScreeningQuestion,
@@ -412,106 +413,32 @@ def get_review(review_id: int):
 
 def get_citations_for_stage(review_id: int, stage: ReviewStage | None = None):
     review = get_review(review_id)
-    all_citations = Citation.objects.filter(dataset__review__id=review_id)
+    citations = Citation.objects.filter(dataset__review_id=review_id)
 
-    if stage is None:
-        return all_citations
-
-    if review.disable_filtering:
-        return all_citations
-
-    if stage == ReviewStage.L1_SCREENING:
-        return all_citations
+    if (
+        stage is None
+        or review.disable_filtering
+        or stage == ReviewStage.L1_SCREENING
+    ):
+        return citations
 
     if stage == ReviewStage.L2_SCREENING:
-        return all_citations.filter(
-            id__in=_screened_in_citation_ids(
-                review_id,
-                L1ScreeningQuestion,
-                L1HumanAnswer,
-                L1ScreeningResult,
-            )
+        if not L1ScreeningQuestion.active_objects.filter(
+            review_id=review_id, disable_screening=False
+        ).exists():
+            return citations
+        return citations.add_l1_overall_status().filter(
+            l1_overall_status=CitationStatus.In
         )
 
     if stage == ReviewStage.PARAMETER_EXTRACTION:
-        return all_citations.filter(
-            id__in=_screened_in_citation_ids(
-                review_id,
-                L2ScreeningQuestion,
-                L2HumanAnswer,
-                L2ScreeningResult,
-            )
-        )
-
-
-@cached_within_request
-def _screened_in_citation_ids(
-    review_id, question_model, human_model, result_model
-):
-    question_ids = set(
-        question_model.active_objects.filter(
+        if not L2ScreeningQuestion.active_objects.filter(
             review_id=review_id, disable_screening=False
-        ).values_list("id", flat=True)
-    )
-    if not question_ids:
-        return Citation.objects.filter(
-            dataset__review_id=review_id
-        ).values_list("id", flat=True)
-
-    human_answers = human_model.objects.filter(
-        citation__dataset__review_id=review_id,
-        question_id__in=question_ids,
-    ).values_list(
-        "citation_id",
-        "question_id",
-        "selected_option__question_id",
-        "selected_option__deletion_time",
-        "selected_option__screening_action",
-    )
-    human_pairs = set()
-    passing_pairs = set()
-    failing_pairs = set()
-    for (
-        citation_id,
-        question_id,
-        option_question_id,
-        deleted_at,
-        action,
-    ) in human_answers:
-        pair = (citation_id, question_id)
-        human_pairs.add(pair)
-        if (
-            option_question_id == question_id
-            and deleted_at is None
-            and action == ScreeningActions.ScreenIn
-        ):
-            passing_pairs.add(pair)
-        else:
-            failing_pairs.add(pair)
-
-    ai_answers = result_model.objects.filter(
-        citation__dataset__review_id=review_id,
-        question_id__in=question_ids,
-        status=ScreeningResultStatus.COMPLETED,
-        selected_option__deletion_time__isnull=True,
-        selected_option__screening_action=ScreeningActions.ScreenIn,
-    ).values_list("citation_id", "question_id", "selected_option__question_id")
-    passing_pairs.update(
-        (citation_id, question_id)
-        for citation_id, question_id, option_question_id in ai_answers
-        if option_question_id == question_id
-        and (citation_id, question_id) not in human_pairs
-    )
-    passing_pairs.difference_update(failing_pairs)
-
-    passed_counts = {}
-    for citation_id, _ in passing_pairs:
-        passed_counts[citation_id] = passed_counts.get(citation_id, 0) + 1
-    return [
-        citation_id
-        for citation_id, count in passed_counts.items()
-        if count == len(question_ids)
-    ]
+        ).exists():
+            return citations
+        return citations.add_l2_overall_status().filter(
+            l2_overall_status=CitationStatus.In
+        )
 
 
 @cached_within_request

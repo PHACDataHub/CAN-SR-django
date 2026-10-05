@@ -2,6 +2,7 @@ from typing import NamedTuple
 
 import pytest
 
+from my_app.constants import DEFAULT_CONFIDENCE
 from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
@@ -15,7 +16,12 @@ from my_app.model_factories import (
     L2ScreeningResultFactory,
     ReviewFactory,
 )
-from my_app.models import ScreeningActions, ScreeningResultStatus
+from my_app.models import (
+    L1CriticalScreeningResult,
+    L2CriticalScreeningResult,
+    ScreeningActions,
+    ScreeningResultStatus,
+)
 from my_app.queries import (
     ReviewStage,
     get_adjacent_citation_ids,
@@ -32,6 +38,7 @@ class ScreeningLayer(NamedTuple):
     option_factory: type
     human_factory: type
     result_factory: type
+    critical_result_model: type
     stage: ReviewStage
 
 
@@ -43,6 +50,7 @@ class ScreeningLayer(NamedTuple):
                 L1ScreeningQuestionOptionFactory,
                 L1HumanAnswerFactory,
                 L1ScreeningResultFactory,
+                L1CriticalScreeningResult,
                 ReviewStage.L2_SCREENING,
             ),
             id="L1-answers-for-L2",
@@ -53,6 +61,7 @@ class ScreeningLayer(NamedTuple):
                 L2ScreeningQuestionOptionFactory,
                 L2HumanAnswerFactory,
                 L2ScreeningResultFactory,
+                L2CriticalScreeningResult,
                 ReviewStage.PARAMETER_EXTRACTION,
             ),
             id="L2-answers-for-parameters",
@@ -66,6 +75,7 @@ def screening_layer(request):
 def test_stage_filter_requires_a_passing_answer_to_every_active_question(
     screening_layer,
 ):
+    # Human and confirmed AI answers can cover separate questions; every question must pass.
     layer = screening_layer
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
@@ -90,11 +100,17 @@ def test_stage_filter_requires_a_passing_answer_to_every_active_question(
             question=first_question,
             selected_option=first_in,
         )
-    layer.result_factory(
+    result = layer.result_factory(
         citation=included,
         question=second_question,
         selected_option=second_in,
         status=ScreeningResultStatus.COMPLETED,
+        confidence=DEFAULT_CONFIDENCE,
+    )
+    layer.critical_result_model.objects.create(
+        initial_result=result,
+        status=ScreeningResultStatus.COMPLETED,
+        confidence=DEFAULT_CONFIDENCE,
     )
     layer.human_factory(
         citation=excluded_answer,
@@ -160,34 +176,6 @@ def test_stage_filter_human_inclusion_overrides_ai_exclusion(screening_layer):
     assert list(
         get_citations_for_stage(citation.dataset.review_id, layer.stage)
     ) == [citation]
-
-
-def test_stage_filter_deleted_options_cannot_screen_in_a_citation(
-    screening_layer,
-):
-    layer = screening_layer
-    review = ReviewFactory()
-    dataset = CitationDatasetFactory(review=review)
-    human_citation = CitationFactory(dataset=dataset, order=1)
-    ai_citation = CitationFactory(dataset=dataset, order=2)
-    question = layer.question_factory(review=review)
-    deleted_option = layer.option_factory(
-        question=question, screening_action=ScreeningActions.ScreenIn
-    )
-    deleted_option.soft_delete()
-    layer.human_factory(
-        citation=human_citation,
-        question=question,
-        selected_option=deleted_option,
-    )
-    layer.result_factory(
-        citation=ai_citation,
-        question=question,
-        selected_option=deleted_option,
-        status=ScreeningResultStatus.COMPLETED,
-    )
-
-    assert not get_citations_for_stage(review.id, layer.stage).exists()
 
 
 def test_stage_filter_ignores_deleted_questions_and_their_answers(

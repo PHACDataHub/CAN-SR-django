@@ -43,7 +43,119 @@ class CitationHumanStatus(models.TextChoices):
     Unanswered = ("unanswered", tdt("Unanswered"))
 
 
+class CitationStatus(models.TextChoices):
+    In = ("in", tdt("In"))
+    Out = ("out", tdt("Out"))
+    Unanswered = ("unanswered", tdt("Unanswered"))
+    Ambiguous = ("ambiguous", tdt("Ambiguous"))
+
+
 class CitationQuerySet(models.QuerySet):
+    def _annotate_stage_overall_status(
+        self, question_model, answer_model, result_model, field_name
+    ):
+        active_questions = question_model.objects.filter(
+            review_id=OuterRef("dataset__review_id"),
+            deletion_time__isnull=True,
+            disable_screening=False,
+        )
+        latest_answer = answer_model.objects.filter(
+            citation_id=OuterRef("citation_id"),
+            question_id=OuterRef("question_id"),
+        ).order_by("-updated_at", "-id")
+        human_answers = answer_model.objects.filter(
+            citation_id=OuterRef(OuterRef("pk")),
+            question_id=OuterRef("pk"),
+        )
+        valid_human_answers = human_answers.filter(
+            pk=Subquery(latest_answer.values("pk")[:1]),
+            selected_option__deletion_time__isnull=True,
+            selected_option__question_id=F("question_id"),
+        )
+        ai_answers = result_model.objects.filter(
+            citation_id=OuterRef(OuterRef("pk")),
+            question_id=OuterRef("pk"),
+        )
+        threshold = Coalesce(
+            F("question__confidence"),
+            F("question__review__confidence"),
+            Value(DEFAULT_CONFIDENCE),
+        )
+        confident_ai_answers = ai_answers.filter(
+            status=ScreeningResultStatus.COMPLETED,
+            confidence__gte=threshold,
+            selected_option__deletion_time__isnull=True,
+            selected_option__question_id=F("question_id"),
+            critical_result__status=ScreeningResultStatus.COMPLETED,
+            critical_result__confidence__gte=threshold,
+            critical_result__selected_option__isnull=True,
+        )
+        human_in = Exists(
+            valid_human_answers.filter(
+                selected_option__screening_action=ScreeningActions.ScreenIn
+            )
+        )
+        human_out = Exists(
+            valid_human_answers.filter(
+                selected_option__screening_action=ScreeningActions.ScreenOut
+            )
+        )
+        ai_in = Exists(
+            confident_ai_answers.filter(
+                selected_option__screening_action=ScreeningActions.ScreenIn
+            )
+        )
+        ai_out = Exists(
+            confident_ai_answers.filter(
+                selected_option__screening_action=ScreeningActions.ScreenOut
+            )
+        )
+        excluded_questions = active_questions.filter(
+            human_out | (ai_out & ~human_in)
+        )
+        questions_without_inclusion = active_questions.filter(
+            ~(human_in | (ai_in & ~human_out))
+        )
+        answered_questions = active_questions.filter(
+            Exists(human_answers) | Exists(ai_answers)
+        )
+        return self.annotate(
+            **{
+                field_name: models.Case(
+                    models.When(
+                        Exists(excluded_questions),
+                        then=Value(CitationStatus.Out),
+                    ),
+                    models.When(
+                        ~Exists(answered_questions),
+                        then=Value(CitationStatus.Unanswered),
+                    ),
+                    models.When(
+                        ~Exists(questions_without_inclusion),
+                        then=Value(CitationStatus.In),
+                    ),
+                    default=Value(CitationStatus.Ambiguous),
+                    output_field=models.CharField(),
+                )
+            }
+        )
+
+    def add_l1_overall_status(self):
+        return self._annotate_stage_overall_status(
+            L1ScreeningQuestion,
+            L1HumanAnswer,
+            L1ScreeningResult,
+            "l1_overall_status",
+        )
+
+    def add_l2_overall_status(self):
+        return self._annotate_stage_overall_status(
+            L2ScreeningQuestion,
+            L2HumanAnswer,
+            L2ScreeningResult,
+            "l2_overall_status",
+        )
+
     def _annotate_stage_human_status(
         self, question_model, answer_model, field_name
     ):

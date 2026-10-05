@@ -7,6 +7,7 @@ from django.urls import reverse
 import pytest
 from phac_aspc.rules import patch_rules
 
+from my_app.constants import DEFAULT_CONFIDENCE
 from my_app.model_factories import (
     CitationDatasetFactory,
     CitationFactory,
@@ -28,6 +29,7 @@ from my_app.models import (
     DocumentFigure,
     DocumentTable,
     FigureExtractionResult,
+    L1CriticalScreeningResult,
     L1ScreeningResult,
     L2HumanAnswer,
     L2ScreeningResult,
@@ -133,6 +135,7 @@ def test_screening_l2_component_view_renders(vanilla_client):
 def test_l2_list_filters_but_detail_allows_l1_excluded_citation(
     vanilla_client,
 ):
+    # Confirmed L1 inclusion advances to L2; excluded citations remain accessible directly.
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     included = CitationFactory(
@@ -145,11 +148,17 @@ def test_l2_list_filters_but_detail_allows_l1_excluded_citation(
     option = L1ScreeningQuestionOptionFactory(
         question=question, screening_action=ScreeningActions.ScreenIn
     )
-    L1ScreeningResultFactory(
+    result = L1ScreeningResultFactory(
         citation=included,
         question=question,
         selected_option=option,
         status=ScreeningResultStatus.COMPLETED,
+        confidence=DEFAULT_CONFIDENCE,
+    )
+    L1CriticalScreeningResult.objects.create(
+        initial_result=result,
+        status=ScreeningResultStatus.COMPLETED,
+        confidence=DEFAULT_CONFIDENCE,
     )
 
     with patch_rules(can_access_review=True):
