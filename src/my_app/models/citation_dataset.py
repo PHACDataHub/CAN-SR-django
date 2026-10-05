@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import Exists, F, OuterRef, Value
+from django.db.models import Exists, F, OuterRef, Subquery, Value
 from django.db.models.functions import Coalesce
 
 from phac_aspc.django import fields
@@ -16,7 +16,9 @@ from .screening_criteria import (
     ScreeningActions,
 )
 from .screening_results import (
+    L1HumanAnswer,
     L1ScreeningResult,
+    L2HumanAnswer,
     L2ScreeningResult,
     ScreeningResultStatus,
 )
@@ -35,7 +37,74 @@ class CitationAIStatus(models.TextChoices):
     )
 
 
+class CitationHumanStatus(models.TextChoices):
+    In = ("in", tdt("In"))
+    Out = ("out", tdt("Out"))
+    Unanswered = ("unanswered", tdt("Unanswered"))
+
+
 class CitationQuerySet(models.QuerySet):
+    def _annotate_stage_human_status(
+        self, question_model, answer_model, field_name
+    ):
+        active_questions = question_model.objects.filter(
+            review_id=OuterRef("dataset__review_id"),
+            deletion_time__isnull=True,
+            disable_screening=False,
+        )
+        latest_answer = answer_model.objects.filter(
+            citation_id=OuterRef("citation_id"),
+            question_id=OuterRef("question_id"),
+        ).order_by("-updated_at", "-id")
+        valid_answers = answer_model.objects.filter(
+            citation_id=OuterRef(OuterRef("pk")),
+            question_id=OuterRef("pk"),
+            pk=Subquery(latest_answer.values("pk")[:1]),
+            selected_option__deletion_time__isnull=True,
+            selected_option__question_id=F("question_id"),
+        )
+        excluded_questions = active_questions.filter(
+            Exists(
+                valid_answers.filter(
+                    selected_option__screening_action=ScreeningActions.ScreenOut
+                )
+            )
+        )
+        unanswered_questions = active_questions.filter(
+            ~Exists(
+                valid_answers.filter(
+                    selected_option__screening_action=ScreeningActions.ScreenIn
+                )
+            )
+        )
+        return self.annotate(
+            **{
+                field_name: models.Case(
+                    models.When(
+                        Exists(excluded_questions),
+                        then=Value(CitationHumanStatus.Out),
+                    ),
+                    models.When(
+                        ~Exists(active_questions)
+                        | Exists(unanswered_questions),
+                        then=Value(CitationHumanStatus.Unanswered),
+                    ),
+                    default=Value(CitationHumanStatus.In),
+                    output_field=models.CharField(),
+                )
+            }
+        )
+
+    def add_l1_human_status(self):
+        return self._annotate_stage_human_status(
+            L1ScreeningQuestion, L1HumanAnswer, "l1_human_status"
+        )
+
+    def add_l2_human_status(self):
+        return self._annotate_stage_human_status(
+            L2ScreeningQuestion, L2HumanAnswer, "l2_human_status"
+        )
+
     def _annotate_stage_ai_status(
         self, question_model, result_model, field_name
     ):
