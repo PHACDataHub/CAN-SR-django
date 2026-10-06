@@ -16,6 +16,10 @@ from my_app.views.screening.components import (
     WorkflowListPageContent,
     WorkflowProgressPanel,
 )
+from my_app.views.screening.filters import (
+    ScreeningFilterMixin,
+    ScreeningFilters,
+)
 from my_app.views.screening.util import BADGE_CLASSES
 from my_app.views.view_utils import (
     MustAccessReviewMixin,
@@ -232,16 +236,29 @@ class L1ScreeningPageTemplate(BasePageTemplate):
         return WorkflowListPageContent(
             review,
             tdt("L1 Screening"),
-            component.render(),
+            [
+                ScreeningFilters(
+                    self.context["filter_form"],
+                    reverse("l1_citations_list", args=[review.id]),
+                ),
+                component.render(),
+            ],
         )
 
 
-class L1ScreeningBaseView(MustAccessReviewMixin, ListView):
+class L1ScreeningBaseView(
+    ScreeningFilterMixin, MustAccessReviewMixin, ListView
+):
+    model = Citation
     paginate_by = 10
+    screening_stage = "l1"
 
     def get_queryset(self):
-        return Citation.objects.filter(dataset__review=self.review).order_by(
-            "order", "id"
+        return (
+            super()
+            .get_queryset()
+            .filter(dataset__review=self.review)
+            .order_by("order", "id")
         )
 
 

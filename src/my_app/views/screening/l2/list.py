@@ -30,6 +30,10 @@ from my_app.views.screening.components import (
 from my_app.views.screening.document_util_components import (
     DocumentCitationListView,
 )
+from my_app.views.screening.filters import (
+    ScreeningFilterMixin,
+    ScreeningFilters,
+)
 from my_app.views.screening.l2.components import L2ScreeningBadge
 from my_app.views.view_utils import (
     paginated_component_response,
@@ -203,12 +207,19 @@ class L2ScreeningPageTemplate(BasePageTemplate):
         return WorkflowListPageContent(
             review,
             tdt("L2 Screening"),
-            component.render(),
+            [
+                ScreeningFilters(
+                    self.context["filter_form"],
+                    reverse("l2_citations_list", args=[review.id]),
+                ),
+                component.render(),
+            ],
         )
 
 
-class L2ScreeningBaseView(DocumentCitationListView):
+class L2ScreeningBaseView(ScreeningFilterMixin, DocumentCitationListView):
     stage = ReviewStage.L2_SCREENING
+    screening_stage = "l2"
 
 
 @route("/reviews/<int:review_id>/screening_l2/", name="l2_citations_list")
