@@ -192,6 +192,9 @@ class L1ScreeningComponent:
             status_counts=get_screening_status_counts(
                 self.citation_rows, "l1"
             ),
+            statistics_url=reverse(
+                "l1_screening_statistics", args=[self.review.id]
+            ),
         )
 
     def render_citations_panel(self):

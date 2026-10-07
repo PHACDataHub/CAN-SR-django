@@ -139,3 +139,17 @@ dl.custom-dl {
 .citation-column-mapping-omitted [data-column-name] {
     opacity: 0.5;
 }
+
+.screening-metrics-modal .modal-dialog {
+    width: 100%;
+    max-width: 1140px;
+    margin: 0;
+}
+
+.screening-metrics-modal .modal-content {
+    max-height: calc(100dvh - 4rem);
+}
+
+.screening-metrics-modal .modal-body {
+    overflow-y: auto;
+}

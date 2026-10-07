@@ -109,7 +109,9 @@ def ScreeningStatusTable(title, rows):
     ]
 
 
-def WorkflowProgressPanel(panel_id, metrics, status_counts=None):
+def WorkflowProgressPanel(
+    panel_id, metrics, status_counts=None, statistics_url=None
+):
     tables = None
     if status_counts is not None:
         tables = h.div(".row.g-3.mt-1")[
@@ -124,6 +126,17 @@ def WorkflowProgressPanel(panel_id, metrics, status_counts=None):
                 )
             ]
         ]
+
+    statistics_button = None
+    if statistics_url is not None:
+        statistics_button = h.button(
+            ".btn.btn-outline-primary.mt-3",
+            type="button",
+            hx_get=statistics_url,
+            hx_target="#modal-slot",
+            hx_swap="innerHTML",
+            hx_disabled_elt="this",
+        )[tdt("Detailed statistics")]
 
     return h.section(
         id=panel_id,
@@ -140,6 +153,7 @@ def WorkflowProgressPanel(panel_id, metrics, status_counts=None):
             ]
         ],
         tables,
+        statistics_button,
     ]
 
 

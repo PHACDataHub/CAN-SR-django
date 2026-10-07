@@ -103,6 +103,20 @@ def test_progress_panel_counts_all_review_citations_and_stage_statuses(
         label.get_text(): value.get_text()
         for label, value in zip(panel.select("dt"), panel.select("dd"))
     }
+    statistics_button = panel.find("button", string="Detailed statistics")
+    if stage == "parameter_extraction":
+        assert statistics_button is None
+    else:
+        assert statistics_button["hx-target"] == "#modal-slot"
+        assert statistics_button["hx-swap"] == "innerHTML"
+        if stage == "l1":
+            assert statistics_button["hx-get"] == reverse(
+                "l1_screening_statistics", args=[review.id]
+            )
+        else:
+            assert statistics_button["hx-get"] == reverse(
+                "l2_screening_statistics", args=[review.id]
+            )
     assert metrics["Total citations"] == "3"
     assert not panel.select('[role="progressbar"]')
     if stage != "l1":

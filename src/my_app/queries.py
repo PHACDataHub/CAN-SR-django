@@ -130,7 +130,9 @@ class ScreeningMetric:
         )
 
 
-def get_screening_answer_metrics(review_id: int, stage: ReviewStage):
+def get_screening_answer_metrics(
+    review_id: int, stage: ReviewStage, *, citations=None
+):
     """Return per-question and overall metrics for one screening stage."""
     stage_models = {
         ReviewStage.L1_SCREENING: (
@@ -160,8 +162,10 @@ def get_screening_answer_metrics(review_id: int, stage: ReviewStage):
     if not question_ids:
         return question_metrics, overall_metric
 
+    if citations is None:
+        citations = Citation.objects.all()
     citation_ids = list(
-        Citation.objects.filter(dataset__review_id=review_id).values_list(
+        citations.filter(dataset__review_id=review_id).values_list(
             "id", flat=True
         )
     )
@@ -170,7 +174,7 @@ def get_screening_answer_metrics(review_id: int, stage: ReviewStage):
 
     answer_filters = {
         "question_id__in": question_ids,
-        "citation__dataset__review_id": review_id,
+        "citation_id__in": citation_ids,
         "selected_option__deletion_time__isnull": True,
         "selected_option__question_id": F("question_id"),
     }

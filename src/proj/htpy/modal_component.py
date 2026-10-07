@@ -15,6 +15,7 @@ def ModalComponent(
     close_button_text=None,
     footer=None,
     header=None,
+    aria_labelledby=None,
 ):
 
     if close_button_text is None:
@@ -28,6 +29,8 @@ def ModalComponent(
         "aria_hidden": "true",
         "class": ["modal", size_cls],
     }
+    if aria_labelledby is not None:
+        wrapper_attrs["aria_labelledby"] = aria_labelledby
     if modal_id:
         wrapper_attrs["id"] = modal_id
 
