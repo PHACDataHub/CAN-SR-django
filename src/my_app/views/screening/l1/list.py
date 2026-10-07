@@ -5,11 +5,13 @@ from proj.htpy.util import polling_attrs
 from my_app.models import (
     Citation,
     L1ScreeningQuestion,
-    L1ScreeningResult,
     Review,
     ScreeningResultStatus,
 )
-from my_app.queries import L1ScreeningStatusFetcher
+from my_app.queries import (
+    L1ScreeningStatusFetcher,
+    get_screening_status_counts,
+)
 from my_app.router import route
 from my_app.views.screening.components import (
     PaginatedCitationPanel,
@@ -149,27 +151,14 @@ class L1ScreeningComponent:
         return [row.id for row in self.page_rows]
 
     @cached_property
-    def screening_questions(self):
-        return list(
-            L1ScreeningQuestion.active_objects.filter(
-                review=self.review
-            ).prefetch_related("options")
-        )
+    def screening_question_count(self):
+        return L1ScreeningQuestion.active_objects.filter(
+            review=self.review, disable_screening=False
+        ).count()
 
     @cached_property
     def total_citations(self):
-        return self.citation_rows.count()
-
-    @cached_property
-    def screened_citations(self):
-        return (
-            L1ScreeningResult.objects.filter(
-                citation__dataset__review=self.review
-            )
-            .values_list("citation_id", flat=True)
-            .distinct()
-            .count()
-        )
+        return Citation.objects.filter(dataset__review=self.review).count()
 
     @cached_property
     def status_fetcher(self):
@@ -198,11 +187,11 @@ class L1ScreeningComponent:
             "l1-screening-progress-panel",
             metrics=[
                 (tdt("Total citations"), self.total_citations),
-                (tdt("Screened so far"), self.screened_citations),
-                (tdt("Screening questions"), len(self.screening_questions)),
+                (tdt("Screening questions"), self.screening_question_count),
             ],
-            completed=self.screened_citations,
-            total=self.total_citations,
+            status_counts=get_screening_status_counts(
+                self.citation_rows, "l1"
+            ),
         )
 
     def render_citations_panel(self):

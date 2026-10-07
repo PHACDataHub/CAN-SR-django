@@ -28,6 +28,8 @@ from phac_aspc.vanilla import group_by
 
 from my_app.models import (
     Citation,
+    CitationAIStatus,
+    CitationHumanStatus,
     CitationStatus,
     FigureExtractionResult,
     L1HumanAnswer,
@@ -439,6 +441,24 @@ def get_citations_for_stage(review_id: int, stage: ReviewStage | None = None):
         return citations.add_l2_overall_status().filter(
             l2_overall_status=CitationStatus.In
         )
+
+
+def get_screening_status_counts(citations, stage):
+    counts = {}
+    for status_type, choices in (
+        ("ai", CitationAIStatus),
+        ("human", CitationHumanStatus),
+        ("overall", CitationStatus),
+    ):
+        field = f"{stage}_{status_type}_status"
+        annotated = getattr(citations, f"add_{field}")()
+        values = dict(
+            annotated.order_by().values_list(field).annotate(count=Count("pk"))
+        )
+        counts[status_type] = [
+            (status.label, values.get(status.value, 0)) for status in choices
+        ]
+    return counts
 
 
 @cached_within_request

@@ -88,40 +88,58 @@ def WorkflowListPageContent(review, title, component):
     ]
 
 
-def WorkflowProgressPanel(panel_id, metrics, completed, total):
-    if total > 0:
-        progress_percent = int((completed / total) * 100)
-    else:
-        progress_percent = 0
-
-    metric_rows = [
-        h.div(
-            class_=(
-                "d-flex justify-content-between align-items-center "
-                + ("mb-3" if index == len(metrics) - 1 else "mb-2")
-            )
-        )[
-            h.span[label],
-            h.span(".fw-semibold")[str(value)],
-        ]
-        for index, (label, value) in enumerate(metrics)
+def ScreeningStatusTable(title, rows):
+    return h.table(".table.table-sm.mb-0")[
+        h.caption(".caption-top.text-body.fw-semibold")[title],
+        h.thead[
+            h.tr[
+                h.th(scope="col")[tdt("Status")],
+                h.th(".text-end", scope="col")[tdt("Count")],
+            ]
+        ],
+        h.tbody[
+            [
+                h.tr[
+                    h.th(".fw-normal", scope="row")[label],
+                    h.td(".text-end")[str(value)],
+                ]
+                for label, value in rows
+            ]
+        ],
     ]
+
+
+def WorkflowProgressPanel(panel_id, metrics, status_counts=None):
+    tables = None
+    if status_counts is not None:
+        tables = h.div(".row.g-3.mt-1")[
+            [
+                h.div(".col-12")[
+                    ScreeningStatusTable(title, status_counts[key])
+                ]
+                for key, title in (
+                    ("ai", tdt("AI status")),
+                    ("human", tdt("Human status")),
+                    ("overall", tdt("Overall screening status")),
+                )
+            ]
+        ]
 
     return h.section(
         id=panel_id,
         class_="border rounded p-3 bg-body-tertiary screening-progress-panel",
     )[
         h.h2(".h5.mb-3")[tdt("Progress")],
-        metric_rows,
-        h.div(".progress", role="progressbar")[
-            h.div(
-                ".progress-bar",
-                style=f"width: {progress_percent}%",
-                aria_valuenow=str(progress_percent),
-                aria_valuemin="0",
-                aria_valuemax="100",
-            )[f"{progress_percent}%"],
+        h.dl(".row.mb-0")[
+            [
+                [
+                    h.dt(".col-9.fw-normal.mb-2")[label],
+                    h.dd(".col-3.text-end.fw-semibold.mb-2")[str(value)],
+                ]
+                for label, value in metrics
+            ]
         ],
+        tables,
     ]
 
 
