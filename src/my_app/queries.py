@@ -24,6 +24,7 @@ from data_fetcher.shorthand_fetcher_classes import (
     AbstractChildModelByAttrFetcher,
     PrimaryKeyFetcherFactory,
 )
+from data_fetcher.util import get_request
 from phac_aspc.vanilla import group_by
 
 from my_app.models import (
@@ -55,6 +56,16 @@ from my_app.models import (
 from shortcuts import logger
 
 ReviewByIdFetcher = PrimaryKeyFetcherFactory.get_model_by_id_fetcher(Review)
+
+
+def get_review_from_context():
+    request = get_request()
+    try:
+        resolver_match = request.resolver_match
+        review_id = resolver_match.kwargs["review_id"]
+        return ReviewByIdFetcher.get_instance().get(review_id)
+    except Exception:
+        return None
 
 
 class ReviewStage(Choices):

@@ -1,6 +1,7 @@
 import htpy as h
 
 from my_app.models import CitationDataset
+from my_app.tables.components import TableNavigation
 from shortcuts import BasePageTemplate, GenericFormWithContainer
 from shortcuts import breadcrumbs as bc
 from shortcuts import get_request, reverse, tdt, test_rule
@@ -216,6 +217,7 @@ class ReviewDetailPage(BasePageTemplate):
                     class_="btn btn-primary",
                 )[tdt("Edit review")],
             ],
+            TableNavigation(review),
         ]
 
     def _build_dataset_stage_card(self, review):
