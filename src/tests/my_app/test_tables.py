@@ -28,6 +28,8 @@ from my_app.tables.ai_answer_table import L1AIAnswerTableDef
 from my_app.tables.citation_table import CitationTableDef
 from my_app.tables.table_framework import AttributeColumn, TableDef, TableView
 
+COL_SELECTION_FORM_PREFIX = TableDef.COL_SELECTION_FORM_PREFIX
+
 TABLE_ROUTES = [
     "citation_table",
     "l1_ai_answer_table",
@@ -39,8 +41,8 @@ TABLE_ROUTES = [
 
 def selection(*columns, **params):
     data = QueryDict(mutable=True)
-    data["column_selection_form-submitted"] = "True"
-    data.setlist("column_selection_form-columns", columns)
+    data[f"{COL_SELECTION_FORM_PREFIX}-submitted"] = "True"
+    data.setlist(f"{COL_SELECTION_FORM_PREFIX}-columns", columns)
     data.update(params)
     return data
 
@@ -156,7 +158,7 @@ def test_pagination_preserves_multiple_selections(vanilla_client):
     assert len(second.context["page_obj"]) == 1
     content = response.content.decode()
     assert (
-        "column_selection_form-columns=title&amp;column_selection_form-columns=l1_ai_status"
+        f"{COL_SELECTION_FORM_PREFIX}-columns=title&amp;{COL_SELECTION_FORM_PREFIX}-columns=l1_ai_status"
         in content
     )
     assert "sort_form-column=title" in content

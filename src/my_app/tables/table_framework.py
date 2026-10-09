@@ -134,7 +134,11 @@ class AbbreviatedAttributeColumn(AttributeColumn):
 
 
 class ColumnSelectionForm(StandardFormMixin, forms.Form):
-    submitted = forms.BooleanField(widget=forms.HiddenInput, initial=True)
+    submitted = forms.BooleanField(
+        # this is a hacky way to use default columns when empty
+        widget=forms.HiddenInput,
+        initial=True,
+    )
     columns = forms.MultipleChoiceField(
         label=tdt("Visible columns"),
         required=False,
@@ -190,6 +194,9 @@ class TableDef:
     def get_columns(self):
         return self.columns
 
+    # needs to be short so querystring params aren't long
+    COL_SELECTION_FORM_PREFIX = "cols"
+
     def form_data(self, prefix):
         if self.data is not None and any(
             key.startswith(f"{prefix}-") for key in self.data
@@ -200,9 +207,9 @@ class TableDef:
     @cached_property
     def column_selection_form(self):
         return ColumnSelectionForm(
-            self.form_data("column_selection_form"),
+            self.form_data(self.COL_SELECTION_FORM_PREFIX),
             columns=self.columns,
-            prefix="column_selection_form",
+            prefix=self.COL_SELECTION_FORM_PREFIX,
         )
 
     @cached_property
@@ -356,7 +363,9 @@ class TableComponent(HtpyComponent):
             role="region",
             aria_label=self.title,
         )[
-            h.table(".table.table-striped.table-bordered")[
+            h.table(
+                ".table.table-striped.table-bordered.table--framework-table"
+            )[
                 h.caption(".visually-hidden")[self.title],
                 h.thead[
                     h.tr[
