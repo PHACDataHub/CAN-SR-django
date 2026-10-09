@@ -24,10 +24,14 @@ from data_fetcher.shorthand_fetcher_classes import (
     AbstractChildModelByAttrFetcher,
     PrimaryKeyFetcherFactory,
 )
+from data_fetcher.util import get_request
 from phac_aspc.vanilla import group_by
 
 from my_app.models import (
     Citation,
+    CitationAIStatus,
+    CitationHumanStatus,
+    CitationStatus,
     FigureExtractionResult,
     L1HumanAnswer,
     L1ScreeningQuestion,
@@ -54,10 +58,202 @@ from shortcuts import logger
 ReviewByIdFetcher = PrimaryKeyFetcherFactory.get_model_by_id_fetcher(Review)
 
 
+def get_review_from_context():
+    request = get_request()
+    try:
+        resolver_match = request.resolver_match
+        review_id = resolver_match.kwargs["review_id"]
+        return ReviewByIdFetcher.get_instance().get(review_id)
+    except Exception:
+        return None
+
+
 class ReviewStage(Choices):
     L1_SCREENING = "l1_screening", "L1 Screening"
     L2_SCREENING = "l2_screening", "L2 Screening"
     PARAMETER_EXTRACTION = "parameter_extraction", "Parameter Extraction"
+
+
+@dataclass
+class ScreeningMetric:
+    true_positives: int = 0
+    false_negatives: int = 0
+    false_positives: int = 0
+    true_negatives: int = 0
+    exact_agreements: int = 0
+    observations: int = 0
+    missing: int = 0
+
+    def add_observation(self, exact_agreement, human_include, ai_include):
+        self.observations += 1
+        if exact_agreement:
+            self.exact_agreements += 1
+
+        if ai_include and human_include:
+            self.true_positives += 1
+        elif ai_include and not human_include:
+            self.false_negatives += 1
+        elif not ai_include and human_include:
+            self.false_positives += 1
+        elif not ai_include and not human_include:
+            self.true_negatives += 1
+        else:
+            raise ValueError("this is logically impossible")
+
+    def add_missing(self):
+        self.missing += 1
+
+    @staticmethod
+    def _ratio(numerator, denominator):
+        if denominator == 0:
+            return None
+        return numerator / denominator
+
+    @property
+    def accuracy(self):
+        return self._ratio(self.exact_agreements, self.observations)
+
+    @property
+    def precision(self):
+        return self._ratio(
+            self.true_positives, self.true_positives + self.false_positives
+        )
+
+    @property
+    def recall(self):
+        return self._ratio(
+            self.true_positives, self.true_positives + self.false_negatives
+        )
+
+    @property
+    def f1(self):
+        return self._ratio(
+            2 * self.true_positives,
+            2 * self.true_positives
+            + self.false_positives
+            + self.false_negatives,
+        )
+
+    @property
+    def npv(self):
+        return self._ratio(
+            self.true_negatives, self.true_negatives + self.false_negatives
+        )
+
+
+def get_screening_answer_metrics(
+    review_id: int, stage: ReviewStage, *, citations=None
+):
+    """Return per-question and overall metrics for one screening stage."""
+    stage_models = {
+        ReviewStage.L1_SCREENING: (
+            L1ScreeningQuestion,
+            L1ScreeningResult,
+            L1HumanAnswer,
+        ),
+        ReviewStage.L2_SCREENING: (
+            L2ScreeningQuestion,
+            L2ScreeningResult,
+            L2HumanAnswer,
+        ),
+    }
+    if stage not in stage_models:
+        raise ValueError(f"Unsupported screening stage: {stage}")
+
+    question_model, result_model, human_model = stage_models[stage]
+    question_ids = list(
+        question_model.active_objects.filter(
+            review_id=review_id, disable_screening=False
+        ).values_list("id", flat=True)
+    )
+    question_metrics = {
+        question_id: ScreeningMetric() for question_id in question_ids
+    }
+    overall_metric = ScreeningMetric()
+    if not question_ids:
+        return question_metrics, overall_metric
+
+    if citations is None:
+        citations = Citation.objects.all()
+    citation_ids = list(
+        citations.filter(dataset__review_id=review_id).values_list(
+            "id", flat=True
+        )
+    )
+    if not citation_ids:
+        return question_metrics, overall_metric
+
+    answer_filters = {
+        "question_id__in": question_ids,
+        "citation_id__in": citation_ids,
+        "selected_option__deletion_time__isnull": True,
+        "selected_option__question_id": F("question_id"),
+    }
+    ai_answers = {
+        (question_id, citation_id): (option_id, screening_action)
+        for question_id, citation_id, option_id, screening_action in (
+            result_model.objects.filter(
+                **answer_filters,
+                status=ScreeningResultStatus.COMPLETED,
+            ).values_list(
+                "question_id",
+                "citation_id",
+                "selected_option_id",
+                "selected_option__screening_action",
+            )
+        )
+    }
+
+    human_answers = {}
+    for (
+        question_id,
+        citation_id,
+        option_id,
+        screening_action,
+        updated_at,
+        answer_id,
+    ) in human_model.objects.filter(**answer_filters).values_list(
+        "question_id",
+        "citation_id",
+        "selected_option_id",
+        "selected_option__screening_action",
+        "updated_at",
+        "id",
+    ):
+        key = (question_id, citation_id)
+        # Use the most recently updated eligible human answer for now.
+        # Break timestamp ties by id; the selection policy may change later.
+        previous = human_answers.get(key)
+        if previous is None or (updated_at, answer_id) > (
+            previous[0],
+            previous[1],
+        ):
+            human_answers[key] = (
+                updated_at,
+                answer_id,
+                option_id,
+                screening_action,
+            )
+
+    for question_id, metric in question_metrics.items():
+        for citation_id in citation_ids:
+            key = (question_id, citation_id)
+            ai_answer = ai_answers.get(key)
+            human_answer = human_answers.get(key)
+            if ai_answer is None or human_answer is None:
+                metric.add_missing()
+                overall_metric.add_missing()
+                continue
+
+            exact_agreement = ai_answer[0] == human_answer[2]
+            human_include = human_answer[3] == ScreeningActions.ScreenIn
+            ai_include = ai_answer[1] == ScreeningActions.ScreenIn
+            metric.add_observation(exact_agreement, human_include, ai_include)
+            overall_metric.add_observation(
+                exact_agreement, human_include, ai_include
+            )
+
+    return question_metrics, overall_metric
 
 
 def normalize_parameter_value(expression):
@@ -234,106 +430,50 @@ def get_review(review_id: int):
 
 def get_citations_for_stage(review_id: int, stage: ReviewStage | None = None):
     review = get_review(review_id)
-    all_citations = Citation.objects.filter(dataset__review__id=review_id)
+    citations = Citation.objects.filter(dataset__review_id=review_id)
 
-    if stage is None:
-        return all_citations
-
-    if review.disable_filtering:
-        return all_citations
-
-    if stage == ReviewStage.L1_SCREENING:
-        return all_citations
+    if (
+        stage is None
+        or review.disable_filtering
+        or stage == ReviewStage.L1_SCREENING
+    ):
+        return citations
 
     if stage == ReviewStage.L2_SCREENING:
-        return all_citations.filter(
-            id__in=_screened_in_citation_ids(
-                review_id,
-                L1ScreeningQuestion,
-                L1HumanAnswer,
-                L1ScreeningResult,
-            )
+        if not L1ScreeningQuestion.active_objects.filter(
+            review_id=review_id, disable_screening=False
+        ).exists():
+            return citations
+        return citations.add_l1_overall_status().filter(
+            l1_overall_status=CitationStatus.In
         )
 
     if stage == ReviewStage.PARAMETER_EXTRACTION:
-        return all_citations.filter(
-            id__in=_screened_in_citation_ids(
-                review_id,
-                L2ScreeningQuestion,
-                L2HumanAnswer,
-                L2ScreeningResult,
-            )
+        if not L2ScreeningQuestion.active_objects.filter(
+            review_id=review_id, disable_screening=False
+        ).exists():
+            return citations
+        return citations.add_l2_overall_status().filter(
+            l2_overall_status=CitationStatus.In
         )
 
 
-@cached_within_request
-def _screened_in_citation_ids(
-    review_id, question_model, human_model, result_model
-):
-    question_ids = set(
-        question_model.active_objects.filter(
-            review_id=review_id, disable_screening=False
-        ).values_list("id", flat=True)
-    )
-    if not question_ids:
-        return Citation.objects.filter(
-            dataset__review_id=review_id
-        ).values_list("id", flat=True)
-
-    human_answers = human_model.objects.filter(
-        citation__dataset__review_id=review_id,
-        question_id__in=question_ids,
-    ).values_list(
-        "citation_id",
-        "question_id",
-        "selected_option__question_id",
-        "selected_option__deletion_time",
-        "selected_option__screening_action",
-    )
-    human_pairs = set()
-    passing_pairs = set()
-    failing_pairs = set()
-    for (
-        citation_id,
-        question_id,
-        option_question_id,
-        deleted_at,
-        action,
-    ) in human_answers:
-        pair = (citation_id, question_id)
-        human_pairs.add(pair)
-        if (
-            option_question_id == question_id
-            and deleted_at is None
-            and action == ScreeningActions.ScreenIn
-        ):
-            passing_pairs.add(pair)
-        else:
-            failing_pairs.add(pair)
-
-    ai_answers = result_model.objects.filter(
-        citation__dataset__review_id=review_id,
-        question_id__in=question_ids,
-        status=ScreeningResultStatus.COMPLETED,
-        selected_option__deletion_time__isnull=True,
-        selected_option__screening_action=ScreeningActions.ScreenIn,
-    ).values_list("citation_id", "question_id", "selected_option__question_id")
-    passing_pairs.update(
-        (citation_id, question_id)
-        for citation_id, question_id, option_question_id in ai_answers
-        if option_question_id == question_id
-        and (citation_id, question_id) not in human_pairs
-    )
-    passing_pairs.difference_update(failing_pairs)
-
-    passed_counts = {}
-    for citation_id, _ in passing_pairs:
-        passed_counts[citation_id] = passed_counts.get(citation_id, 0) + 1
-    return [
-        citation_id
-        for citation_id, count in passed_counts.items()
-        if count == len(question_ids)
-    ]
+def get_screening_status_counts(citations, stage):
+    counts = {}
+    for status_type, choices in (
+        ("ai", CitationAIStatus),
+        ("human", CitationHumanStatus),
+        ("overall", CitationStatus),
+    ):
+        field = f"{stage}_{status_type}_status"
+        annotated = getattr(citations, f"add_{field}")()
+        values = dict(
+            annotated.order_by().values_list(field).annotate(count=Count("pk"))
+        )
+        counts[status_type] = [
+            (status.label, values.get(status.value, 0)) for status in choices
+        ]
+    return counts
 
 
 @cached_within_request

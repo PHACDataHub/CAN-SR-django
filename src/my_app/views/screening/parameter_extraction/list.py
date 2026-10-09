@@ -8,18 +8,17 @@ from proj.htpy.util import polling_attrs
 
 from my_app.models import (
     Citation,
+    CitationStatus,
     Parameter,
     ParameterAnswerAgreement,
     ParameterExtractionResult,
     ParameterHumanAnswer,
     Review,
     ScreeningResultStatus,
-    TextExtractionResult,
 )
 from my_app.queries import (
     ParameterExtractionStatusFetcher,
     ReviewStage,
-    get_citations_for_stage,
     get_parameter_extraction_progress_stats,
     get_parameter_human_ai_agreements,
 )
@@ -321,51 +320,8 @@ class ParameterExtractionComponent:
         return [row.id for row in self.page_rows]
 
     @cached_property
-    def parameters(self):
-        return list(
-            Parameter.active_objects.filter(review=self.review).order_by("id")
-        )
-
-    @cached_property
-    def total_citations(self):
-        return self.citation_rows.count()
-
-    @cached_property
     def citation_rows(self):
-        return get_citations_for_stage(
-            self.review.id, ReviewStage.PARAMETER_EXTRACTION
-        )
-
-    @cached_property
-    def uploaded_citations(self):
-        return (
-            self.citation_rows.filter(document__isnull=False)
-            .values_list("id", flat=True)
-            .distinct()
-            .count()
-        )
-
-    @cached_property
-    def processed_citations(self):
-        return (
-            self.citation_rows.filter(
-                document__text_extraction_result__status=TextExtractionResult.TextExtractionStatus.COMPLETED,
-            )
-            .values_list("id", flat=True)
-            .distinct()
-            .count()
-        )
-
-    @cached_property
-    def extracted_citations(self):
-        return (
-            ParameterExtractionResult.objects.filter(
-                citation__in=self.citation_rows
-            )
-            .values_list("citation_id", flat=True)
-            .distinct()
-            .count()
-        )
+        return Citation.objects.filter(dataset__review=self.review)
 
     @cached_property
     def status_fetcher(self):
@@ -394,14 +350,20 @@ class ParameterExtractionComponent:
         return WorkflowProgressPanel(
             "parameter-extraction-progress-panel",
             metrics=[
-                (tdt("Total citations"), self.total_citations),
-                (tdt("Uploaded documents"), self.uploaded_citations),
-                (tdt("Text extracted documents"), self.processed_citations),
-                (tdt("Extracted so far"), self.extracted_citations),
-                (tdt("Parameters"), len(self.parameters)),
+                (tdt("Total citations"), self.citation_rows.count()),
+                (
+                    tdt("Screened-in citations from L1"),
+                    self.citation_rows.add_l1_overall_status()
+                    .filter(l1_overall_status=CitationStatus.In)
+                    .count(),
+                ),
+                (
+                    tdt("Screened-in citations from L2"),
+                    self.citation_rows.add_l2_overall_status()
+                    .filter(l2_overall_status=CitationStatus.In)
+                    .count(),
+                ),
             ],
-            completed=self.extracted_citations,
-            total=self.total_citations,
         )
 
     def render_citations_panel(self):

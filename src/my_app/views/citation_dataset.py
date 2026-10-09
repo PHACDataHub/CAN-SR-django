@@ -2,17 +2,18 @@ from functools import cached_property
 
 from django import forms
 from django.core.exceptions import SuspiciousOperation
-from django.db.models import Count
 from django.http import HttpResponseBadRequest
 
 import htpy as h
 
-from my_app.models import CitationDataset, Review
+from my_app.models import CitationDataset
 from my_app.router import route
+from my_app.tables.citation_table import CitationDatasetTableDef
+from my_app.tables.table_framework import TableComponent
+from my_app.views.tables.common import ReviewTableView
 from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
     BasePageTemplate,
-    DetailView,
     FormView,
     GenericForm,
     HtpyTemplateMixin,
@@ -34,15 +35,9 @@ class CitationDatasetDetailPage(BasePageTemplate):
         return tdt("Dataset")
 
     def content(self):
-        review = self.context["object"]
+        review = self.context["review"]
         dataset = self._get_dataset(review)
-        rows = self._get_rows(dataset)
         columns = list(dataset.columns.all())
-        table_columns = [
-            tdt("Title"),
-            tdt("Abstract"),
-            *[column.name for column in columns],
-        ]
         delete_url = reverse("delete_citation_dataset", args=[review.id])
 
         return [
@@ -65,7 +60,7 @@ class CitationDatasetDetailPage(BasePageTemplate):
                 h.p(".mb-2")[
                     h.strong[tdt("Number of rows")],
                     ": ",
-                    dataset.row_count,
+                    self.context["page_obj"].paginator.count,
                 ],
                 h.div[
                     h.strong[tdt("Columns")],
@@ -75,13 +70,26 @@ class CitationDatasetDetailPage(BasePageTemplate):
                 ],
             ],
             h.div(".border.rounded.p-3.h-100")[
-                h.h2(".h5")[tdt("Preview")],
-                (
-                    h.p(".text-muted.mb-0")[tdt("Showing the first 100 rows.")]
-                    if dataset.row_count > 100
-                    else h.p(".text-muted.mb-0")[tdt("Showing all rows.")]
+                h.h2(".h5")[tdt("All data")],
+                TableComponent(
+                    page_obj=self.context["page_obj"],
+                    columns=self.context["columns"],
+                    column_selection_form=self.context[
+                        "column_selection_form"
+                    ],
+                    filter_forms=[],
+                    sort_form=None,
+                    request=self.request,
+                    title=tdt("Dataset"),
                 ),
-                self._render_table(table_columns, columns, rows),
+            ],
+            h.p(".mt-3")[
+                tdt("Sort, filter and see progress on these citations in the"),
+                " ",
+                h.a(href=reverse("citation_table", args=[review.id]))[
+                    tdt("citation table page")
+                ],
+                ".",
             ],
         ]
 
@@ -93,32 +101,8 @@ class CitationDatasetDetailPage(BasePageTemplate):
         return (
             CitationDataset.objects.select_related("review")
             .prefetch_related("columns")
-            .annotate(row_count=Count("rows"))
             .get(review=review)
         )
-
-    def _get_rows(self, dataset):
-        return list(dataset.rows.order_by("order", "id")[:100])
-
-    def _render_table(self, table_columns, columns, rows):
-        if not rows:
-            return h.p(".mt-3.mb-0")[tdt("No rows in dataset.")]
-
-        return h.div(".table-responsive.mt-3")[
-            h.table(".table.table-striped.table-sm.align-middle")[
-                h.thead[h.tr[[h.th[column] for column in table_columns]]],
-                h.tbody[[self._render_row(columns, row) for row in rows]],
-            ]
-        ]
-
-    def _render_row(self, columns, row):
-        return h.tr[
-            [
-                h.td[row.title],
-                h.td[row.abstract],
-                *[h.td[row.data.get(column.name, "")] for column in columns],
-            ]
-        ]
 
 
 class DeleteCitationDatasetPage(BasePageTemplate):
@@ -159,19 +143,16 @@ class DeleteCitationDatasetPage(BasePageTemplate):
 
 
 @route("reviews/<int:review_id>/dataset/", name="citation_dataset_detail")
-class CitationDatasetDetailView(
-    MustAccessReviewMixin, DetailView, HtpyTemplateMixin
-):
-    model = Review
-    pk_url_kwarg = "review_id"
+class CitationDatasetDetailView(ReviewTableView):
+    table_def_class = CitationDatasetTableDef
     template_component = CitationDatasetDetailPage
 
-    def get_object(self, *args, **kwargs):
+    def get_queryset(self):
         try:
             self.review.citation_dataset
         except CitationDataset.DoesNotExist:
             raise SuspiciousOperation(tdt("Dataset not found."))
-        return self.review
+        return super().get_queryset()
 
 
 @route(

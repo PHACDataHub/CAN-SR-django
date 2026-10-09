@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from phac_aspc.django import fields
@@ -45,6 +46,14 @@ class Review(models.Model):
             "Useful to skip straight to fulltext screening or parameter extraction"
         ),
         default=False,
+    )
+    confidence = fields.FloatField(
+        null=True,
+        blank=True,
+        default=None,
+        validators=[MinValueValidator(0), MaxValueValidator(1)],
+        verbose_name=tdt("Confidence"),
+        help_text=tdt("Defaults to 0.9."),
     )
 
     def __str__(self):

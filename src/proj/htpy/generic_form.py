@@ -10,14 +10,17 @@ from proj.text import tm
 from .util import HtpyComponent
 
 
-def GenericForm(form: forms.Form):
-    csrf_token = get_token(get_request())
+def GenericForm(form: forms.Form, *, include_csrf=True):
+    csrf_input = None
+    if include_csrf:
+        csrf_token = get_token(get_request())
+        csrf_input = Markup(
+            f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">'
+        )
 
     return [
         Markup(str(form.media)),
-        Markup(
-            f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">'
-        ),
+        csrf_input,
         h.div(".mt-3")[
             [
                 [Markup(str(field.errors)), Markup(str(field))]

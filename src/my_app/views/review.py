@@ -72,6 +72,7 @@ class ReviewForm(ModelForm, StandardFormMixin):
             "users",
             "is_deleted",
             "disable_filtering",
+            "confidence",
         ]
 
     def __init__(self, *args, **kwargs):

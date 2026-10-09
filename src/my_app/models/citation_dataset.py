@@ -4,7 +4,7 @@ from phac_aspc.django import fields
 
 from proj.model_util import add_to_admin
 
-from shortcuts import List, tdt
+from shortcuts import tdt
 
 from .review import Review
 
@@ -41,47 +41,3 @@ class CitationDatasetColumn(models.Model):
 
     def __str__(self):
         return self.name
-
-
-@add_to_admin
-class Citation(models.Model):
-    class Meta:
-        ordering = ["order", "id"]
-
-    dataset = fields.ForeignKey(
-        CitationDataset,
-        related_name="rows",
-        on_delete=models.CASCADE,
-        verbose_name=tdt("Dataset"),
-    )
-    title = fields.TextField(blank=True, default="", verbose_name=tdt("Title"))
-    abstract = fields.TextField(
-        blank=True, default="", verbose_name=tdt("Abstract")
-    )
-    data = models.JSONField(default=dict, blank=True, verbose_name=tdt("Data"))
-    order = fields.IntegerField(verbose_name=tdt("Insertion order"))
-
-    document = fields.ForeignKey(
-        "my_app.Document",
-        related_name="citations",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        verbose_name=tdt("Linked document"),
-    )
-
-    def __str__(self):
-        return f"{self.dataset_id} row {self.order}"
-
-    def serialize_for_prompt(self, columns: List[CitationDatasetColumn]):
-        # could be used to flexibly include different columns in the prompt
-        column_data = [
-            (col.name, self.data.get(col.name, "")) for col in columns
-        ]
-        included_data = [
-            ("Title", self.title),
-            ("Abstract", self.abstract),
-            *column_data,
-        ]
-
-        return "\n".join([f"{pair[0]}: {pair[1]}" for pair in included_data])

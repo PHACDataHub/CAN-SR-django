@@ -4,17 +4,12 @@ import htpy as h
 
 from proj.htpy.util import polling_attrs
 
-from my_app.models import (
-    Citation,
-    L2ScreeningQuestion,
-    L2ScreeningResult,
-    Review,
-    TextExtractionResult,
-)
+from my_app.models import Citation, CitationStatus, L2ScreeningQuestion, Review
 from my_app.queries import (
     L2ScreeningStatusFetcher,
     ReviewStage,
     get_citations_for_stage,
+    get_screening_status_counts,
 )
 from my_app.router import route
 from my_app.views.pdf_components import (
@@ -29,6 +24,10 @@ from my_app.views.screening.components import (
 )
 from my_app.views.screening.document_util_components import (
     DocumentCitationListView,
+)
+from my_app.views.screening.filters import (
+    ScreeningFilterMixin,
+    ScreeningFilters,
 )
 from my_app.views.screening.l2.components import L2ScreeningBadge
 from my_app.views.view_utils import (
@@ -94,43 +93,14 @@ class L2ScreeningComponent:
         return [row.id for row in self.page_rows]
 
     @cached_property
-    def screening_questions(self):
-        return list(
-            L2ScreeningQuestion.active_objects.filter(review=self.review)
-        )
+    def screening_question_count(self):
+        return L2ScreeningQuestion.active_objects.filter(
+            review=self.review, disable_screening=False
+        ).count()
 
     @cached_property
     def total_citations(self):
-        return self.citation_rows.count()
-
-    @cached_property
-    def uploaded_citations(self):
-        return (
-            self.citation_rows.filter(document__isnull=False)
-            .values_list("id", flat=True)
-            .distinct()
-            .count()
-        )
-
-    @cached_property
-    def processed_citations(self):
-        return (
-            self.citation_rows.filter(
-                document__text_extraction_result__status=TextExtractionResult.TextExtractionStatus.COMPLETED,
-            )
-            .values_list("id", flat=True)
-            .distinct()
-            .count()
-        )
-
-    @cached_property
-    def screened_citations(self):
-        return (
-            L2ScreeningResult.objects.filter(citation__in=self.citation_rows)
-            .values_list("citation_id", flat=True)
-            .distinct()
-            .count()
-        )
+        return Citation.objects.filter(dataset__review=self.review).count()
 
     @cached_property
     def status_fetcher(self):
@@ -160,13 +130,21 @@ class L2ScreeningComponent:
             "l2-screening-progress-panel",
             metrics=[
                 (tdt("Total citations"), self.total_citations),
-                (tdt("Uploaded documents"), self.uploaded_citations),
-                (tdt("Text extracted documents"), self.processed_citations),
-                (tdt("Screened so far"), self.screened_citations),
-                (tdt("Screening questions"), len(self.screening_questions)),
+                (
+                    tdt("Screened-in citations from L1"),
+                    Citation.objects.filter(dataset__review=self.review)
+                    .add_l1_overall_status()
+                    .filter(l1_overall_status=CitationStatus.In)
+                    .count(),
+                ),
+                (tdt("Screening questions"), self.screening_question_count),
             ],
-            completed=self.screened_citations,
-            total=self.total_citations,
+            status_counts=get_screening_status_counts(
+                self.citation_rows, "l2"
+            ),
+            statistics_url=reverse(
+                "l2_screening_statistics", args=[self.review.id]
+            ),
         )
 
     def render_citations_panel(self):
@@ -203,12 +181,19 @@ class L2ScreeningPageTemplate(BasePageTemplate):
         return WorkflowListPageContent(
             review,
             tdt("L2 Screening"),
-            component.render(),
+            [
+                ScreeningFilters(
+                    self.context["filter_form"],
+                    reverse("l2_citations_list", args=[review.id]),
+                ),
+                component.render(),
+            ],
         )
 
 
-class L2ScreeningBaseView(DocumentCitationListView):
+class L2ScreeningBaseView(ScreeningFilterMixin, DocumentCitationListView):
     stage = ReviewStage.L2_SCREENING
+    screening_stage = "l2"
 
 
 @route("/reviews/<int:review_id>/screening_l2/", name="l2_citations_list")

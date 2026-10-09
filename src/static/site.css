@@ -139,3 +139,67 @@ dl.custom-dl {
 .citation-column-mapping-omitted [data-column-name] {
     opacity: 0.5;
 }
+
+.screening-metrics-modal .modal-dialog {
+    width: 100%;
+    max-width: 1140px;
+    margin: 0;
+}
+
+.screening-metrics-modal .modal-content {
+    max-height: calc(100dvh - 4rem);
+}
+
+.screening-metrics-modal .modal-body {
+    overflow-y: auto;
+}
+
+.table-column-checkboxes {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.table-filter-control .col-form-label,
+.table-sort-controls .col-form-label {
+    padding-bottom: 0.25rem;
+}
+
+.table-filter-control .col-sm-3,
+.table-filter-control .col-sm-9,
+.table-sort-controls .col-sm-3,
+.table-sort-controls .col-sm-9 {
+    width: 100%;
+}
+
+@media (min-width: 992px) {
+    .table-sort-controls>.mt-3 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 1.5rem;
+    }
+}
+
+table.table--framework-table th,
+table.table--framework-table td {
+    max-width: 30em;
+    word-break: normal;
+    overflow-wrap: break-word;
+}
+
+table.table--framework-table .table-cell-content {
+    max-width: 30em;
+}
+
+.stickyheader-table-container {
+    max-height: calc(85vh - var(--table-header-bottom-inset));
+    overflow: auto;
+}
+
+.stickyheader-table-container thead th {
+    position: sticky;
+    top: min(0px, calc(2lh + var(--table-header-bottom-inset, 0.5rem) - var(--table-header-height, 0px)));
+    vertical-align: bottom;
+    z-index: 2;
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: inset 0 -1px 0 var(--bs-border-color, #dee2e6);
+}
