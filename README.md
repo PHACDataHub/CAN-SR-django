@@ -210,3 +210,13 @@ From the `src/` directory run the following
 2. `coverage html -i`
 3. `python -m http.server 1337`
 4. visit `http://localhost:1337/htmlcov/` and dig into modules to see which individual line coverage
+
+
+## Generating fake data (low quality)
+
+This is just to test the system with low-quality, synthetic questions and AI/Human answers. Great for seeing counts and modals, not great for testing AI flows because those require more realistic questions. 
+```
+./venv/bin/python src/manage.py runscript my_app.scripts.gen_fake_data_for_review --script-args REVIEW_ID STAGE
+```
+STAGE can be `L1`, `L2`, `PARAM`, or `RESET` (case-insensitive;
+`parameter` also works).
