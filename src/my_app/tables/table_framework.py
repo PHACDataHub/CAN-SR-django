@@ -11,7 +11,7 @@ import htpy as h
 
 from proj.form_util import StandardFormMixin
 from proj.htpy.generic_form import GenericForm
-from proj.htpy.util import HtpyComponent
+from proj.htpy.util import HtpyComponent, static_no_cache
 from proj.text import tdt
 
 
@@ -393,7 +393,10 @@ class TableComponent(HtpyComponent):
                     ]
                 ],
                 h.tbody[rows],
-            ]
+            ],
+            h.script(
+                src=static_no_cache("table_sticky_header.js"), defer=True
+            ),
         ]
 
     def page_url(self, number):

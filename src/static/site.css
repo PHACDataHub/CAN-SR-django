@@ -191,13 +191,14 @@ table.table--framework-table .table-cell-content {
 }
 
 .stickyheader-table-container {
-    max-height: 95vh;
+    max-height: calc(85vh - var(--table-header-bottom-inset));
     overflow: auto;
 }
 
 .stickyheader-table-container thead th {
     position: sticky;
-    top: 0;
+    top: min(0px, calc(2lh + var(--table-header-bottom-inset, 0.5rem) - var(--table-header-height, 0px)));
+    vertical-align: bottom;
     z-index: 2;
     background-color: var(--bs-body-bg, #fff);
     box-shadow: inset 0 -1px 0 var(--bs-border-color, #dee2e6);
