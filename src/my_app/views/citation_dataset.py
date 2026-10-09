@@ -20,11 +20,7 @@ from shortcuts import (
     HttpResponseRedirect,
 )
 from shortcuts import breadcrumbs as bc
-from shortcuts import (
-    messages,
-    reverse,
-    tdt,
-)
+from shortcuts import messages, reverse, tdt
 
 
 class DeleteCitationDatasetForm(forms.Form):
