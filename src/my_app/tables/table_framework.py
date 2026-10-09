@@ -351,7 +351,7 @@ class TableComponent(HtpyComponent):
                 h.tr[h.td(colspan=len(self.columns))[tdt("No records found.")]]
             ]
         return h.div(
-            ".table-responsive",
+            ".table-responsive.stickyheader-table-container",
             tabindex="0",
             role="region",
             aria_label=self.title,

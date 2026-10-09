@@ -172,9 +172,22 @@ dl.custom-dl {
 }
 
 @media (min-width: 992px) {
-    .table-sort-controls > .mt-3 {
+    .table-sort-controls>.mt-3 {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         column-gap: 1.5rem;
     }
+}
+
+.stickyheader-table-container {
+    max-height: 75vh;
+    overflow: auto;
+}
+
+.stickyheader-table-container thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: inset 0 -1px 0 var(--bs-border-color, #dee2e6);
 }
