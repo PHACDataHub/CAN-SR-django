@@ -28,11 +28,11 @@ from .table_framework import (
 )
 
 
-class CitationTableDef(ReviewTableDef):
-    title = tdt("Citations")
+class CitationDatasetTableDef(ReviewTableDef):
+    title = tdt("Dataset")
     default_ordering = ("order", "pk")
 
-    def get_columns(self):
+    def get_citation_columns(self):
         return [
             AttributeColumn(
                 "id",
@@ -44,6 +44,21 @@ class CitationTableDef(ReviewTableDef):
                 "title", tdt("Title"), sort_field="title"
             ),
             AbbreviatedAttributeColumn("abstract", tdt("Abstract")),
+        ]
+
+    def get_columns(self):
+        return [*self.get_citation_columns(), *self.dataset_columns()]
+
+    def get_base_queryset(self):
+        return Citation.objects.filter(dataset__review=self.review)
+
+
+class CitationTableDef(CitationDatasetTableDef):
+    title = tdt("Citations")
+
+    def get_columns(self):
+        return [
+            *self.get_citation_columns(),
             *StatusColumns(filters=True),
             DateTimeAttributeColumn(
                 "last_updated",
@@ -54,9 +69,6 @@ class CitationTableDef(ReviewTableDef):
             *self.dataset_columns(),
             DetailColumn(),
         ]
-
-    def get_base_queryset(self):
-        return Citation.objects.filter(dataset__review=self.review)
 
     def annotate_queryset(self, queryset):
         keys = {column.key for column in self.enabled_columns}

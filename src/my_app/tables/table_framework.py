@@ -343,12 +343,16 @@ class TableComponent(HtpyComponent):
         ]
 
     def render_sort_form(self):
+        if not self.sort_form:
+            return None
         return h.fieldset(".table-sort-controls")[
             h.legend(".h5")[tdt("Sorting")],
             GenericForm(self.sort_form, include_csrf=False),
         ]
 
     def render_table(self):
+        if not self.columns:
+            return h.p[tdt("Select at least one column to display the table.")]
         rows = [
             h.tr[
                 [
