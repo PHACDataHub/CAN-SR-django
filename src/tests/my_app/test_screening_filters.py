@@ -231,7 +231,13 @@ def test_filter_form_resets_page_and_pagination_preserves_filters(
     assert form.find("input", {"name": "search"})["value"] == "match"
     component = soup.find(id=f"{layer.stage}-screening-component")
     assert form.sourceline < component.sourceline
-    previous = component.find("button", {"hx-get": True})["hx-get"]
+    previous = component.find(
+        "button",
+        {
+            "hx-get": True,
+            "hx-target": f"#{layer.stage}-screening-component",
+        },
+    )["hx-get"]
     query = parse_qs(urlsplit(previous).query)
     assert query == {**params, "page": ["1"], "search": ["match"]}
     with patch_rules(can_access_review=True):
