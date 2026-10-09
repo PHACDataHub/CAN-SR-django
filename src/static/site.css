@@ -179,6 +179,17 @@ dl.custom-dl {
     }
 }
 
+table.table--framework-table th,
+table.table--framework-table td {
+    max-width: 30em;
+    word-break: normal;
+    overflow-wrap: break-word;
+}
+
+table.table--framework-table .table-cell-content {
+    max-width: 30em;
+}
+
 .stickyheader-table-container {
     max-height: 75vh;
     overflow: auto;

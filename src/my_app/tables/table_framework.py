@@ -350,7 +350,16 @@ class TableComponent(HtpyComponent):
 
     def render_table(self):
         rows = [
-            h.tr[[h.td[column.render_cell(record)] for column in self.columns]]
+            h.tr[
+                [
+                    h.td[
+                        h.div(".table-cell-content")[
+                            column.render_cell(record)
+                        ]
+                    ]
+                    for column in self.columns
+                ]
+            ]
             for record in self.page_obj.object_list
         ]
         if not rows:
@@ -370,7 +379,11 @@ class TableComponent(HtpyComponent):
                 h.thead[
                     h.tr[
                         [
-                            h.th(scope="col")[column.render_header()]
+                            h.th(scope="col")[
+                                h.div(".table-cell-content")[
+                                    column.render_header()
+                                ]
+                            ]
                             for column in self.columns
                         ]
                     ]
