@@ -191,7 +191,7 @@ table.table--framework-table .table-cell-content {
 }
 
 .stickyheader-table-container {
-    max-height: 75vh;
+    max-height: 95vh;
     overflow: auto;
 }
 
