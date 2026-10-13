@@ -130,7 +130,10 @@ class L1HumanAnswer(HumanAnswer):
         "L1ScreeningQuestion", on_delete=models.CASCADE
     )
     selected_option = models.ForeignKey(
-        "L1ScreeningQuestionOption", on_delete=models.CASCADE
+        "L1ScreeningQuestionOption",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
     )
 
 
@@ -139,7 +142,10 @@ class L2HumanAnswer(HumanAnswer):
         "L2ScreeningQuestion", on_delete=models.CASCADE
     )
     selected_option = models.ForeignKey(
-        "L2ScreeningQuestionOption", on_delete=models.CASCADE
+        "L2ScreeningQuestionOption",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
     )
 
 

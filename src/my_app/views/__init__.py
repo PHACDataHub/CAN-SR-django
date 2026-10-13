@@ -6,6 +6,7 @@ from my_app import detail_modals
 from . import (
     citation_dataset,
     citation_upload,
+    create_human_answers,
     review,
     screening,
     screening_criteria,

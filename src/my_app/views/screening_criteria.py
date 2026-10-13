@@ -389,6 +389,12 @@ class ScreeningCriteriaPageContent(HtpyComponent):
             self.render_form_and_formset_section(L2FormsetAdapter),
             h.h2(".h5.mb-0.mt-3")[tdt("Parameters")],
             self.render_form_and_formset_section(ParameterFormsetAdapter),
+            h.p(".mt-4")[
+                tdt("Have the answers and want to test? "),
+                h.a(
+                    href=reverse("create_human_answers", args=[self.review.pk])
+                )[tdt("Create human answers in bulk")],
+            ],
         ]
 
 
