@@ -382,6 +382,11 @@ class ScreeningCriteriaPageContent(HtpyComponent):
                 bc.BreadcrumbItem(label=tdt("Screening criteria"))
             ],
             h.h1[tdt("Screening criteria")],
+            h.p[
+                h.a(href=reverse("criteria_upload", args=[self.review.pk]))[
+                    tdt("Upload criteria YAML")
+                ],
+            ],
             self.render_screening_columns_section(),
             h.h2(".h5.mb-0.mt-3")[tdt("L1 screening questions")],
             self.render_form_and_formset_section(L1FormsetAdapter),

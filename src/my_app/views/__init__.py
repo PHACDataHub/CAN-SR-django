@@ -7,6 +7,7 @@ from . import (
     citation_dataset,
     citation_upload,
     create_human_answers,
+    criteria_upload,
     review,
     screening,
     screening_criteria,
