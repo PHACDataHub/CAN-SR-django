@@ -82,7 +82,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
         )[ScreeningResultStatus(status).label]
 
     return h.div(
-        ".list-group-item.citation-item.position-relative.pb-4",
+        ".list-group-item.citation-item",
         id=row_id,
     )[
         h.div(".d-flex.justify-content-between.align-items-start.gap-3")[
@@ -96,15 +96,16 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
                     else None
                 ),
             ],
-            h.div(".d-flex.flex-column.align-items-end.gap-2")[
-                CitationRowL1StatusBadge(citation_row), button_markup
+            h.div(".d-flex.flex-column.flex-shrink-0.align-items-end.gap-2")[
+                CitationRowL1StatusBadge(citation_row),
+                button_markup,
+                h.a(
+                    ".btn.btn-outline-secondary.btn-sm",
+                    href=details_url,
+                    id=f"l1-screening-row-details-btn-{citation_row.id}",
+                )[tdt("View more")],
             ],
         ],
-        h.a(
-            ".btn.btn-outline-secondary.btn-sm.position-absolute.bottom-0.end-0.me-3.mb-2",
-            href=details_url,
-            id=f"l1-screening-row-details-btn-{citation_row.id}",
-        )[tdt("View more")],
     ]
 
 

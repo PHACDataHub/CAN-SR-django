@@ -211,7 +211,7 @@ def DocumentWorkflowCitationRow(
     figure_extraction_badge = FigureExtractionBadge(citation_row)
 
     return h.div(
-        ".list-group-item.citation-item.position-relative.pb-4",
+        ".list-group-item.citation-item",
         id=row_id,
     )[
         h.div(".d-flex.justify-content-between.align-items-start.gap-3")[
@@ -250,7 +250,9 @@ def DocumentWorkflowCitationRow(
                     workflow_status,
                 ],
             ],
-            h.div(".d-flex.flex-column.align-items-end.gap-2")[actions],
+            h.div(".d-flex.flex-column.flex-shrink-0.align-items-end.gap-2")[
+                actions
+            ],
         ],
     ]
 
