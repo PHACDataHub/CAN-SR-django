@@ -554,7 +554,7 @@ def render_evidence_chips(
     )[
         [
             h.button(
-                ".btn.btn-sm.btn-outline-primary.evidence-chip",
+                ".btn.btn-xs.btn-outline-primary.evidence-chip",
                 type="button",
                 data_evidence_type=evidence_type,
                 data_evidence_index=str(evidence_index),
