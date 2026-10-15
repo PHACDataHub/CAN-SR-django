@@ -7,6 +7,7 @@ from proj.htpy.components import PercentFormatter
 
 from my_app.models import ScreeningResultStatus
 from my_app.queries import get_adjacent_citation_ids, get_citations_for_stage
+from my_app.views.screening.refresh import WorkflowRefreshButton
 from my_app.views.screening.util import BADGE_CLASSES
 from my_app.views.view_utils import url_with_same_params
 from shortcuts import breadcrumbs as bc
@@ -78,12 +79,7 @@ def WorkflowListPageContent(review, title, component):
     return [
         bc.BreadcrumbTrailForReview(review)[bc.BreadcrumbItem(label=title),],
         h.h1[title],
-        h.div(".mb-3")[
-            h.button(
-                "#refresh-button.btn.btn-outline-secondary",
-                type="button",
-            )[tdt("Refresh")],
-        ],
+        WorkflowRefreshButton(),
         component,
     ]
 

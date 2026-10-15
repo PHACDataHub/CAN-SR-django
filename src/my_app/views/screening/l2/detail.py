@@ -89,6 +89,7 @@ class L2PdfScreeningPage(BasePageTemplate):
         citation_row = self.citation_row
 
         return PdfWorkflowPageContent(
+            refresh_url=self.request.get_full_path(),
             assets=PdfViewerAssets(
                 citation_row,
                 review,
@@ -104,11 +105,11 @@ class L2PdfScreeningPage(BasePageTemplate):
             ],
             title=tdt("L2 PDF screening"),
             progress_navigation=CitationScreeningProgressNav(
-                citation_row,
-                review,
+                self.citation_row,
+                self.review,
                 stage=ReviewStage.L2_SCREENING,
                 detail_route_name="l2_citation_detail",
-                progress_stats=get_l2_screening_progress_stats(review.id),
+                progress_stats=get_l2_screening_progress_stats(self.review.id),
                 nav_label=tdt("L2 citation navigation"),
             ),
             pdf_panel=PdfPanel(citation_row),
@@ -211,7 +212,14 @@ class L2PdfScreeningPage(BasePageTemplate):
                 ),
                 (tdt("Confidence"), PercentFormatter(result.confidence)),
                 *CriticalAgentDefinitionItems(result),
-                *EvidenceDefinitionItems(result),
+                *EvidenceDefinitionItems(
+                    result,
+                    getattr(
+                        self.citation_row.document,
+                        "text_extraction_result",
+                        None,
+                    ),
+                ),
             ]
         )
 

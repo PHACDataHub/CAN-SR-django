@@ -20,8 +20,33 @@ function tdt(str) {
 
 
 document.addEventListener("DOMContentLoaded", function (event) {
+    configureMorph();
     configureHtmx();
 });
+
+
+function configureMorph() {
+    // ensure that morph-swapped detail tags retain their open/closed state
+
+    const morph = Idiomorph.morph;
+    Idiomorph.morph = function (target, content, options = {}) {
+        const beforeNodeMorphed = options.callbacks?.beforeNodeMorphed;
+        return morph(target, content, {
+            ...options,
+            callbacks: {
+                ...options.callbacks,
+                beforeNodeMorphed(current, incoming) {
+                    const result = beforeNodeMorphed?.(current, incoming);
+                    if (current instanceof HTMLDetailsElement && incoming instanceof HTMLDetailsElement) {
+                        // Keep disclosure state while allowing the contents to refresh.
+                        incoming.open = current.open;
+                    }
+                    return result;
+                },
+            },
+        });
+    };
+}
 
 
 

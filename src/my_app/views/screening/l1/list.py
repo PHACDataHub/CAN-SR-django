@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-from proj.htpy.util import polling_attrs
-
 from my_app.models import (
     Citation,
     L1ScreeningQuestion,
@@ -21,6 +19,10 @@ from my_app.views.screening.components import (
 from my_app.views.screening.filters import (
     ScreeningFilterMixin,
     ScreeningFilters,
+)
+from my_app.views.screening.refresh import (
+    WorkflowListRefreshMixin,
+    workflow_refresh_attrs,
 )
 from my_app.views.screening.util import BADGE_CLASSES
 from my_app.views.view_utils import (
@@ -60,7 +62,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
             data_focus_after=f"#{badge_id(citation_row)}",
             hx_target="closest .citation-item",
             hx_select=f"#{row_id}",
-            hx_swap="innerHTML",
+            hx_swap="outerHTML",
             hx_disabled_elt="this",
             id=btn_id,
         )[tdt("Screen this row")]
@@ -82,7 +84,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
         )[ScreeningResultStatus(status).label]
 
     return h.div(
-        ".list-group-item.citation-item.position-relative.pb-4",
+        ".list-group-item.citation-item",
         id=row_id,
     )[
         h.div(".d-flex.justify-content-between.align-items-start.gap-3")[
@@ -96,15 +98,16 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
                     else None
                 ),
             ],
-            h.div(".d-flex.flex-column.align-items-end.gap-2")[
-                CitationRowL1StatusBadge(citation_row), button_markup
+            h.div(".d-flex.flex-column.flex-shrink-0.align-items-end.gap-2")[
+                CitationRowL1StatusBadge(citation_row),
+                button_markup,
+                h.a(
+                    ".btn.btn-outline-secondary.btn-sm",
+                    href=details_url,
+                    id=f"l1-screening-row-details-btn-{citation_row.id}",
+                )[tdt("View more")],
             ],
         ],
-        h.a(
-            ".btn.btn-outline-secondary.btn-sm.position-absolute.bottom-0.end-0.me-3.mb-2",
-            href=details_url,
-            id=f"l1-screening-row-details-btn-{citation_row.id}",
-        )[tdt("View more")],
     ]
 
 
@@ -169,14 +172,12 @@ class L1ScreeningComponent:
     def render(self):
         return h.div(
             id="l1-screening-component",
-            hx_target="this",
-            hx_get=self.page_url(self.page_number, self.component_url),
             hx_swap="morph:outerHTML",
-            hx_disabled_elt="#refresh-button",
-            hx_sync="this:replace",
-            **polling_attrs("click from:#refresh-button"),
+            **workflow_refresh_attrs(
+                self.page_url(self.page_number, self.component_url),
+            ),
         )[
-            h.div(".row.g-4")[
+            h.div(".row.g-4", hx_sync="body:replace")[
                 h.div(".col-lg-5")[self.render_progress_panel()],
                 h.div(".col-lg-7")[self.render_citations_panel()],
             ]
@@ -239,7 +240,10 @@ class L1ScreeningPageTemplate(BasePageTemplate):
 
 
 class L1ScreeningBaseView(
-    ScreeningFilterMixin, MustAccessReviewMixin, ListView
+    WorkflowListRefreshMixin,
+    ScreeningFilterMixin,
+    MustAccessReviewMixin,
+    ListView,
 ):
     model = Citation
     paginate_by = 10

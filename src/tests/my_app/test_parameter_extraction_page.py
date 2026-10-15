@@ -60,7 +60,7 @@ def test_parameter_extraction_shell_renders_component_and_refresh_button(
     assert 'hx-target="#parameter-extraction-component"' in body
     assert 'hx-swap="morph:outerHTML"' in body
     assert (
-        'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s"'
+        'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s [!document.hidden]"'
         in body
     )
     assert "Refresh" in body
@@ -204,7 +204,7 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     assert 'id="citation-pdf-pages"' in body
     assert "citation_pdf.js" in body
     assert "citation_pdf.css" in body
-    assert 'class="btn btn-sm btn-outline-primary evidence-chip"' in body
+    assert 'class="btn btn-xs btn-outline-primary evidence-chip"' in body
     assert (
         'data-evidence-type="sentence" data-evidence-index="1">Sentence 1</button>'
         in body

@@ -122,6 +122,6 @@ def static_no_cache(path):
 
 def polling_attrs(hx_trigger, interval="5s"):
     if settings.ENABLE_HTMX_POLLING:
-        hx_trigger = f"{hx_trigger}, every {interval}"
+        hx_trigger = f"{hx_trigger}, every {interval} [!document.hidden]"
 
     return {"hx_trigger": hx_trigger}

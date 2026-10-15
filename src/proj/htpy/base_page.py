@@ -291,7 +291,7 @@ class BasePageTemplate(HtpyComponent):
     def render(self):
         return h.html(lang="en")[
             self.head(),
-            h.body(hx_ext="morph")[
+            h.body(hx_ext="morph", hx_sync="this:replace")[
                 h.div(".d-none")[h.div(id="dummy-target")],
                 h.div(id="modal-slot", data_modal_slot=True),
                 h.script(

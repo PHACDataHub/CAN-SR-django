@@ -16,6 +16,11 @@ from my_app.models import (
     ScreeningResultStatus,
     TextExtractionResult,
 )
+from my_app.pdf.text_extraction.evidence import group_evidence_sentences
+from my_app.views.screening.refresh import (
+    WorkflowRefreshButton,
+    workflow_refresh_attrs,
+)
 from shortcuts import GenericForm, reverse, tdt
 
 BADGE_CLASSES = {
@@ -211,7 +216,7 @@ def DocumentWorkflowCitationRow(
     figure_extraction_badge = FigureExtractionBadge(citation_row)
 
     return h.div(
-        ".list-group-item.citation-item.position-relative.pb-4",
+        ".list-group-item.citation-item",
         id=row_id,
     )[
         h.div(".d-flex.justify-content-between.align-items-start.gap-3")[
@@ -250,7 +255,9 @@ def DocumentWorkflowCitationRow(
                     workflow_status,
                 ],
             ],
-            h.div(".d-flex.flex-column.align-items-end.gap-2")[actions],
+            h.div(".d-flex.flex-column.flex-shrink-0.align-items-end.gap-2")[
+                actions
+            ],
         ],
     ]
 
@@ -299,7 +306,8 @@ def PdfPanel(citation_row: Citation):
         initial_status = tdt("Loading PDF...")
 
     return h.section(
-        ".citation-pdf-panel",
+        "#citation-pdf-viewer.citation-pdf-panel",
+        hx_preserve=True,
         aria_label=tdt("Citation PDF viewer"),
     )[
         h.div(".citation-pdf-toolbar")[
@@ -323,6 +331,7 @@ def PdfPanel(citation_row: Citation):
 
 def PdfWorkflowPageContent(
     *,
+    refresh_url,
     assets,
     breadcrumbs,
     title,
@@ -335,14 +344,20 @@ def PdfWorkflowPageContent(
         assets,
         breadcrumbs,
         h.h1[title],
-        progress_navigation,
-        h.div(".row.g-4.citation-workflow-layout")[
-            h.div(".col-lg-9")[pdf_panel],
-            h.div(".col-lg-3.citation-workflow-sidebar")[
-                h.div(".vstack.gap-4")[
-                    citation_panel,
-                    results_panel,
-                ]
+        WorkflowRefreshButton(),
+        h.div(
+            id="workflow-detail-component",
+            hx_select="#workflow-detail-component",
+            hx_disinherit="hx-select",
+            hx_swap="morph:outerHTML",
+            **workflow_refresh_attrs(refresh_url),
+        )[
+            progress_navigation,
+            h.div(".row.g-4.citation-workflow-layout", hx_sync="body:replace")[
+                h.div(".col-lg-9")[pdf_panel],
+                h.div(".col-lg-3.citation-workflow-sidebar")[
+                    h.div(".vstack.gap-4")[citation_panel, results_panel],
+                ],
             ],
         ],
     ]
@@ -490,7 +505,7 @@ def WorkflowResultsPanel(
     ]
 
 
-def EvidenceDefinitionItems(result):
+def EvidenceDefinitionItems(result, text_extraction_result=None):
     return [
         (
             tdt("Evidence sentences"),
@@ -499,6 +514,9 @@ def EvidenceDefinitionItems(result):
                 "sentence",
                 tdt("Sentence"),
                 tdt("Evidence sentences"),
+                sentence_groups=group_evidence_sentences(
+                    result.evidence_sentences, text_extraction_result
+                ),
             ),
         ),
         (
@@ -527,6 +545,8 @@ def render_evidence_chips(
     evidence_type,
     label,
     aria_label,
+    *,
+    sentence_groups=None,
 ):
     if not evidence_indices:
         return tdt("Nothing to highlight")
@@ -534,13 +554,19 @@ def render_evidence_chips(
     evidence_list = ", ".join(
         str(evidence_index) for evidence_index in evidence_indices
     )
+    if sentence_groups is not None:
+        return h.div(
+            ".d-flex.flex-wrap.gap-2",
+            aria_label=f"{aria_label}: {evidence_list}",
+        )[[SentenceEvidenceChip(group) for group in sentence_groups]]
+
     return h.div(
         ".d-flex.flex-wrap.gap-2",
         aria_label=f"{aria_label}: {evidence_list}",
     )[
         [
             h.button(
-                ".btn.btn-sm.btn-outline-primary.evidence-chip",
+                ".btn.btn-xs.btn-outline-primary.evidence-chip",
                 type="button",
                 data_evidence_type=evidence_type,
                 data_evidence_index=str(evidence_index),
@@ -548,3 +574,21 @@ def render_evidence_chips(
             for evidence_index in evidence_indices
         ]
     ]
+
+
+def SentenceEvidenceChip(indices):
+    if len(indices) == 1:
+        return h.button(
+            ".btn.btn-xs.btn-outline-primary.evidence-chip",
+            type="button",
+            data_evidence_type="sentence",
+            data_evidence_index=str(indices[0]),
+        )[tdt("Sentence"), " ", str(indices[0])]
+
+    return h.button(
+        ".btn.btn-xs.btn-outline-primary.evidence-chip",
+        type="button",
+        data_evidence_type="sentence",
+        data_evidence_index=str(indices[0]),
+        data_evidence_indices=",".join(str(index) for index in indices),
+    )[tdt("Sentences"), " ", f"{indices[0]}–{indices[-1]}"]

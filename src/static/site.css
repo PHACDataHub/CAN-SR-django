@@ -203,3 +203,15 @@ table.table--framework-table .table-cell-content {
     background-color: var(--bs-body-bg, #fff);
     box-shadow: inset 0 -1px 0 var(--bs-border-color, #dee2e6);
 }
+
+
+
+
+
+.btn-group-xs>.btn,
+.btn-xs {
+    --bs-btn-padding-y: 0.125rem;
+    --bs-btn-padding-x: 0.25rem;
+    --bs-btn-font-size: 0.875rem;
+    --bs-btn-border-radius: 0.25rem;
+}

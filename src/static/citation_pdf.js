@@ -12,10 +12,69 @@ let pdfDocument = null;
 let metadata = null;
 let renderVersion = 0;
 let resizeTimeout = null;
+let evidenceSignature = null;
+let metadataRefreshing = false;
+let viewerInitializing = false;
+const pageViewports = new Map();
+let selectedEvidenceHighlights = [];
 
 document.body.addEventListener('citations-update', () => {
     window.location.reload();
 });
+
+document.body.addEventListener('htmx:afterSettle', (event) => {
+    if (event.detail.elt?.id === 'workflow-detail-component') {
+        refreshEvidenceMetadata();
+    }
+});
+
+function currentEvidenceSignature() {
+    return JSON.stringify(Array.from(document.querySelectorAll('.evidence-chip'), (chip) => [
+        chip.dataset.evidenceType || 'sentence',
+        chip.dataset.evidenceIndex ?? chip.dataset.sentenceIndex,
+        chip.dataset.evidenceIndices,
+    ]));
+}
+
+function renderPageHighlights(pageElement, viewport) {
+    const pageNumber = Number.parseInt(pageElement.dataset.pageNumber, 10);
+    const pageInfo = metadata.pages[pageNumber - 1];
+    const overlay = pageElement.querySelector('.citation-pdf-overlay');
+    const highlights = [];
+    if (pageInfo) {
+        highlights.push(...pageHighlights(pageNumber).map(
+            (highlight) => renderHighlight(highlight, pageInfo, viewport),
+        ));
+    }
+    overlay.replaceChildren(...highlights);
+}
+
+async function refreshEvidenceMetadata() {
+    if (!pdfDocument) {
+        await initializePdfViewer();
+        return;
+    }
+    const signature = currentEvidenceSignature();
+    if (metadataRefreshing || signature === evidenceSignature) {
+        return;
+    }
+    metadataRefreshing = true;
+    try {
+        const response = await fetch(args.metadataUrl);
+        if (!response.ok) {
+            throw new Error(`Metadata request failed with status ${response.status}`);
+        }
+        metadata = await response.json();
+        evidenceSignature = signature;
+        pagesElement.querySelectorAll('.citation-pdf-page').forEach((page) => {
+            renderPageHighlights(page, pageViewports.get(Number.parseInt(page.dataset.pageNumber, 10)));
+        });
+    } catch (error) {
+        console.error(error);
+    } finally {
+        metadataRefreshing = false;
+    }
+}
 
 function setStatus(message) {
     statusElement.textContent = message;
@@ -54,7 +113,10 @@ function evidenceHighlights(evidenceType, evidenceIndex) {
 }
 
 function updateEvidenceHighlightState(evidenceType, evidenceIndex) {
-    const highlights = evidenceHighlights(evidenceType, evidenceIndex);
+    let highlights = evidenceHighlights(evidenceType, evidenceIndex);
+    if (highlights.some((highlight) => selectedEvidenceHighlights.includes(highlight))) {
+        highlights = selectedEvidenceHighlights;
+    }
     const isActive = highlights.some((highlight) => highlight.matches(':hover, :focus'));
 
     highlights.forEach((highlight) => {
@@ -102,6 +164,7 @@ async function renderPage(pageNumber, version) {
     const availableWidth = Math.max(pagesElement.clientWidth - 32, 240);
     const scale = Math.min(availableWidth / baseViewport.width, 1.75);
     const viewport = page.getViewport({scale});
+    pageViewports.set(pageNumber, viewport);
     const outputScale = window.devicePixelRatio || 1;
     const canvas = document.createElement('canvas');
     const canvasContext = canvas.getContext('2d');
@@ -123,14 +186,7 @@ async function renderPage(pageNumber, version) {
     pageElement.append(canvas, overlayElement);
     pagesElement.append(pageElement);
 
-    const pageInfo = metadata.pages[pageNumber - 1];
-    if (pageInfo) {
-        overlayElement.append(
-            ...pageHighlights(pageNumber).map(
-                (highlight) => renderHighlight(highlight, pageInfo, viewport),
-            ),
-        );
-    }
+    renderPageHighlights(pageElement, viewport);
 
     await page.render({
         canvasContext,
@@ -144,6 +200,7 @@ async function renderPage(pageNumber, version) {
 async function renderDocument() {
     const version = ++renderVersion;
     pagesElement.replaceChildren();
+    pageViewports.clear();
     setStatus(tdt('Rendering PDF...'));
 
     for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
@@ -160,7 +217,7 @@ async function renderDocument() {
     }
 }
 
-function scrollToEvidence(evidenceType, evidenceIndex) {
+function scrollToEvidence(evidenceType, evidenceIndex, evidenceIndices) {
     const label = evidenceLabel(evidenceType);
     const highlight = pagesElement.querySelector(evidenceSelector(evidenceType, evidenceIndex));
     if (!highlight) {
@@ -170,17 +227,27 @@ function scrollToEvidence(evidenceType, evidenceIndex) {
         return;
     }
 
+    selectedEvidenceHighlights.forEach((box) => {
+        box.classList.remove('citation-pdf-highlight-active');
+    });
+    selectedEvidenceHighlights = evidenceIndices.flatMap(
+        (index) => evidenceHighlights(evidenceType, index),
+    );
     highlight.scrollIntoView({behavior: 'smooth', block: 'center'});
     highlight.focus({preventScroll: true});
+    updateEvidenceHighlightState(evidenceType, evidenceIndex);
 }
 
 function bindEvidenceChips() {
-    document.querySelectorAll('.evidence-chip').forEach((chip) => {
-        chip.addEventListener('click', () => {
-            const evidenceType = chip.dataset.evidenceType || 'sentence';
-            const evidenceIndex = chip.dataset.evidenceIndex ?? chip.dataset.sentenceIndex;
-            scrollToEvidence(evidenceType, evidenceIndex);
-        });
+    document.body.addEventListener('click', (event) => {
+        const chip = event.target.closest('.evidence-chip');
+        if (!chip) {
+            return;
+        }
+        const evidenceType = chip.dataset.evidenceType || 'sentence';
+        const evidenceIndex = chip.dataset.evidenceIndex ?? chip.dataset.sentenceIndex;
+        const evidenceIndices = (chip.dataset.evidenceIndices || evidenceIndex).split(',');
+        scrollToEvidence(evidenceType, evidenceIndex, evidenceIndices);
     });
 }
 
@@ -195,12 +262,12 @@ function bindResizeHandler() {
 }
 
 async function initializePdfViewer() {
-    bindEvidenceChips();
-
-    if (!args.pdfUrl || !args.metadataUrl) {
+    if (viewerInitializing || !args.pdfUrl || !args.metadataUrl) {
         return;
     }
 
+    viewerInitializing = true;
+    const signature = currentEvidenceSignature();
     try {
         const [pdfjsLib, metadataResponse] = await Promise.all([
             import(PDFJS_URL),
@@ -211,6 +278,7 @@ async function initializePdfViewer() {
         }
 
         metadata = await metadataResponse.json();
+        evidenceSignature = signature;
         pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
         pdfDocument = await pdfjsLib.getDocument(args.pdfUrl).promise;
         await renderDocument();
@@ -218,9 +286,12 @@ async function initializePdfViewer() {
     } catch (error) {
         console.error(error);
         setStatus(tdt('The PDF could not be loaded.'));
+    } finally {
+        viewerInitializing = false;
     }
 }
 
 if (pagesElement && scrollElement && statusElement) {
+    bindEvidenceChips();
     initializePdfViewer();
 }

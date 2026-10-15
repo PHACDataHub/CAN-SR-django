@@ -48,7 +48,10 @@ def test_screening_l1_shell_renders_component_and_refresh_button(
     assert reverse("l1_citations_list_partial", args=[review.id]) in body
     assert 'hx-target="#l1-screening-component"' in body
     assert 'hx-swap="morph:outerHTML"' in body
-    assert 'hx-trigger="click from:#refresh-button, every 5s"' in body
+    assert (
+        'hx-trigger="click from:#refresh-button, every 5s [!document.hidden]"'
+        in body
+    )
     assert "Completed" in body
 
 
