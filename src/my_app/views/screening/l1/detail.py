@@ -21,6 +21,10 @@ from my_app.views.screening.components import (
     render_human_review_control,
 )
 from my_app.views.screening.l1.list import CitationRowL1StatusBadge
+from my_app.views.screening.refresh import (
+    WorkflowRefreshButton,
+    workflow_refresh_attrs,
+)
 from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import BasePageTemplate, DetailView, HtpyTemplateMixin
 from shortcuts import breadcrumbs as bc
@@ -165,21 +169,30 @@ class L1CitationScreeningPage(BasePageTemplate):
                 bc.BreadcrumbItem(label=tdt("Citation screening")),
             ],
             h.h1[tdt("L1 citation screening")],
-            CitationScreeningProgressNav(
-                self.citation_row,
-                review,
-                stage=ReviewStage.L1_SCREENING,
-                detail_route_name="l1_citation_detail",
-                progress_stats=get_l1_screening_progress_stats(review.id),
-                nav_label=tdt("L1 citation navigation"),
-            ),
-            h.div(".row.g-4")[
-                h.div(".col-lg-8")[self.render_citation_panel()],
-                h.div(".col-lg-4")[
-                    h.div(".vstack.gap-4")[
-                        self.render_screening_panel(),
-                        self.render_results_panel(),
-                    ]
+            WorkflowRefreshButton(),
+            h.div(
+                id="workflow-detail-component",
+                hx_select="#workflow-detail-component",
+                hx_disinherit="hx-select",
+                hx_swap="morph:outerHTML",
+                **workflow_refresh_attrs(self.request.get_full_path()),
+            )[
+                CitationScreeningProgressNav(
+                    self.citation_row,
+                    review,
+                    stage=ReviewStage.L1_SCREENING,
+                    detail_route_name="l1_citation_detail",
+                    progress_stats=get_l1_screening_progress_stats(review.id),
+                    nav_label=tdt("L1 citation navigation"),
+                ),
+                h.div(".row.g-4", hx_sync="body:replace")[
+                    h.div(".col-lg-8")[self.render_citation_panel()],
+                    h.div(".col-lg-4")[
+                        h.div(".vstack.gap-4")[
+                            self.render_screening_panel(),
+                            self.render_results_panel(),
+                        ],
+                    ],
                 ],
             ],
         ]
@@ -264,6 +277,7 @@ class L1CitationScreeningPage(BasePageTemplate):
                     args=[self.review.id, self.citation_row.id],
                 ),
                 hx_target=f"#{l1_screening_control_id(self.citation_row)}",
+                hx_select=f"#{l1_screening_control_id(self.citation_row)}",
                 hx_swap="outerHTML",
                 hx_disabled_elt="this",
             )[tdt("Re-screen")]
@@ -321,7 +335,9 @@ class L1CitationScreeningPage(BasePageTemplate):
     name="l1_citation_detail",
 )
 class L1CitationScreeningView(
-    MustAccessReviewMixin, DetailView, HtpyTemplateMixin
+    MustAccessReviewMixin,
+    DetailView,
+    HtpyTemplateMixin,
 ):
     model = Citation
     pk_url_kwarg = "row_pk"

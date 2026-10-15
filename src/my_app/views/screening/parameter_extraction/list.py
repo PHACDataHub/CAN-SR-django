@@ -4,7 +4,6 @@ import htpy as h
 
 from proj.htpy import definition_list as DefList
 from proj.htpy.components import PercentFormatter
-from proj.htpy.util import polling_attrs
 
 from my_app.models import (
     Citation,
@@ -46,6 +45,7 @@ from my_app.views.screening.components import (
 from my_app.views.screening.document_util_components import (
     DocumentCitationListView,
 )
+from my_app.views.screening.refresh import workflow_refresh_attrs
 from my_app.views.screening.util import (
     BADGE_CLASSES,
     can_start_parameter_extraction,
@@ -332,15 +332,13 @@ class ParameterExtractionComponent:
     def render(self):
         return h.div(
             id="parameter-extraction-component",
-            hx_target="this",
-            hx_get=self.page_url(self.page_number, self.component_url),
             hx_swap="morph:outerHTML",
-            hx_disabled_elt="#refresh-button",
-            **polling_attrs(
-                "click from:#refresh-button, citations-update from:body"
+            **workflow_refresh_attrs(
+                self.page_url(self.page_number, self.component_url),
+                citations_update=True,
             ),
         )[
-            h.div(".row.g-4")[
+            h.div(".row.g-4", hx_sync="body:replace")[
                 h.div(".col-lg-5")[self.render_progress_panel()],
                 h.div(".col-lg-7")[self.render_citations_panel()],
             ]
@@ -422,6 +420,7 @@ class ParameterExtractionPdfPage(BasePageTemplate):
         citation_row = self.citation_row
 
         return PdfWorkflowPageContent(
+            refresh_url=self.request.get_full_path(),
             assets=PdfViewerAssets(
                 citation_row,
                 review,
@@ -439,12 +438,12 @@ class ParameterExtractionPdfPage(BasePageTemplate):
             ],
             title=tdt("Parameter PDF extraction"),
             progress_navigation=CitationScreeningProgressNav(
-                citation_row,
-                review,
+                self.citation_row,
+                self.review,
                 stage=ReviewStage.PARAMETER_EXTRACTION,
                 detail_route_name="parameter_extraction_citation_detail",
                 progress_stats=get_parameter_extraction_progress_stats(
-                    review.id
+                    self.review.id
                 ),
                 nav_label=tdt("Parameter extraction citation navigation"),
             ),

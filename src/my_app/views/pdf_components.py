@@ -16,6 +16,10 @@ from my_app.models import (
     ScreeningResultStatus,
     TextExtractionResult,
 )
+from my_app.views.screening.refresh import (
+    WorkflowRefreshButton,
+    workflow_refresh_attrs,
+)
 from shortcuts import GenericForm, reverse, tdt
 
 BADGE_CLASSES = {
@@ -301,7 +305,8 @@ def PdfPanel(citation_row: Citation):
         initial_status = tdt("Loading PDF...")
 
     return h.section(
-        ".citation-pdf-panel",
+        "#citation-pdf-viewer.citation-pdf-panel",
+        hx_preserve=True,
         aria_label=tdt("Citation PDF viewer"),
     )[
         h.div(".citation-pdf-toolbar")[
@@ -325,6 +330,7 @@ def PdfPanel(citation_row: Citation):
 
 def PdfWorkflowPageContent(
     *,
+    refresh_url,
     assets,
     breadcrumbs,
     title,
@@ -337,14 +343,20 @@ def PdfWorkflowPageContent(
         assets,
         breadcrumbs,
         h.h1[title],
-        progress_navigation,
-        h.div(".row.g-4.citation-workflow-layout")[
-            h.div(".col-lg-9")[pdf_panel],
-            h.div(".col-lg-3.citation-workflow-sidebar")[
-                h.div(".vstack.gap-4")[
-                    citation_panel,
-                    results_panel,
-                ]
+        WorkflowRefreshButton(),
+        h.div(
+            id="workflow-detail-component",
+            hx_select="#workflow-detail-component",
+            hx_disinherit="hx-select",
+            hx_swap="morph:outerHTML",
+            **workflow_refresh_attrs(refresh_url),
+        )[
+            progress_navigation,
+            h.div(".row.g-4.citation-workflow-layout", hx_sync="body:replace")[
+                h.div(".col-lg-9")[pdf_panel],
+                h.div(".col-lg-3.citation-workflow-sidebar")[
+                    h.div(".vstack.gap-4")[citation_panel, results_panel],
+                ],
             ],
         ],
     ]

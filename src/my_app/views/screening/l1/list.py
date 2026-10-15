@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-from proj.htpy.util import polling_attrs
-
 from my_app.models import (
     Citation,
     L1ScreeningQuestion,
@@ -21,6 +19,10 @@ from my_app.views.screening.components import (
 from my_app.views.screening.filters import (
     ScreeningFilterMixin,
     ScreeningFilters,
+)
+from my_app.views.screening.refresh import (
+    WorkflowListRefreshMixin,
+    workflow_refresh_attrs,
 )
 from my_app.views.screening.util import BADGE_CLASSES
 from my_app.views.view_utils import (
@@ -60,7 +62,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
             data_focus_after=f"#{badge_id(citation_row)}",
             hx_target="closest .citation-item",
             hx_select=f"#{row_id}",
-            hx_swap="innerHTML",
+            hx_swap="outerHTML",
             hx_disabled_elt="this",
             id=btn_id,
         )[tdt("Screen this row")]
@@ -170,14 +172,12 @@ class L1ScreeningComponent:
     def render(self):
         return h.div(
             id="l1-screening-component",
-            hx_target="this",
-            hx_get=self.page_url(self.page_number, self.component_url),
             hx_swap="morph:outerHTML",
-            hx_disabled_elt="#refresh-button",
-            hx_sync="this:replace",
-            **polling_attrs("click from:#refresh-button"),
+            **workflow_refresh_attrs(
+                self.page_url(self.page_number, self.component_url),
+            ),
         )[
-            h.div(".row.g-4")[
+            h.div(".row.g-4", hx_sync="body:replace")[
                 h.div(".col-lg-5")[self.render_progress_panel()],
                 h.div(".col-lg-7")[self.render_citations_panel()],
             ]
@@ -240,7 +240,10 @@ class L1ScreeningPageTemplate(BasePageTemplate):
 
 
 class L1ScreeningBaseView(
-    ScreeningFilterMixin, MustAccessReviewMixin, ListView
+    WorkflowListRefreshMixin,
+    ScreeningFilterMixin,
+    MustAccessReviewMixin,
+    ListView,
 ):
     model = Citation
     paginate_by = 10

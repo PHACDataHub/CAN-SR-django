@@ -60,7 +60,7 @@ def test_parameter_extraction_shell_renders_component_and_refresh_button(
     assert 'hx-target="#parameter-extraction-component"' in body
     assert 'hx-swap="morph:outerHTML"' in body
     assert (
-        'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s"'
+        'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s [!document.hidden]"'
         in body
     )
     assert "Refresh" in body

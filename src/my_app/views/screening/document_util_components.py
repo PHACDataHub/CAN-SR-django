@@ -2,6 +2,7 @@ from django.http import Http404, JsonResponse
 
 from my_app.models import Citation, DocumentFigure, DocumentTable
 from my_app.queries import get_citations_for_stage
+from my_app.views.screening.refresh import WorkflowListRefreshMixin
 from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
     DetailView,
@@ -25,7 +26,9 @@ def document_citations_for_review(review, stage=None):
     ).order_by("order", "id")
 
 
-class DocumentCitationListView(MustAccessReviewMixin, ListView):
+class DocumentCitationListView(
+    WorkflowListRefreshMixin, MustAccessReviewMixin, ListView
+):
     paginate_by = 10
     stage = None
 
