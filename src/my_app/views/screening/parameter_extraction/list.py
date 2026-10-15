@@ -542,7 +542,14 @@ class ParameterExtractionPdfPage(BasePageTemplate):
                     ),
                 ),
                 (tdt("Confidence"), PercentFormatter(result.confidence)),
-                *EvidenceDefinitionItems(result),
+                *EvidenceDefinitionItems(
+                    result,
+                    getattr(
+                        self.citation_row.document,
+                        "text_extraction_result",
+                        None,
+                    ),
+                ),
             ]
         )
 

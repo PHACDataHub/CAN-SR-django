@@ -16,6 +16,7 @@ let evidenceSignature = null;
 let metadataRefreshing = false;
 let viewerInitializing = false;
 const pageViewports = new Map();
+let selectedEvidenceHighlights = [];
 
 document.body.addEventListener('citations-update', () => {
     window.location.reload();
@@ -31,6 +32,7 @@ function currentEvidenceSignature() {
     return JSON.stringify(Array.from(document.querySelectorAll('.evidence-chip'), (chip) => [
         chip.dataset.evidenceType || 'sentence',
         chip.dataset.evidenceIndex ?? chip.dataset.sentenceIndex,
+        chip.dataset.evidenceIndices,
     ]));
 }
 
@@ -111,7 +113,10 @@ function evidenceHighlights(evidenceType, evidenceIndex) {
 }
 
 function updateEvidenceHighlightState(evidenceType, evidenceIndex) {
-    const highlights = evidenceHighlights(evidenceType, evidenceIndex);
+    let highlights = evidenceHighlights(evidenceType, evidenceIndex);
+    if (highlights.some((highlight) => selectedEvidenceHighlights.includes(highlight))) {
+        highlights = selectedEvidenceHighlights;
+    }
     const isActive = highlights.some((highlight) => highlight.matches(':hover, :focus'));
 
     highlights.forEach((highlight) => {
@@ -212,7 +217,7 @@ async function renderDocument() {
     }
 }
 
-function scrollToEvidence(evidenceType, evidenceIndex) {
+function scrollToEvidence(evidenceType, evidenceIndex, evidenceIndices) {
     const label = evidenceLabel(evidenceType);
     const highlight = pagesElement.querySelector(evidenceSelector(evidenceType, evidenceIndex));
     if (!highlight) {
@@ -222,8 +227,15 @@ function scrollToEvidence(evidenceType, evidenceIndex) {
         return;
     }
 
+    selectedEvidenceHighlights.forEach((box) => {
+        box.classList.remove('citation-pdf-highlight-active');
+    });
+    selectedEvidenceHighlights = evidenceIndices.flatMap(
+        (index) => evidenceHighlights(evidenceType, index),
+    );
     highlight.scrollIntoView({behavior: 'smooth', block: 'center'});
     highlight.focus({preventScroll: true});
+    updateEvidenceHighlightState(evidenceType, evidenceIndex);
 }
 
 function bindEvidenceChips() {
@@ -234,7 +246,8 @@ function bindEvidenceChips() {
         }
         const evidenceType = chip.dataset.evidenceType || 'sentence';
         const evidenceIndex = chip.dataset.evidenceIndex ?? chip.dataset.sentenceIndex;
-        scrollToEvidence(evidenceType, evidenceIndex);
+        const evidenceIndices = (chip.dataset.evidenceIndices || evidenceIndex).split(',');
+        scrollToEvidence(evidenceType, evidenceIndex, evidenceIndices);
     });
 }
 

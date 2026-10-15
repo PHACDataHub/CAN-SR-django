@@ -212,7 +212,14 @@ class L2PdfScreeningPage(BasePageTemplate):
                 ),
                 (tdt("Confidence"), PercentFormatter(result.confidence)),
                 *CriticalAgentDefinitionItems(result),
-                *EvidenceDefinitionItems(result),
+                *EvidenceDefinitionItems(
+                    result,
+                    getattr(
+                        self.citation_row.document,
+                        "text_extraction_result",
+                        None,
+                    ),
+                ),
             ]
         )
 

@@ -313,7 +313,7 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert 'id="citation-pdf-pages"' in body
     assert "citation_pdf.js" in body
     assert "citation_pdf.css" in body
-    assert 'class="btn btn-sm btn-outline-primary evidence-chip"' in body
+    assert 'class="btn btn-xs btn-outline-primary evidence-chip"' in body
     assert (
         'data-evidence-type="sentence" data-evidence-index="1">Sentence 1</button>'
         in body

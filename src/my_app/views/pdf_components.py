@@ -16,6 +16,7 @@ from my_app.models import (
     ScreeningResultStatus,
     TextExtractionResult,
 )
+from my_app.pdf.text_extraction.evidence import group_evidence_sentences
 from my_app.views.screening.refresh import (
     WorkflowRefreshButton,
     workflow_refresh_attrs,
@@ -504,7 +505,7 @@ def WorkflowResultsPanel(
     ]
 
 
-def EvidenceDefinitionItems(result):
+def EvidenceDefinitionItems(result, text_extraction_result=None):
     return [
         (
             tdt("Evidence sentences"),
@@ -513,6 +514,9 @@ def EvidenceDefinitionItems(result):
                 "sentence",
                 tdt("Sentence"),
                 tdt("Evidence sentences"),
+                sentence_groups=group_evidence_sentences(
+                    result.evidence_sentences, text_extraction_result
+                ),
             ),
         ),
         (
@@ -541,6 +545,8 @@ def render_evidence_chips(
     evidence_type,
     label,
     aria_label,
+    *,
+    sentence_groups=None,
 ):
     if not evidence_indices:
         return tdt("Nothing to highlight")
@@ -548,6 +554,12 @@ def render_evidence_chips(
     evidence_list = ", ".join(
         str(evidence_index) for evidence_index in evidence_indices
     )
+    if sentence_groups is not None:
+        return h.div(
+            ".d-flex.flex-wrap.gap-2",
+            aria_label=f"{aria_label}: {evidence_list}",
+        )[[SentenceEvidenceChip(group) for group in sentence_groups]]
+
     return h.div(
         ".d-flex.flex-wrap.gap-2",
         aria_label=f"{aria_label}: {evidence_list}",
@@ -562,3 +574,21 @@ def render_evidence_chips(
             for evidence_index in evidence_indices
         ]
     ]
+
+
+def SentenceEvidenceChip(indices):
+    if len(indices) == 1:
+        return h.button(
+            ".btn.btn-xs.btn-outline-primary.evidence-chip",
+            type="button",
+            data_evidence_type="sentence",
+            data_evidence_index=str(indices[0]),
+        )[tdt("Sentence"), " ", str(indices[0])]
+
+    return h.button(
+        ".btn.btn-xs.btn-outline-primary.evidence-chip",
+        type="button",
+        data_evidence_type="sentence",
+        data_evidence_index=str(indices[0]),
+        data_evidence_indices=",".join(str(index) for index in indices),
+    )[tdt("Sentences"), " ", f"{indices[0]}–{indices[-1]}"]
