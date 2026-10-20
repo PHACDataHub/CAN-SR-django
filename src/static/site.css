@@ -215,3 +215,22 @@ table.table--framework-table .table-cell-content {
     --bs-btn-font-size: 0.875rem;
     --bs-btn-border-radius: 0.25rem;
 }
+
+.citation-detail-modal .modal-dialog {
+    width: 100%;
+    max-width: var(--bs-modal-width);
+    margin: 0;
+}
+
+.citation-detail-modal .modal-content {
+    max-height: calc(100dvh - 4rem);
+}
+
+.citation-detail-modal .modal-body {
+    overflow-y: auto;
+}
+
+.citation-detail-modal .detail-value {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

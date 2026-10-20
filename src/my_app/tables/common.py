@@ -137,6 +137,7 @@ class DetailColumn(Column):
     disableable: bool = False
     exportable: bool = False
     stage: str = None
+    citation_stage: str = "l1"
 
     def render_cell(self, record):
         if self.stage == "l1":
@@ -151,6 +152,7 @@ class DetailColumn(Column):
             )
         else:
             url = reverse("citation_detail_modal", args=[record.pk])
+            url = f"{url}?stage={self.citation_stage}"
         return h.button(
             ".btn.btn-outline-primary.btn-sm",
             type="button",
