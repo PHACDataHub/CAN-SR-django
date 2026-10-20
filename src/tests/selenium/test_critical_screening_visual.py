@@ -27,7 +27,8 @@ from my_app.models import (
 
 
 @pytest.fixture(autouse=True)
-def fixed_snapshot_time():
+def fixed_snapshot_time(settings):
+    settings.ENABLE_HTMX_POLLING = False
     with patch(
         "django.utils.timezone.now",
         return_value=datetime(2026, 1, 15, 15, 30, tzinfo=timezone.utc),
@@ -129,6 +130,16 @@ def _capture_detail_panels(
             By.XPATH,
             f"//section[.//h2[normalize-space()='L{level} screening results']]",
         )
+        details = panel.find_element(
+            By.CSS_SELECTOR, ".question-panel > details"
+        )
+        if details.get_attribute("open") is None:
+            summary = details.find_element(By.CSS_SELECTOR, "summary")
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});",
+                summary,
+            )
+            summary.click()
         assert expected_text in panel.text
         if expected_class is not None:
             assert panel.find_element(

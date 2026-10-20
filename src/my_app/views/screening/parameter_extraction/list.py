@@ -2,16 +2,9 @@ from dataclasses import dataclass
 
 import htpy as h
 
-from proj.htpy import definition_list as DefList
-from proj.htpy.components import PercentFormatter
-
 from my_app.models import (
     Citation,
     CitationStatus,
-    Parameter,
-    ParameterAnswerAgreement,
-    ParameterExtractionResult,
-    ParameterHumanAnswer,
     Review,
     ScreeningResultStatus,
 )
@@ -19,17 +12,14 @@ from my_app.queries import (
     ParameterExtractionStatusFetcher,
     ReviewStage,
     get_parameter_extraction_progress_stats,
-    get_parameter_human_ai_agreements,
 )
 from my_app.router import route
 from my_app.views.pdf_components import (
     DocumentWorkflowCitationPanel,
     DocumentWorkflowCitationRow,
-    EvidenceDefinitionItems,
     PdfPanel,
     PdfViewerAssets,
     PdfWorkflowPageContent,
-    WorkflowResultsPanel,
     render_pdf_detail_link,
     render_pdf_modal_button,
 )
@@ -39,12 +29,11 @@ from my_app.views.screening.components import (
     PaginatedCitationPanel,
     WorkflowListPageContent,
     WorkflowProgressPanel,
-    human_review_control_id,
-    render_answer_timestamp,
 )
 from my_app.views.screening.document_util_components import (
     DocumentCitationListView,
 )
+from my_app.views.screening.question_panels import QuestionPanels
 from my_app.views.screening.refresh import workflow_refresh_attrs
 from my_app.views.screening.util import (
     BADGE_CLASSES,
@@ -70,169 +59,6 @@ def ParameterExtractionBadge(citation_row: Citation, status_fetcher):
 
 def parameter_extraction_control_id(citation_row):
     return f"parameter-extraction-control-{citation_row.id}"
-
-
-def parameter_extraction_human_review_control_id(result):
-    return human_review_control_id("parameter-extraction", result)
-
-
-def render_parameter_answer_values(found, value, selected_option=None):
-    found_value = tdt("Yes") if found else tdt("No")
-    displayed_value = selected_option.name if selected_option else value
-    return h.div[
-        h.div(".fw-semibold")[tdt("Found"), ": ", found_value],
-        h.div(".small.text-muted")[
-            tdt("Value"), ": ", displayed_value or tdt("None")
-        ],
-    ]
-
-
-def render_parameter_human_answer_row(
-    answer, *, label, edit_url=None, edit_button_id=None
-):
-    edit_button = None
-    if edit_url is not None:
-        edit_button = h.button(
-            ".btn.btn-outline-secondary.btn-sm",
-            id=edit_button_id,
-            type="button",
-            hx_get=edit_url,
-            hx_target="#modal-slot",
-            hx_swap="innerHTML",
-        )[tdt("Edit")]
-
-    agreement_classes = {
-        ParameterAnswerAgreement.DETECTION_DISAGREEMENT: "text-bg-danger",
-        ParameterAnswerAgreement.ABSENCE_AGREEMENT: "text-bg-success",
-        ParameterAnswerAgreement.VALUE_AGREEMENT: "text-bg-success",
-        ParameterAnswerAgreement.VALUE_DISAGREEMENT: "text-bg-secondary",
-    }
-    agreement = ParameterAnswerAgreement(answer.agreement)
-
-    return h.div(".border-top.pt-3")[
-        h.div(".d-flex.flex-wrap.justify-content-between.gap-2.mb-2")[
-            h.div[
-                h.strong[label],
-                " ",
-                render_answer_timestamp(answer.updated_at),
-            ],
-            h.div(".d-flex.flex-wrap.align-items-center.gap-2")[
-                h.span(f".badge.{agreement_classes[agreement]}")[
-                    agreement.label
-                ],
-                edit_button,
-            ],
-        ],
-        render_parameter_answer_values(
-            answer.found, answer.value, answer.selected_option
-        ),
-        h.p(".small.mt-2.mb-0")[answer.notes] if answer.notes else None,
-    ]
-
-
-def render_parameter_human_review_control(
-    result,
-    review,
-    current_user,
-    answers=None,
-):
-    if answers is None:
-        answers = (
-            get_parameter_human_ai_agreements(result.question.review_id)
-            .filter(citation=result.citation, question=result.question)
-            .select_related("user", "selected_option")
-            .order_by("-updated_at", "-id")
-        )
-
-    answers = list(answers)
-    control_id = parameter_extraction_human_review_control_id(result)
-    answer_url = reverse(
-        "parameter_extraction_citation_human_answer",
-        args=[review.id, result.id],
-    )
-    current_answer = next(
-        (answer for answer in answers if answer.user_id == current_user.id),
-        None,
-    )
-    other_answers = [
-        answer for answer in answers if answer is not current_answer
-    ]
-
-    validate_button = None
-    if not answers:
-        validate_button = h.button(
-            ".btn.btn-success.btn-sm",
-            id=f"parameter-extraction-validate-answer-{result.id}",
-            type="button",
-            hx_post=reverse(
-                "parameter_extraction_citation_validate_ai_answer",
-                args=[review.id, result.id],
-            ),
-            hx_target=f"#{control_id}",
-            hx_swap="morph:outerHTML",
-        )[tdt("Validate")]
-
-    ai_row = h.div[
-        h.div(".d-flex.flex-wrap.justify-content-between.gap-2.mb-2")[
-            h.div[
-                h.strong[tdt("AI answer")],
-                " ",
-                render_answer_timestamp(result.updated_at),
-            ],
-        ],
-        render_parameter_answer_values(
-            result.found, result.value, result.selected_option
-        ),
-        (
-            h.p(".small.mt-2.mb-0")[result.explanation]
-            if result.explanation
-            else None
-        ),
-        h.div(".mt-2")[validate_button] if validate_button else None,
-    ]
-
-    human_rows = []
-    if current_answer is not None:
-        human_rows.append(
-            render_parameter_human_answer_row(
-                current_answer,
-                label=tdt("Your answer"),
-                edit_url=answer_url,
-                edit_button_id=(
-                    f"parameter-extraction-human-answer-action-{result.id}"
-                ),
-            )
-        )
-
-    for answer in other_answers:
-        author = answer.user
-        author_name = (
-            author.get_full_name() or author.get_username()
-            if author is not None
-            else tdt("Unknown user")
-        )
-        human_rows.append(
-            render_parameter_human_answer_row(answer, label=author_name)
-        )
-
-    add_button = None
-    if current_answer is None:
-        add_button = h.div(".border-top.pt-3")[
-            h.button(
-                ".btn.btn-outline-primary.btn-sm",
-                id=f"parameter-extraction-human-answer-action-{result.id}",
-                type="button",
-                hx_get=answer_url,
-                hx_target="#modal-slot",
-                hx_swap="innerHTML",
-            )[tdt("Add your answer")]
-        ]
-
-    return h.div(".vstack.gap-3", id=control_id)[
-        ai_row,
-        human_rows,
-        add_button,
-    ]
 
 
 def render_parameter_extraction_control(
@@ -488,79 +314,10 @@ class ParameterExtractionPdfPage(BasePageTemplate):
             hx_disabled_elt="this",
         )[tdt("Re-extract")]
 
-    def render_results_panel(self, citation_row: Citation):
-        results = self.get_results(citation_row)
-        self.human_answers_by_question_id = (
-            self.get_human_answers_by_question_id(citation_row, results)
-        )
-        return WorkflowResultsPanel(
-            title=tdt("Parameter extraction results"),
-            results=results,
-            empty_message=tdt("No extraction results yet."),
-            render_result=self.render_result,
-        )
-
-    def get_results(self, citation_row: Citation):
-        return list(
-            ParameterExtractionResult.objects.filter(citation=citation_row)
-            .select_related("question", "selected_option")
-            .order_by("question_id")
-        )
-
-    def get_human_answers_by_question_id(self, citation_row, results):
-        answers = (
-            get_parameter_human_ai_agreements(self.review.id)
-            .filter(
-                citation=citation_row,
-                question_id__in=[result.question_id for result in results],
-            )
-            .select_related("user", "selected_option")
-            .order_by("-updated_at", "-id")
-        )
-        grouped_answers = {}
-        for answer in answers:
-            grouped_answers.setdefault(answer.question_id, []).append(answer)
-        return grouped_answers
-
-    def render_result(self, result: ParameterExtractionResult):
-        return DefList.DL(
-            [
-                (tdt("Parameter"), result.question.name),
-                (
-                    tdt("Status"),
-                    ScreeningResultStatus(result.status).label,
-                ),
-                (
-                    tdt("Answers"),
-                    render_parameter_human_review_control(
-                        result,
-                        self.review,
-                        self.request.user,
-                        self.human_answers_by_question_id.get(
-                            result.question_id, []
-                        ),
-                    ),
-                ),
-                (tdt("Confidence"), PercentFormatter(result.confidence)),
-                *EvidenceDefinitionItems(
-                    result,
-                    getattr(
-                        self.citation_row.document,
-                        "text_extraction_result",
-                        None,
-                    ),
-                ),
-            ]
-        )
-
-    def render_human_review_control(self, result: ParameterExtractionResult):
-        answers = self.human_answers_by_question_id.get(result.question_id, [])
-        return render_parameter_human_review_control(
-            result,
-            self.review,
-            self.request.user,
-            answers,
-        )
+    def render_results_panel(self, citation_row):
+        return QuestionPanels(
+            citation_row, self.review, self.request.user, "parameters"
+        ).render(tdt("Parameter extraction results"))
 
 
 class ParameterExtractionBaseView(DocumentCitationListView):

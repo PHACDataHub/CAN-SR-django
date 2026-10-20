@@ -9,11 +9,21 @@ from proj.htpy.modal_component import (
 )
 from proj.view_util import MustPassRuleMixin
 
-from my_app.models import Citation, L1ScreeningQuestion, L2ScreeningQuestion
+from my_app.models import (
+    Citation,
+    L1ScreeningQuestion,
+    L2ScreeningQuestion,
+    Parameter,
+)
 from my_app.router import route
 from shortcuts import View, cached_property, get_object_or_404, tdt
 
-from .components import AnswerDetails, CitationDetails, ScreeningData
+from .components import (
+    AnswerDetails,
+    CitationDetails,
+    ParameterAnswerDetails,
+    ScreeningData,
+)
 
 
 class CitationDetailAccessMixin(MustPassRuleMixin):
@@ -72,6 +82,7 @@ class CitationDetailModalView(CitationDetailAccessMixin, View):
 class AnswerDetailModalView(CitationDetailAccessMixin, View):
     question_model = None
     stage = None
+    detail_component = staticmethod(AnswerDetails)
 
     @cached_property
     def question(self):
@@ -87,10 +98,13 @@ class AnswerDetailModalView(CitationDetailAccessMixin, View):
         data = ScreeningData(
             self.citation, self.stage, question_id=self.question.pk
         )
+        title = tdt(f"{self.stage.upper()} answer details")
+        if self.stage == "parameters":
+            title = tdt("Parameter answer details")
         return self.modal_response(
-            tdt(f"{self.stage.upper()} answer details"),
+            title,
             f"{self.stage}-answer-details-{self.citation.pk}-{self.question.pk}",
-            AnswerDetails(self.citation, self.question, data),
+            self.detail_component(self.citation, self.question, data),
         )
 
 
@@ -110,3 +124,13 @@ class L1AnswerDetailModalView(AnswerDetailModalView):
 class L2AnswerDetailModalView(AnswerDetailModalView):
     question_model = L2ScreeningQuestion
     stage = "l2"
+
+
+@route(
+    "/citations/<int:citation_id>/parameters/<int:question_id>/details/",
+    name="parameter_answer_detail_modal",
+)
+class ParameterAnswerDetailModalView(AnswerDetailModalView):
+    question_model = Parameter
+    stage = "parameters"
+    detail_component = staticmethod(ParameterAnswerDetails)

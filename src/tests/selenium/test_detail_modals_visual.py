@@ -22,7 +22,8 @@ from tests.detail_modal_cases import ANSWER_CASES, create_answer_case
 
 
 @pytest.fixture(autouse=True)
-def fixed_time():
+def fixed_time(settings):
+    settings.ENABLE_HTMX_POLLING = False
     with patch(
         "django.utils.timezone.now",
         return_value=datetime(2026, 1, 15, 15, 30, tzinfo=timezone.utc),
@@ -253,3 +254,57 @@ def test_answer_to_citation_nested_modal_visual(
     assert parent.is_displayed()
     driver.switch_to.active_element.send_keys(Keys.ESCAPE)
     WebDriverWait(driver, 10).until(EC.invisibility_of_element(parent))
+
+
+@pytest.mark.parametrize("stage", ["l1", "l2"])
+def test_citation_page_compact_answers_visual(
+    live_server, driver, admin_user, force_login, save_screenshot, stage
+):
+    data = create_answer_case(stage, "multiple-humans")
+    force_login(admin_user)
+    driver.set_window_size(1280, 800)
+    driver.get(
+        live_server.url
+        + reverse(
+            f"{stage}_citation_detail", args=[data.review.pk, data.citation.pk]
+        )
+    )
+    control = driver.find_element(
+        By.ID, f"{stage}-question-panel-{data.citation.pk}-{data.question.pk}"
+    )
+    assert "Includes Canadian adults" not in control.text
+    assert "Population outside the review scope" not in control.text
+    url = reverse(
+        f"{stage}_answer_detail_modal",
+        args=[data.citation.pk, data.question.pk],
+    )
+    buttons = control.find_elements(By.CSS_SELECTOR, f'button[hx-get="{url}"]')
+    assert len(buttons) == 1
+    driver.execute_script(
+        "arguments[0].scrollIntoView({block: 'start', behavior: 'instant'});",
+        control,
+    )
+    assert save_screenshot(
+        driver, snapshot_name=f"{stage}-citation-page-compact-answers"
+    ).is_file()
+    button = buttons[-1]
+    driver.execute_script(
+        "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});",
+        button,
+    )
+    button.click()
+    modal = WebDriverWait(driver, 10).until(
+        lambda browser: visible_modal(
+            browser,
+            f"{stage}-answer-details-{data.citation.pk}-{data.question.pk}",
+        )
+    )
+    assert "modal-xl" in modal.get_attribute("class")
+    assert "Alex Smith" in modal.text and "Blair Chen" in modal.text
+    capture_modal(
+        driver, save_screenshot, f"{stage}-citation-page-answer-modal", modal
+    )
+    modal.find_element(By.CSS_SELECTOR, ".modal-footer button").click()
+    WebDriverWait(driver, 10).until(
+        lambda browser: browser.switch_to.active_element == button
+    )

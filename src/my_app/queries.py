@@ -706,12 +706,9 @@ def _get_screening_progress_stats(
             row["result_count"] >= question_count
             and row["completed_count"] >= question_count
         )
-        if not is_complete:
-            continue
-
         if row["human_reviewed_count"] >= question_count:
             human_reviewed_citations += 1
-        else:
+        elif is_complete:
             completed_not_human_reviewed_citations += 1
 
     incomplete_citations = (
@@ -831,12 +828,9 @@ def get_parameter_extraction_progress_stats(review_id: int):
             row["result_count"] >= parameter_count
             and row["completed_count"] >= parameter_count
         )
-        if not is_complete:
-            continue
-
         if row["human_reviewed_count"] >= parameter_count:
             human_reviewed_citations += 1
-        else:
+        elif is_complete:
             completed_not_human_reviewed_citations += 1
 
     incomplete_citations = (

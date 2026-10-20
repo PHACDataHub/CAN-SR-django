@@ -38,8 +38,11 @@ function configureMorph() {
                 beforeNodeMorphed(current, incoming) {
                     const result = beforeNodeMorphed?.(current, incoming);
                     if (current instanceof HTMLDetailsElement && incoming instanceof HTMLDetailsElement) {
-                        // Keep disclosure state while allowing the contents to refresh.
-                        incoming.open = current.open;
+                        const newExpansionReason = incoming.dataset.autoExpand &&
+                            incoming.dataset.autoExpand !== current.dataset.autoExpand;
+                        if (!newExpansionReason) {
+                            incoming.open = current.open;
+                        }
                     }
                     return result;
                 },

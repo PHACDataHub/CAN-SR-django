@@ -79,7 +79,9 @@ def test_detail_updates_preserve_pdf_and_open_form(
             click_refresh(driver)
         WebDriverWait(driver, 12).until(
             lambda browser: "Worker finished this result"
-            in browser.find_element(By.ID, "workflow-detail-component").text
+            in browser.find_element(
+                By.ID, "workflow-detail-component"
+            ).get_attribute("textContent")
         )
         assert (
             driver.find_element(
@@ -319,8 +321,8 @@ def test_actions_cancel_stale_refreshes_and_block_new_polls(
             release_action.set()
             WebDriverWait(driver, 5).until(
                 lambda browser: browser.execute_script(
-                    "return document.getElementById(arguments[0])?.textContent.includes('Validated');",
-                    f"l1-human-review-{result.id}",
+                    "return document.getElementById(arguments[0])?.textContent.includes('Included');",
+                    f"l1-question-panel-{result.citation_id}-{result.question_id}",
                 )
             )
             release_refresh.set()
@@ -328,9 +330,10 @@ def test_actions_cancel_stale_refreshes_and_block_new_polls(
                 "window.setTimeout(arguments[0], 250);"
             )
             assert (
-                "Validated"
+                "Included"
                 in driver.find_element(
-                    By.ID, f"l1-human-review-{result.id}"
+                    By.ID,
+                    f"l1-question-panel-{result.citation_id}-{result.question_id}",
                 ).text
             )
         finally:

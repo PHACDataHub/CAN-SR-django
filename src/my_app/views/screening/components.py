@@ -345,8 +345,18 @@ def _citation_nav_button(citation_id, review, detail_route_name, label):
     )[label]
 
 
-def human_review_control_id(prefix, result):
-    return f"{prefix}-human-review-{result.id}"
+def SelectedOption(option, *, screening_disabled=False):
+    if option is None:
+        return h.span(".text-muted")[tdt("No option selected")]
+    action = tdt("Include")
+    if screening_disabled:
+        action = tdt("Screening disabled")
+    elif option.screening_action == "screen_out":
+        action = tdt("Exclude")
+    return h.div[
+        h.div(".fw-semibold")[option.option_text],
+        h.div(".small.text-muted")[action],
+    ]
 
 
 def render_selected_option(selected_option):
@@ -365,135 +375,3 @@ def render_answer_timestamp(timestamp):
         ".small.text-muted",
         datetime=local_timestamp.isoformat(),
     )[formats.date_format(local_timestamp, "DATETIME_FORMAT")]
-
-
-def render_human_answer_row(
-    answer, *, label, edit_url=None, edit_button_id=None
-):
-    edit_button = None
-    if edit_url is not None:
-        edit_button = h.div(".text-end")[
-            h.button(
-                ".btn.btn-outline-secondary.btn-sm",
-                id=edit_button_id,
-                type="button",
-                hx_get=edit_url,
-                hx_target="#modal-slot",
-                hx_swap="innerHTML",
-            )[tdt("Edit")]
-        ]
-
-    return h.div(".border-top.pt-3")[
-        h.div(".d-flex.flex-wrap.justify-content-between.gap-2.mb-2")[
-            h.div[
-                h.strong[label],
-                " ",
-                render_answer_timestamp(answer.updated_at),
-            ],
-        ],
-        render_selected_option(answer.selected_option),
-        h.p(".small.mt-2.mb-0")[answer.notes] if answer.notes else None,
-        edit_button,
-    ]
-
-
-def render_human_review_control(
-    result,
-    *,
-    answers,
-    current_user,
-    prefix,
-    answer_url,
-    validate_url,
-):
-    control_id = human_review_control_id(prefix, result)
-    answers = list(answers)
-    current_answer = next(
-        (answer for answer in answers if answer.user_id == current_user.id),
-        None,
-    )
-    other_answers = [
-        answer for answer in answers if answer is not current_answer
-    ]
-
-    ai_status = None
-    validate_button = None
-    if answers:
-        all_match = all(
-            answer.selected_option_id == result.selected_option_id
-            for answer in answers
-        )
-        if all_match:
-            ai_status = h.span(".badge.text-bg-success.align-self-start")[
-                tdt("Validated")
-            ]
-        else:
-            ai_status = h.span(".badge.text-bg-danger.align-self-start")[
-                tdt("Refuted")
-            ]
-    elif result.selected_option_id is not None:
-        validate_button = h.button(
-            ".btn.btn-success.btn-sm",
-            id=f"{prefix}-validate-answer-{result.id}",
-            type="button",
-            hx_post=validate_url,
-            hx_target=f"#{control_id}",
-            hx_swap="morph:outerHTML",
-        )[tdt("Validate")]
-
-    ai_row = h.div[
-        h.div(".d-flex.flex-wrap.justify-content-between.gap-2.mb-2")[
-            h.div[
-                h.strong[tdt("AI answer")],
-                " ",
-                render_answer_timestamp(result.updated_at),
-            ],
-            ai_status,
-        ],
-        render_selected_option(result.selected_option),
-        (
-            h.p(".small.mt-2.mb-0")[result.explanation]
-            if result.explanation
-            else None
-        ),
-        h.div(".mt-2")[validate_button] if validate_button else None,
-    ]
-
-    human_rows = []
-    if current_answer is not None:
-        human_rows.append(
-            render_human_answer_row(
-                current_answer,
-                label=tdt("Your answer"),
-                edit_url=answer_url,
-                edit_button_id=f"{prefix}-human-answer-action-{result.id}",
-            )
-        )
-
-    for answer in other_answers:
-        author = answer.user
-        author_name = (
-            author.get_full_name() or author.get_username()
-            if author is not None
-            else tdt("Unknown user")
-        )
-        human_rows.append(render_human_answer_row(answer, label=author_name))
-
-    add_button = None
-    if current_answer is None:
-        add_button = h.div(".border-top.pt-3")[
-            h.button(
-                ".btn.btn-outline-primary.btn-sm",
-                id=f"{prefix}-human-answer-action-{result.id}",
-                type="button",
-                hx_get=answer_url,
-                hx_target="#modal-slot",
-                hx_swap="innerHTML",
-            )[tdt("Add your answer")]
-        ]
-
-    return h.div(".vstack.gap-3", id=control_id)[
-        ai_row,
-        human_rows,
-        add_button,
-    ]

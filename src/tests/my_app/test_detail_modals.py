@@ -226,3 +226,43 @@ def test_modal_sizes(vanilla_client, route, size, expected):
             + f"?stage={stage}&size=lg"
         )
         assert soup.select_one(button["hx-target"]).has_attr("data-modal-slot")
+
+
+@pytest.mark.parametrize("stage", ["l1", "l2"])
+@pytest.mark.parametrize("disabled", [False, True])
+def test_citation_pages_show_compact_answers_and_detail_links(
+    vanilla_client, stage, disabled
+):
+    data = create_answer_case(stage, "multiple-humans")
+    data.question.disable_screening = disabled
+    data.question.save()
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse(
+                f"{stage}_citation_detail",
+                args=[data.review.pk, data.citation.pk],
+            )
+        )
+    assert response.status_code == 200
+    soup = BeautifulSoup(response.content, "html.parser")
+    control = soup.select_one(
+        f"#{stage}-question-panel-{data.citation.pk}-{data.question.pk}"
+    )
+    text = control.get_text(" ", strip=True)
+    assert "Includes Canadian adults" not in text
+    assert "Population outside the review scope" not in text
+    assert "Exclude" in text
+    assert control.select_one(".badge").get_text() == "Human"
+    assert "Controversial" in text
+    if disabled:
+        assert text.count("Screening disabled") == 1
+    else:
+        assert text.count("Exclude") == 2
+    url = reverse(
+        f"{stage}_answer_detail_modal",
+        args=[data.citation.pk, data.question.pk],
+    )
+    links = control.select(f'button[hx-get="{url}"]')
+    assert len(links) == 1
+    assert all(link["hx-target"] == "#modal-slot" for link in links)
+    assert all(link.get_text(strip=True) == "Answer details" for link in links)

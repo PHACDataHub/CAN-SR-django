@@ -259,7 +259,7 @@ def test_screen_l1_row_details_view_renders_modal_content(vanilla_client):
     assert "L1 screening results" in body
     assert question.question_text in body
     assert selected_option.option_text in body
-    assert selected_option.option_value in body
+    assert selected_option.option_value not in body
     assert "Looks good." in body
     assert f'id="l1-citation-screening-control-{row.id}"' in body
     assert (
@@ -337,6 +337,7 @@ def test_l1_validation_creates_human_answer_matching_ai_answer(
         citation=row,
         question=question,
         selected_option=selected_option,
+        status=ScreeningResultStatus.COMPLETED,
     )
 
     with patch_rules(can_access_review=True):
@@ -354,8 +355,8 @@ def test_l1_validation_creates_human_answer_matching_ai_answer(
     assert human_answer.question == question
     assert human_answer.selected_option == selected_option
     assert human_answer.notes is None
-    assert "Validated" in body
-    assert "Your answer" in body
+    assert "Included" in body
+    assert "Edit your answer" in body
     assert f'id="l1-validate-answer-{result.id}"' not in body
 
     with patch_rules(can_access_review=True):
@@ -410,7 +411,7 @@ def test_l1_human_answer_modal_saves_question_option_and_notes(
     assert human_answer.selected_option == answer
     assert human_answer.notes == "Human review notes."
     assert response["HX-Reswap"] == "morph:outerHTML"
-    assert "Your answer" in body
+    assert "Edit your answer" in body
     assert "Edit" in body
 
 
@@ -424,7 +425,10 @@ def test_l1_answer_section_renders_other_reviewers_and_refuted_status(
     ai_option = L1ScreeningQuestionOptionFactory(question=question)
     other_option = L1ScreeningQuestionOptionFactory(question=question)
     result = L1ScreeningResultFactory(
-        citation=row, question=question, selected_option=ai_option
+        citation=row,
+        question=question,
+        selected_option=ai_option,
+        status=ScreeningResultStatus.COMPLETED,
     )
     other_answer = L1HumanAnswerFactory(
         citation=row,
@@ -439,7 +443,7 @@ def test_l1_answer_section_renders_other_reviewers_and_refuted_status(
 
     body = response.content.decode()
     assert response.status_code == 200
-    assert "Refuted" in body
-    assert other_answer.user.username in body
+    assert "Controversial" in body
+    assert other_option.option_text in body
     assert "Add your answer" in body
     assert "Validate" not in body

@@ -18,14 +18,12 @@ from my_app.views.screening.document_util_components import (
 )
 from my_app.views.screening.human_answers import (
     HumanAnswerFormView,
+    QuestionHumanAnswerViewMixin,
     ScreeningHumanAnswerViewMixin,
     ValidateAIAnswerView,
 )
 from my_app.views.screening.parameter_extraction.detail import (
     render_parameter_extraction_control,
-)
-from my_app.views.screening.parameter_extraction.list import (
-    render_parameter_human_review_control,
 )
 from my_app.views.screening.util import can_start_parameter_extraction
 from shortcuts import StandardFormMixin, cached_property, tdt
@@ -128,14 +126,11 @@ class ParameterExtractionProcessView(DocumentCitationMixin):
 
 
 class ParameterExtractionHumanReviewMixin(ScreeningHumanAnswerViewMixin):
+    stage = "parameters"
     result_model = ParameterExtractionResult
     answer_model = ParameterHumanAnswer
     form_class = ParameterExtractionHumanAnswerForm
     prefix = "parameter-extraction"
-    route_name = "parameter_extraction_citation_human_answer"
-    render_control_component = staticmethod(
-        render_parameter_human_review_control
-    )
     result_select_related = (
         "citation",
         "question",
@@ -145,7 +140,7 @@ class ParameterExtractionHumanReviewMixin(ScreeningHumanAnswerViewMixin):
     modal_title = tdt("Your parameter answer")
 
     def can_validate(self):
-        return True
+        return self.result is not None and self.result.status == "completed"
 
     def validated_answer_values(self):
         return {
@@ -155,7 +150,7 @@ class ParameterExtractionHumanReviewMixin(ScreeningHumanAnswerViewMixin):
         }
 
     def human_answer_form_kwargs(self):
-        return {"question": self.result.question}
+        return {"question": self.question}
 
 
 @route(
@@ -186,3 +181,15 @@ class ParameterExtractionHumanAnswerView(
 )
 class ParameterExtractionPdfCitationMetadataView(PdfCitationMetadataView):
     result_model = ParameterExtractionResult
+
+
+@route(
+    "/reviews/<int:review_id>/parameter_extraction/citations/<int:citation_id>/questions/<int:question_id>/human-answer/",
+    name="parameter_question_human_answer",
+)
+class ParameterExtractionQuestionHumanAnswerView(
+    QuestionHumanAnswerViewMixin,
+    ParameterExtractionHumanReviewMixin,
+    HumanAnswerFormView,
+):
+    question_model = Parameter

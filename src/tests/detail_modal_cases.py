@@ -156,3 +156,55 @@ def create_answer_case(stage, case):
     return SimpleNamespace(
         review=review, citation=citation, question=question, result=result
     )
+
+
+def panel_case(stage, case):
+    if stage != "parameters":
+        return create_answer_case(stage, case)
+    review = factories.ReviewFactory(
+        title="Community health review", confidence=0.9
+    )
+    citation = factories.CitationFactory(
+        dataset=factories.CitationDatasetFactory(review=review),
+        title="Community health study",
+        abstract="A study in Canadian community clinics.",
+    )
+    question = factories.ParameterFactory(
+        review=review,
+        name="Study setting",
+        description="Where was the study conducted?",
+    )
+    result = None
+    if case not in {"neither", "human-only"}:
+        status = "completed"
+        if case == "pending":
+            status = "pending"
+        elif case == "error":
+            status = "abandoned"
+        result = factories.ParameterExtractionResultFactory(
+            citation=citation,
+            question=question,
+            status=status,
+            found=True,
+            value="Community clinics",
+            confidence=0.94,
+            explanation="The methods describe the setting.",
+        )
+    if case in {"human-only", "agreement", "disagreement", "multiple-humans"}:
+        factories.ParameterHumanAnswerFactory(
+            citation=citation,
+            question=question,
+            found=True,
+            value="Schools" if case == "disagreement" else "Community clinics",
+            notes="Human extraction notes.",
+        )
+        if case == "multiple-humans":
+            factories.ParameterHumanAnswerFactory(
+                citation=citation,
+                question=question,
+                found=True,
+                value="Schools",
+            )
+    return SimpleNamespace(
+        review=review, citation=citation, question=question, result=result
+    )

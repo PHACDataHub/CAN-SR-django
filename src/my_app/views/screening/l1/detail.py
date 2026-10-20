@@ -1,26 +1,15 @@
 from proj.htpy import definition_list as DefList
-from proj.htpy.components import PercentFormatter
 
-from my_app.models import (
-    Citation,
-    L1HumanAnswer,
-    L1ScreeningResult,
-    Review,
-    ScreeningResultStatus,
-)
+from my_app.models import Citation, ScreeningResultStatus
 from my_app.queries import (
     L1ScreeningStatusFetcher,
     ReviewStage,
     get_l1_screening_progress_stats,
 )
 from my_app.router import route
-from my_app.views.screening.components import (
-    CitationScreeningProgressNav,
-    CriticalAgentDefinitionItems,
-    human_review_control_id,
-    render_human_review_control,
-)
+from my_app.views.screening.components import CitationScreeningProgressNav
 from my_app.views.screening.l1.list import CitationRowL1StatusBadge
+from my_app.views.screening.question_panels import QuestionPanels
 from my_app.views.screening.refresh import (
     WorkflowRefreshButton,
     workflow_refresh_attrs,
@@ -69,40 +58,6 @@ def render_l1_screening_control(citation_row, review, status_fetcher=None):
     ]
 
 
-def l1_human_review_control_id(result):
-    return human_review_control_id("l1", result)
-
-
-def render_l1_human_review_control(
-    result: L1ScreeningResult,
-    review: Review,
-    current_user,
-    answers=None,
-):
-    if answers is None:
-        answers = (
-            L1HumanAnswer.objects.filter(
-                citation=result.citation,
-                question=result.question,
-            )
-            .select_related("selected_option", "user")
-            .order_by("-updated_at", "-id")
-        )
-
-    return render_human_review_control(
-        result,
-        answers=answers,
-        current_user=current_user,
-        prefix="l1",
-        answer_url=reverse(
-            "l1_citation_human_answer", args=[review.id, result.id]
-        ),
-        validate_url=reverse(
-            "l1_citation_validate_correct", args=[review.id, result.id]
-        ),
-    )
-
-
 class L1CitationScreeningPage(BasePageTemplate):
     @property
     def citation_row(self) -> Citation:
@@ -115,35 +70,6 @@ class L1CitationScreeningPage(BasePageTemplate):
     @cached_property
     def screening_columns(self):
         return list(self.citation_row.dataset.screening_columns.order_by("id"))
-
-    @cached_property
-    def screening_results(self):
-        return list(
-            L1ScreeningResult.objects.filter(citation=self.citation_row)
-            .select_related(
-                "question",
-                "selected_option",
-                "critical_result__selected_option",
-            )
-            .order_by("question_id")
-        )
-
-    @cached_property
-    def human_answers_by_question_id(self):
-        answers = (
-            L1HumanAnswer.objects.filter(
-                citation=self.citation_row,
-                question_id__in=[
-                    result.question_id for result in self.screening_results
-                ],
-            )
-            .select_related("selected_option", "user")
-            .order_by("-updated_at", "-id")
-        )
-        grouped_answers = {}
-        for answer in answers:
-            grouped_answers.setdefault(answer.question_id, []).append(answer)
-        return grouped_answers
 
     @cached_property
     def included_field_names(self):
@@ -284,50 +210,9 @@ class L1CitationScreeningPage(BasePageTemplate):
         ]
 
     def render_results_panel(self):
-        results = self.screening_results
-
-        return h.section(".border.rounded.p-3")[
-            h.div(".d-flex.justify-content-between.align-items-center.mb-3")[
-                h.h2(".h5.mb-0")[tdt("L1 screening results")],
-                h.div(".text-muted.small")[
-                    tdt("Results"),
-                    " ",
-                    str(len(results)),
-                ],
-            ],
-            (
-                h.div(".vstack.gap-3")[
-                    [self.render_result(result) for result in results]
-                ]
-                if results
-                else h.p(".text-muted.mb-0")[tdt("No screening results yet.")]
-            ),
-        ]
-
-    def render_result(self, result: L1ScreeningResult):
-
-        return DefList.DL(
-            [
-                (tdt("Question"), result.question.question_text),
-                (
-                    tdt("Status"),
-                    ScreeningResultStatus(result.status).label,
-                ),
-                (
-                    tdt("Answers"),
-                    render_l1_human_review_control(
-                        result,
-                        self.review,
-                        self.request.user,
-                        self.human_answers_by_question_id.get(
-                            result.question_id, []
-                        ),
-                    ),
-                ),
-                (tdt("Confidence"), PercentFormatter(result.confidence)),
-                *CriticalAgentDefinitionItems(result),
-            ]
-        )
+        return QuestionPanels(
+            self.citation_row, self.review, self.request.user, "l1"
+        ).render(tdt("L1 screening results"))
 
 
 @route(

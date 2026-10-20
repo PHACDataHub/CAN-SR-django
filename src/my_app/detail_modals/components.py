@@ -28,6 +28,7 @@ from my_app.models import (
 )
 from my_app.views.screening.components import (
     CriticalAgentDefinitionItems,
+    SelectedOption,
     render_answer_timestamp,
     render_selected_option,
 )
@@ -145,20 +146,6 @@ def AnswerComparison(result, answers):
         label = tdt("AI and human answers disagree")
         css = ".alert.alert-warning.py-2"
     return h.div(css)[label]
-
-
-def SelectedOption(option, *, screening_disabled=False):
-    if option is None:
-        return h.span(".text-muted")[tdt("No option selected")]
-    action = tdt("Include")
-    if screening_disabled:
-        action = tdt("Screening disabled")
-    elif option.screening_action == "screen_out":
-        action = tdt("Exclude")
-    return h.div[
-        h.div(".fw-semibold")[option.option_text],
-        h.div(".small.text-muted")[action],
-    ]
 
 
 def StageDetailLink(citation, stage):
@@ -753,4 +740,36 @@ def CitationDetails(citation, stage):
             ": ",
             str(citation.document or tdt("No document uploaded")),
         ],
+    ]
+
+
+def ParameterAnswerDetails(citation, question, data):
+    answers = data.human_answers.get(question.pk, [])
+    return h.div[
+        h.h2(".h5")[citation.title or tdt("Untitled citation")],
+        CitationModalButton(citation, question, data.stage),
+        h.p[StageDetailLink(citation, data.stage)],
+        h.h2(".h5")[question.name],
+        h.p[question.description],
+        DefinitionList(
+            [
+                (tdt("Answer type"), question.get_option_type_display()),
+                (
+                    tdt("Units and reporting instructions"),
+                    question.units_and_reporting_instructions,
+                ),
+                (
+                    tdt("Calculation instructions"),
+                    question.calculation_instructions,
+                ),
+            ]
+        ),
+        h.h2(".h5")[tdt("AI answer")],
+        AIAnswer(data.results.get(question.pk), citation, parameter=True),
+        h.h2(".h5")[tdt("Human answers")],
+        HumanAnswers(answers, parameter=True),
+        h.div(
+            id=f"answer-citation-modal-slot-{data.stage}-{citation.pk}-{question.pk}",
+            data_modal_slot=True,
+        ),
     ]
