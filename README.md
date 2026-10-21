@@ -1,104 +1,5 @@
 # Django CAN-SR
 
-## Versions and changelog
-
-Commits on `master` must follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
-The **Conventional commit title** check validates every PR title, including bot
-PRs. Use squash merging with the PR title as the squash commit title so the
-validated title becomes the commit that release-please reads. Direct pushes
-must follow the same convention.
-
-After pushes to `master`, release-please opens or updates one release PR with
-`version.txt`, `CHANGELOG.md`, and `.release-please-manifest.json`. Merging that
-PR advances the version displayed in the page footer after deployment. The
-starting baseline is `1.0.0`; historical commits before the introduction of the
-manifest are excluded. No GitHub releases or tags are created.
-
-| Commit type | Version change |
-| --- | --- |
-| `feat:` | Minor, e.g. `1.0.0` → `1.1.0` |
-| `fix:`, `perf:`, `refactor:`, `build:`, `ci:`, `deps:`, `revert:`, `style:` | Patch, e.g. `1.0.0` → `1.0.1` |
-| `docs:`, `test:`, `chore:` | No release on their own; included in the next release's technical notes |
-| Any breaking change (`type!:` or a `BREAKING CHANGE:` footer) | Major, e.g. `1.0.0` → `2.0.0`, including maintenance types |
-
-Each release groups its notes into **User-facing changes** (`feat`, `fix`,
-`style`, `perf`, `revert`) and **Technical changes (clients can skip)** (`chore`,
-`refactor`, `test`, `docs`, `build`, `ci`, `deps`). Both sections are shown when
-they contain entries. Clients can focus on the user-facing section.
-This grouping does not change version rules: for example, `refactor:` still
-triggers a patch, while `docs:`, `test:`, and `chore:` wait for the next release.
-The workflow gates release creation separately from changelog visibility so
-these maintenance notes can be shown without triggering releases themselves.
-
-Scopes are optional, e.g. `feat(screening): add filters`. A batch uses the
-largest applicable bump, so merging a feature and a fix before the release PR
-produces one minor bump. Custom types are accepted by the title check but are
-not included in release notes and do not trigger a release by themselves;
-add a visible entry to `changelog-sections` in `release-please-config.json` to
-make another type trigger patches. This retains release-please's default
-breaking-change behavior rather than implementing custom versioning.
-
-The PR-only workflow uses the most recent commit changing the version manifest
-as its release boundary and clears `autorelease: pending` from merged release
-PRs. This allows subsequent release PRs without publishing tags or releases.
-Do not manually edit the manifest or `version.txt`; let release-please keep
-them synchronized. Generated version comparison links refer to version tags;
-these links will not resolve unless matching tags are created separately.
-Individual commit links still work.
-
-### Editing the changelog manually
-
-Yes: entries added to already merged version sections in `CHANGELOG.md` are
-preserved when release-please prepends the next version. Use a `docs:` PR for
-these edits and retain the version headings. An open release PR's newly
-generated section can be regenerated on subsequent pushes, so edits made
-directly on that branch may be overwritten. Prefer correcting an entry after
-merging, or include the desired wording in the original conventional commit.
-If a release PR is already open when a manual changelog edit lands, merge
-`master` into its branch before merging it to preserve the edit.
-
-### GitHub setup
-
-1. Under **Settings → Actions → General → Workflow permissions**, allow GitHub
-   Actions to create and approve pull requests. Organization policy may need
-   to allow this too. The workflow requests contents, issues, and pull request
-   write permissions.
-2. To have CI and the title check run automatically on generated release PRs,
-   create an organization-approved fine-grained PAT with repository **Contents**,
-   **Issues**, and **Pull requests** read/write permissions, and save it under
-   **Settings → Secrets and variables → Actions** as `RELEASE_PLEASE_TOKEN`.
-   A bot account is appropriate. Without this secret the workflow uses
-   `GITHUB_TOKEN`, whose generated PR events do not trigger other workflows;
-   required CI checks on those PRs may remain pending. See the
-   [release-please credentials documentation](https://github.com/googleapis/release-please-action#other-actions-on-release-please-prs).
-3. Under **Settings → General → Pull Requests**, enable squash merging, choose
-   **Pull request title** as its default commit message, and disable merge
-   commits/rebase merging if all merges must use the validated title.
-4. In the branch ruleset/protection for `master`, require pull requests and
-   the **Conventional commit title** status check (plus existing CI checks).
-   The title check alone does not prevent merging unless it is required.
-5. Merge this setup, then use **Actions → Release please → Run workflow** to
-   retry a run after changing permissions or credentials.
-
-### Trying it out
-
-Opening a PR only runs title validation; version changes happen after its
-conventional squash commit reaches `master`. Starting from `1.0.0`:
-
-1. Open `feat: add screening filters`. Check the title passes, then squash
-   merge. Expect a release PR proposing `1.1.0` in all version files and a
-   User-facing changes changelog entry. Merge that release PR.
-2. Open and squash merge `fix: correct screening counts`. Expect `1.1.1`.
-   Merge that release PR too; this also exercises a second PR-only release.
-3. Open and squash merge `docs: clarify local setup`, then `test: cover counts`
-   or `chore: tidy development files`. Expect no new release PR or version
-   change. A `refactor:` PR should instead propose a patch.
-4. Open a PR named `Update screening filters`. Expect the title check to fail;
-   rename it to `feat(screening): update filters` and verify the check reruns.
-5. After deploying a merged release PR, check the footer version matches
-   `version.txt` and that the footer is hidden when printing. The agreement
-   and accessibility links are placeholders.
-
 ## Docker
 
 For the local Docker quick start, detailed commands, and production-container
@@ -319,3 +220,66 @@ This is just to test the system with low-quality, synthetic questions and AI/Hum
 ```
 STAGE can be `L1`, `L2`, `PARAM`, or `RESET` (case-insensitive;
 `parameter` also works).
+
+
+## Versions and changelog
+
+Commits on `master` must follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
+The **Conventional commit title** check validates every PR title, including bot
+PRs. Use squash merging with the PR title as the squash commit title so the
+validated title becomes the commit that release-please reads. Direct pushes
+must follow the same convention.
+
+After pushes to `master`, release-please opens or updates one release PR with
+`version.txt`, `CHANGELOG.md`, and `.release-please-manifest.json`. Merging that
+PR advances the version displayed in the page footer after deployment. The
+version is loaded once when Django starts; restart the application processes
+after deploying an updated `version.txt`. The starting baseline is `1.0.0`;
+historical commits before the introduction of the
+manifest are excluded. No GitHub releases or tags are created.
+
+| Commit type | Version change |
+| --- | --- |
+| `feat:`, `style:` | Major, e.g. `1.2.3` → `2.0.0` |
+| `fix:` | Minor, e.g. `1.2.3` → `1.3.0` |
+| `chore:` | No release on its own; included in the next release's technical notes |
+| Everything else, including `docs:`, `test:`, and custom types | Patch, e.g. `1.2.3` → `1.2.4` |
+
+These are project-specific rules, implemented by the workflow's `commit-types`
+versioning strategy. The commit type determines the bump even when it includes
+`!` or a `BREAKING CHANGE:` footer: `fix!:` still bumps minor and `chore!:`
+still does not trigger a release.
+
+Each release groups its notes into **User-facing changes** (`feat`, `fix`,
+`style`, `perf`, `revert`) and **Tech-only changes** (`chore`,
+`refactor`, `test`, `docs`, `build`, `ci`, `deps`). Both sections are shown when
+they contain entries. Clients can focus on the user-facing section.
+This grouping does not change version rules: `docs:` and `test:` trigger
+patches, while only `chore:` waits for the next release.
+The workflow gates release creation separately from changelog visibility so
+chore notes can be shown without triggering releases themselves.
+
+Scopes are optional, e.g. `feat(screening): add filters`. A batch uses the
+largest applicable bump, so merging a feature and a fix before the release PR
+produces one major bump. Custom types are accepted by the title check, trigger
+patch releases, and appear in the technical section by default. Add an entry
+to `changelog-sections` in `release-please-config.json` to change their section.
+
+The PR-only workflow uses the most recent commit changing the version manifest
+as its release boundary and clears `autorelease: pending` from merged release
+PRs. This allows subsequent release PRs without publishing tags or releases.
+Do not manually edit the manifest or `version.txt`; let release-please keep
+them synchronized. Generated version comparison links refer to version tags;
+these links will not resolve unless matching tags are created separately.
+Individual commit links still work.
+
+### Editing the changelog manually
+
+Entries added to already merged version sections in `CHANGELOG.md` are
+preserved when release-please prepends the next version. Use a `chore:` PR for
+these edits and retain the version headings. An open release PR's newly
+generated section can be regenerated on subsequent pushes, so edits made
+directly on that branch may be overwritten. Prefer correcting an entry after
+merging, or include the desired wording in the original conventional commit.
+If a release PR is already open when a manual changelog edit lands, merge
+`master` into its branch before merging it to preserve the edit.
