@@ -3,6 +3,19 @@
 Each release separates user-facing changes from technical changes. Users can
 skip the technical section; it records maintenance and development work.
 
+## [2.0.0](https://github.com/PHACDataHub/CAN-SR-django/compare/v1.1.0...v2.0.0) (2026-10-21)
+
+
+### User-facing changes
+
+* include release changelog link ([#68](https://github.com/PHACDataHub/CAN-SR-django/issues/68)) ([2f314bd](https://github.com/PHACDataHub/CAN-SR-django/commit/2f314bddd1e5fa227aa99d4f38f56801b586bfcc))
+
+
+### Tech-only changes
+
+* include version.txt in production ([bb0da78](https://github.com/PHACDataHub/CAN-SR-django/commit/bb0da784dc08cb4b4dfa54d6dd37c0463aab53eb))
+* test chore PR ([#67](https://github.com/PHACDataHub/CAN-SR-django/issues/67)) ([88fbcc5](https://github.com/PHACDataHub/CAN-SR-django/commit/88fbcc5e74b7a32852b89a56ee27ea9267576d9c))
+
 ## [1.1.0](https://github.com/PHACDataHub/CAN-SR-django/compare/v1.0.0...v1.1.0) (2026-10-21)
 
 
