@@ -24,6 +24,7 @@ from my_app.models import (
     L2CriticalScreeningResult,
     ScreeningResultStatus,
 )
+from tests.selenium.visual_comparison_utils import scroll_into_view
 
 
 @pytest.fixture(autouse=True)
@@ -135,10 +136,7 @@ def _capture_detail_panels(
         )
         if details.get_attribute("open") is None:
             summary = details.find_element(By.CSS_SELECTOR, "summary")
-            driver.execute_script(
-                "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});",
-                summary,
-            )
+            scroll_into_view(driver, summary)
             summary.click()
         assert expected_text in panel.text
         if expected_class is not None:

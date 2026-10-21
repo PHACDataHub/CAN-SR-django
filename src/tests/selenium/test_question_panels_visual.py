@@ -13,6 +13,7 @@ from my_app.models import (
     ParameterExtractionResult,
 )
 from tests.detail_modal_cases import panel_case
+from tests.selenium.visual_comparison_utils import scroll_into_view
 
 PAGE_ROUTES = {
     "l1": "l1_citation_detail",
@@ -92,12 +93,11 @@ def test_question_panel_visual(
             element=snapshot_element,
         ).is_file()
     else:
-        details.find_element(By.CSS_SELECTOR, "summary").click()
+        summary = details.find_element(By.CSS_SELECTOR, "summary")
+        scroll_into_view(driver, summary)
+        summary.click()
     button = panel.find_element(By.CSS_SELECTOR, 'button[hx-get*="/details/"]')
-    driver.execute_script(
-        "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});",
-        button,
-    )
+    scroll_into_view(driver, button)
     button.click()
     modal = WebDriverWait(driver, 10).until(
         lambda browser: browser.find_element(
@@ -134,10 +134,7 @@ def test_enter_human_answer_before_ai(
     button = panel.find_element(
         By.CSS_SELECTOR, 'button[hx-get*="/human-answer/"]'
     )
-    driver.execute_script(
-        "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});",
-        button,
-    )
+    scroll_into_view(driver, button)
     button.click()
     modal = WebDriverWait(driver, 10).until(
         lambda browser: browser.find_element(
@@ -177,7 +174,11 @@ def test_enter_human_answer_before_ai(
         )
     )
     panel = driver.find_element(By.ID, panel_id)
-    assert "Edit your answer" in panel.text
+    edit_button = panel.find_element(
+        By.CSS_SELECTOR, 'button[hx-get*="/human-answer/"]'
+    )
+    scroll_into_view(driver, edit_button)
+    assert "Edit your answer" in edit_button.text
     result_model = {
         "l1": L1ScreeningResult,
         "l2": L2ScreeningResult,
