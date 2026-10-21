@@ -1,8 +1,8 @@
-// I think this only runs locally and manually, e.g. node --test .github/scripts/release-please.test.cjs, but it also requires installing the packages used below
+// This seems like overkill, but AI wrote it and it runs in CI ¯\_(ツ)_/¯
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { test } = require('node:test');
-const { Manifest, setLogger } = require('release-please');
+const { Manifest, setLogger, registerVersioningStrategy } = require('release-please');
 const maintainReleasePR = require('./release-please.cjs');
 
 const config = JSON.parse(fs.readFileSync('release-please-config.json', 'utf8'));
@@ -22,7 +22,7 @@ function harness(messages, version = '1.0.0') {
   const client = {
     repository: { ...repo, defaultBranch: 'master' },
     async getFileJson(path) {
-      if (path === 'release-please-config.json') return config;
+      if (path === 'release-please-config.json') return structuredClone(config);
       return JSON.parse(files[path]);
     },
     async *releaseIterator() { },
@@ -62,18 +62,22 @@ function harness(messages, version = '1.0.0') {
           },
           async paginate() { return merged; },
         },
-      }, { Manifest, GitHub: { async create() { return client; } } });
+      }, { Manifest, registerVersioningStrategy, GitHub: { async create() { return client; } } });
     },
   };
 }
 
 for (const [message, expected] of [
-  ['feat: new filters', '1.1.0'],
-  ['fix: correct counts', '1.0.1'],
-  ...['perf', 'refactor', 'build', 'ci', 'deps', 'revert', 'style'].map(type => [`${type}: update something`, '1.0.1']),
-  ...['docs', 'test', 'chore', 'custom'].map(type => [`${type}: update something`, null]),
+  ['feat: new filters', '2.0.0'],
+  ['style: improve layout', '2.0.0'],
+  ['fix: correct counts', '1.1.0'],
+  ...['perf', 'refactor', 'build', 'ci', 'deps', 'revert', 'docs', 'test', 'custom'].map(type => [`${type}: update something`, '1.0.1']),
+  ['chore: update tooling', null],
   ['feat!: replace filters', '2.0.0'],
-  ['chore!: remove legacy support', '2.0.0'],
+  ['fix!: replace count logic', '1.1.0'],
+  ['docs!: rewrite documentation', '1.0.1'],
+  ['chore!: remove legacy support', null],
+  ['refactor: replace helpers\n\nBREAKING CHANGE: helper interface changed', '1.0.1'],
 ]) {
   test(message, async () => {
     const state = harness([message]);
@@ -90,14 +94,14 @@ for (const [message, expected] of [
 test('a second PR-only release uses the merged manifest version', async () => {
   const state = harness(['fix: follow-up correction'], '1.1.0');
   await state.run();
-  assert.equal(state.files['version.txt'].trim(), '1.1.1');
+  assert.equal(state.files['version.txt'].trim(), '1.2.0');
 });
 
-test('a feature and fix together use one minor bump and preserve manual notes', async () => {
+test('a feature and fix together use one major bump and preserve manual notes', async () => {
   const state = harness(['fix: counts', 'feat: filters']);
   state.files['CHANGELOG.md'] = '# Changelog\n\n## 1.0.0\n\nManual note.\n';
   await state.run();
-  assert.equal(state.files['version.txt'].trim(), '1.1.0');
+  assert.equal(state.files['version.txt'].trim(), '2.0.0');
   assert.match(state.files['CHANGELOG.md'], /Manual note\./);
 });
 
@@ -109,10 +113,10 @@ test('release notes separate client changes from all technical changes', async (
     'test: cover filter edge cases', 'docs: explain developer setup',
   ]);
   await state.run();
-  assert.equal(state.files['version.txt'].trim(), '1.1.0');
+  assert.equal(state.files['version.txt'].trim(), '2.0.0');
   const notes = state.files['CHANGELOG.md'];
   const userFacing = notes.match(/### User-facing changes\n([\s\S]*?)(?=\n### |$)/)[1];
-  const technical = notes.match(/### Technical changes \(clients can skip\)\n([\s\S]*?)(?=\n### |$)/)[1];
+  const technical = notes.match(/### Tech-only changes\n([\s\S]*?)(?=\n### |$)/)[1];
   for (const message of ['add client filters', 'correct client counts', 'improve client spacing', 'speed up client searches']) {
     assert.ok(userFacing.includes(message));
     assert.ok(!technical.includes(message));
@@ -123,8 +127,30 @@ test('release notes separate client changes from all technical changes', async (
   }
 });
 
-test('a batch of maintenance and custom commits waits for a release', async () => {
+test('a batch of maintenance and custom commits triggers a patch', async () => {
   const state = harness(['docs: setup', 'test: coverage', 'chore: tooling', 'custom: internal task']);
   await state.run();
+  assert.equal(state.created.length, 1);
+  assert.equal(state.files['version.txt'].trim(), '1.0.1');
+  assert.match(state.files['CHANGELOG.md'], /internal task/);
+});
+
+test('chore commits alone wait for a release', async () => {
+  const state = harness(['chore: setup', 'chore: refresh tools']);
+  await state.run();
   assert.equal(state.created.length, 0);
+});
+
+test('minor bumps reset the patch and ignore accompanying chore commits', async () => {
+  const state = harness(['fix: correct counts', 'chore: tooling'], '2.3.4');
+  await state.run();
+  assert.equal(state.files['version.txt'].trim(), '2.4.0');
+});
+
+test('major bumps reset minor and patch, including before 1.0', async () => {
+  for (const version of ['2.3.4', '0.2.3']) {
+    const state = harness(['style: improve layout', 'fix: counts', 'docs: setup'], version);
+    await state.run();
+    assert.equal(state.files['version.txt'].trim(), version.startsWith('0') ? '1.0.0' : '3.0.0');
+  }
 });

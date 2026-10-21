@@ -274,11 +274,16 @@ class BasePageTemplate(HtpyComponent):
             h.nav(".navbar.navbar-dark.mt-3.bg-dark.text-white")[
                 h.div(".container")[
                     h.p(".my-3")[
-                        tdt("Version {version}").format(
-                            version=(settings.BASE_DIR.parent / "version.txt")
-                            .read_text(encoding="utf-8")
-                            .strip()
-                        )
+                        h.a(
+                            ".text-white.text-decoration-none",
+                            href="https://github.com/PHACDataHub/CAN-SR-django/blob/master/CHANGELOG.md",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        )[
+                            tdt("Version {version}").format(
+                                version=settings.APP_VERSION
+                            ),
+                        ],
                     ],
                     h.ul(".list-unstyled.my-3.list-inline")[
                         h.li(".list-inline-item")[
