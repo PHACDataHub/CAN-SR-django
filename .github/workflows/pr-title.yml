@@ -1,0 +1,22 @@
+name: PR title
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-commit-title:
+    name: Conventional commit title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            if (!/^[a-z]+(?:\([^()\r\n]+\))?!?: \S[^\r\n]*$/.test(title)) {
+              core.setFailed('Use a Conventional Commit title, e.g. feat: add screening filters or fix(screening): save decisions.');
+            }

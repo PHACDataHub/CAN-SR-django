@@ -271,18 +271,26 @@ class BasePageTemplate(HtpyComponent):
 
     def footer(self):
         return h.footer(".d-print-none.goc-footer.bg-light")[
-            h.div(".container")[
-                h.div(".row")[
-                    h.div(".col"),
-                    h.div(".col-auto")[
-                        h.object_(
-                            type="image/svg+xml",
-                            tabindex="-1",
-                            role="img",
-                            data=static("third_party/img/wmms-blk.svg"),
-                            aria_label="Symbol of the Government of Canada",
-                            style="height: 2rem; margin: 1rem 0;",
-                        ),
+            h.nav(".navbar.navbar-dark.mt-3.bg-dark.text-white")[
+                h.div(".container")[
+                    h.p(".my-3")[
+                        tdt("Version {version}").format(
+                            version=(settings.BASE_DIR.parent / "version.txt")
+                            .read_text(encoding="utf-8")
+                            .strip()
+                        )
+                    ],
+                    h.ul(".list-unstyled.my-3.list-inline")[
+                        h.li(".list-inline-item")[
+                            h.a(".text-white", href="#")[
+                                tdt("User agreement (todo)")
+                            ]
+                        ],
+                        h.li(".list-inline-item")[
+                            h.a(".text-white", href="#")[
+                                tdt("Accessibility statement (todo)")
+                            ]
+                        ],
                     ],
                 ],
             ],
@@ -317,8 +325,8 @@ class BasePageTemplate(HtpyComponent):
                         ],
                     ],
                 ],
-                self.footer(),
                 phac_aspc.phac_aspc_wet_scripts(include_jquery=False),
+                self.footer(),
             ],
         ]
 

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "changelog-sections": [
+    { "type": "feat", "section": "User-facing changes" },
+    { "type": "fix", "section": "User-facing changes" },
+    { "type": "style", "section": "User-facing changes" },
+    { "type": "perf", "section": "User-facing changes" },
+    { "type": "revert", "section": "User-facing changes" },
+    { "type": "chore", "section": "Technical changes (clients can skip)" },
+    { "type": "refactor", "section": "Technical changes (clients can skip)" },
+    { "type": "test", "section": "Technical changes (clients can skip)" },
+    { "type": "docs", "section": "Technical changes (clients can skip)" },
+    { "type": "build", "section": "Technical changes (clients can skip)" },
+    { "type": "ci", "section": "Technical changes (clients can skip)" },
+    { "type": "deps", "section": "Technical changes (clients can skip)" }
+  ],
+  "packages": {
+    ".": {}
+  }
+}

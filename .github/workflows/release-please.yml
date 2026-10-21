@@ -1,0 +1,40 @@
+name: Release please
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-please-master
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install release-please
+        run: npm install --prefix "$RUNNER_TEMP/release-please" --ignore-scripts --no-audit --no-fund release-please@17.1.2
+      - name: Maintain version and changelog PR
+        uses: actions/github-script@v7
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+        with:
+          github-token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          script: |
+            const releasePlease = require(`${process.env.RUNNER_TEMP}/release-please/node_modules/release-please`);
+            const maintainReleasePR = require('./.github/scripts/release-please.cjs');
+            await maintainReleasePR({github, context, exec, core}, releasePlease);
