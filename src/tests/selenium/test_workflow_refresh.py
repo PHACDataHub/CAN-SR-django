@@ -63,12 +63,14 @@ def test_detail_updates_preserve_pdf_and_open_form(
     force_login(admin_user)
     with override_settings(ENABLE_HTMX_POLLING=polling):
         driver.get(live_server.url + url)
-        driver.execute_script("""
+        driver.execute_script(
+            """
             window.originalPdf = document.getElementById('citation-pdf-pages');
             document.getElementById('modal-slot').innerHTML =
                 '<form><input id="unsaved-answer" value="Unsaved answer"></form>';
             window.originalInput = document.getElementById('unsaved-answer');
-        """)
+        """
+        )
         result.status = ScreeningResultStatus.COMPLETED
         result.explanation = "Worker finished this result"
         result.save()
@@ -87,11 +89,13 @@ def test_detail_updates_preserve_pdf_and_open_form(
             ).get_attribute("aria-valuenow")
             == "100"
         )
-        assert driver.execute_script("""
+        assert driver.execute_script(
+            """
             return window.originalPdf === document.getElementById('citation-pdf-pages')
                 && window.originalInput === document.getElementById('unsaved-answer')
                 && window.originalInput.value === 'Unsaved answer';
-        """)
+        """
+        )
 
 
 @pytest.mark.xfail(strict=False, reason="Flaky test: passing to keep CI green")
@@ -117,10 +121,12 @@ def test_list_refresh_keeps_applied_filters_until_submit(
         )
         search.clear()
         search.send_keys("Beta")
-        driver.execute_script("""
+        driver.execute_script(
+            """
             window.originalFilters = document.getElementById('screening-filters');
             window.originalAutocomplete = document.querySelector('[data-autocomplete-multiselect]');
-        """)
+        """
+        )
         click_refresh(driver)
         WebDriverWait(driver, 5).until(
             lambda browser: browser.find_element(
@@ -135,10 +141,12 @@ def test_list_refresh_keeps_applied_filters_until_submit(
         assert "Page 2 of 2" in driver.find_element(By.ID, "page_x_of_y").text
         assert "search=Alpha" in driver.current_url
         assert search.get_attribute("value") == "Beta"
-        assert driver.execute_script("""
+        assert driver.execute_script(
+            """
             return window.originalFilters === document.getElementById('screening-filters')
                 && window.originalAutocomplete === document.querySelector('[data-autocomplete-multiselect]');
-        """)
+        """
+        )
         input_id = driver.execute_script(
             "return window.originalAutocomplete.querySelector('[data-autocomplete-input]').id;"
         )
@@ -208,7 +216,8 @@ def test_hidden_tab_skips_timer_but_manual_refresh_works(
                 args=[citation.dataset.review_id, citation.id],
             )
         )
-        driver.execute_script("""
+        driver.execute_script(
+            """
             Object.defineProperty(document, 'hidden', {configurable: true, value: true});
             window.refreshRequests = 0;
             document.body.addEventListener('htmx:beforeRequest', event => {
@@ -216,7 +225,8 @@ def test_hidden_tab_skips_timer_but_manual_refresh_works(
                     window.refreshRequests += 1;
                 }
             });
-        """)
+        """
+        )
         driver.set_script_timeout(10)
         driver.execute_async_script("window.setTimeout(arguments[0], 5500);")
         assert driver.execute_script("return window.refreshRequests") == 0
@@ -275,14 +285,16 @@ def test_actions_cancel_stale_refreshes_and_block_new_polls(
                 args=[citation.dataset.review_id, citation.id],
             )
         )
-        driver.execute_script("""
+        driver.execute_script(
+            """
             window.refreshRequests = 0;
             document.body.addEventListener('htmx:beforeRequest', event => {
                 if (event.detail.elt.id === 'workflow-detail-component') {
                     window.refreshRequests += 1;
                 }
             });
-        """)
+        """
+        )
         button_id = f"l1-validate-answer-{result.id}"
         if in_modal:
             driver.execute_script(
@@ -345,7 +357,8 @@ def test_pdf_evidence_updates_without_replacing_canvas(
             )
         )
         # Stub PDF.js rendering and metadata transport, exercising the real viewer code.
-        driver.execute_script("""
+        driver.execute_script(
+            """
             const data = document.getElementById('l2-citation-data');
             data.dataset.pdfUrl = '/test-document.pdf';
             data.dataset.metadataUrl = '/test-metadata';
@@ -373,7 +386,8 @@ def test_pdf_evidence_updates_without_replacing_canvas(
                     })
                 })})
             };
-        """)
+        """
+        )
         viewer_source = (
             Path(__file__).parents[2] / "static/citation_pdf.js"
         ).read_text()
@@ -388,10 +402,12 @@ def test_pdf_evidence_updates_without_replacing_canvas(
             )
         )
         driver.execute_async_script("window.setTimeout(arguments[0], 250);")
-        driver.execute_script("""
+        driver.execute_script(
+            """
             window.originalCanvas = document.querySelector('#citation-pdf-pages canvas');
             window.updatedEvidence = true;
-        """)
+        """
+        )
         result.status = ScreeningResultStatus.COMPLETED
         result.evidence_sentences = [0]
         result.save()
