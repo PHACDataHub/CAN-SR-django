@@ -275,9 +275,7 @@ class BasePageTemplate(HtpyComponent):
                 h.div(".container")[
                     h.p(".my-3")[
                         tdt("Version {version}").format(
-                            version=(settings.BASE_DIR.parent / "version.txt")
-                            .read_text(encoding="utf-8")
-                            .strip()
+                            version=settings.APP_VERSION
                         )
                     ],
                     h.ul(".list-unstyled.my-3.list-inline")[

@@ -1,13 +1,12 @@
+from django.test import override_settings
 from django.urls import reverse
 
 from bs4 import BeautifulSoup
 
 
-def test_base_page_footer(client, settings, tmp_path):
-    settings.BASE_DIR = tmp_path / "src"
-    (tmp_path / "version.txt").write_text("1.17.25\n", encoding="utf-8")
-
-    response = client.get(reverse("login"))
+def test_base_page_footer(client, settings):
+    with override_settings(APP_VERSION="1.17.25"):
+        response = client.get(reverse("login"))
 
     assert response.status_code == 200
     footer = BeautifulSoup(response.content, "html.parser").find("footer")
