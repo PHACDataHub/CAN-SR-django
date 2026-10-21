@@ -1,4 +1,4 @@
-// CI's Release tooling job installs release-please and sets NODE_PATH before running these tests.
+// This seems like overkill, but AI wrote it and it runs in CI ¯\_(ツ)_/¯
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { test } = require('node:test');
@@ -116,7 +116,7 @@ test('release notes separate client changes from all technical changes', async (
   assert.equal(state.files['version.txt'].trim(), '2.0.0');
   const notes = state.files['CHANGELOG.md'];
   const userFacing = notes.match(/### User-facing changes\n([\s\S]*?)(?=\n### |$)/)[1];
-  const technical = notes.match(/### Technical changes \(clients can skip\)\n([\s\S]*?)(?=\n### |$)/)[1];
+  const technical = notes.match(/### Tech-only changes\n([\s\S]*?)(?=\n### |$)/)[1];
   for (const message of ['add client filters', 'correct client counts', 'improve client spacing', 'speed up client searches']) {
     assert.ok(userFacing.includes(message));
     assert.ok(!technical.includes(message));
