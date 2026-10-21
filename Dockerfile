@@ -33,6 +33,7 @@ RUN python -m pip install --no-index --find-links=/wheels \
     && rm -rf /wheels
 
 COPY --chown=app:app src /app/src
+COPY --chown=app:app version.txt /app/version.txt
 COPY docker/entrypoint.sh /usr/local/bin/can-sr-entrypoint
 
 RUN chmod 0755 /usr/local/bin/can-sr-entrypoint \

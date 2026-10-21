@@ -7,6 +7,21 @@ on:
   pull_request:
 
 jobs:
+  release-tooling:
+    name: Release tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install release-please
+        run: npm install --prefix "$RUNNER_TEMP/release-please" --ignore-scripts --no-audit --no-fund release-please@17.1.2
+      - name: Check PR-only releases and version rules
+        env:
+          NODE_PATH: ${{ runner.temp }}/release-please/node_modules
+        run: node --test .github/scripts/release-please.test.cjs
+
   pytest-sqlite:
     name: Pytest (sqlite)
     runs-on: ubuntu-latest
