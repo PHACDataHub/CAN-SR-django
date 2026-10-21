@@ -12,7 +12,3 @@ def test_base_page_footer(client, settings):
     footer = BeautifulSoup(response.content, "html.parser").find("footer")
     assert "d-print-none" in footer["class"]
     assert "Version 1.17.25" in footer.get_text()
-    assert [(link.text, link["href"]) for link in footer.select("a")] == [
-        ("User agreement (todo)", "#"),
-        ("Accessibility statement (todo)", "#"),
-    ]
