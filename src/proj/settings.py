@@ -312,7 +312,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-ca"
 
-TIME_ZONE = "EST"
+# Preserve fixed UTC-5 without depending on the legacy EST zoneinfo file.
+TIME_ZONE = "Etc/GMT+5"
 
 USE_I18N = True
 

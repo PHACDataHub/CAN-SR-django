@@ -13,14 +13,12 @@ from my_app.router import route
 from my_app.services.l1_screening import EnqueueL1ScreeningService
 from my_app.views.screening.human_answers import (
     HumanAnswerFormView,
+    QuestionHumanAnswerViewMixin,
     ScreeningHumanAnswerForm,
     ScreeningHumanAnswerViewMixin,
     ValidateAIAnswerView,
 )
-from my_app.views.screening.l1.detail import (
-    render_l1_human_review_control,
-    render_l1_screening_control,
-)
+from my_app.views.screening.l1.detail import render_l1_screening_control
 from my_app.views.screening.l1.list import CitationRowDisplay
 from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import cached_property, get_object_or_404
@@ -88,12 +86,11 @@ class L1CitationMixin(MustAccessReviewMixin, View):
 
 
 class L1HumanReviewMixin(ScreeningHumanAnswerViewMixin):
+    stage = "l1"
     result_model = L1ScreeningResult
     answer_model = L1HumanAnswer
     form_class = L1HumanAnswerForm
     prefix = "l1"
-    route_name = "l1_citation_human_answer"
-    render_control_component = staticmethod(render_l1_human_review_control)
 
 
 @route(
@@ -110,3 +107,13 @@ class L1ValidateCorrectView(L1HumanReviewMixin, ValidateAIAnswerView):
 )
 class L1HumanAnswerView(L1HumanReviewMixin, HumanAnswerFormView):
     pass
+
+
+@route(
+    "/reviews/<int:review_id>/screening_l1/citations/<int:citation_id>/questions/<int:question_id>/human-answer/",
+    name="l1_question_human_answer",
+)
+class L1QuestionHumanAnswerView(
+    QuestionHumanAnswerViewMixin, L1HumanReviewMixin, HumanAnswerFormView
+):
+    question_model = L1ScreeningQuestion

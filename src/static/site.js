@@ -20,8 +20,36 @@ function tdt(str) {
 
 
 document.addEventListener("DOMContentLoaded", function (event) {
+    configureMorph();
     configureHtmx();
 });
+
+
+function configureMorph() {
+    // ensure that morph-swapped detail tags retain their open/closed state
+
+    const morph = Idiomorph.morph;
+    Idiomorph.morph = function (target, content, options = {}) {
+        const beforeNodeMorphed = options.callbacks?.beforeNodeMorphed;
+        return morph(target, content, {
+            ...options,
+            callbacks: {
+                ...options.callbacks,
+                beforeNodeMorphed(current, incoming) {
+                    const result = beforeNodeMorphed?.(current, incoming);
+                    if (current instanceof HTMLDetailsElement && incoming instanceof HTMLDetailsElement) {
+                        const newExpansionReason = incoming.dataset.autoExpand &&
+                            incoming.dataset.autoExpand !== current.dataset.autoExpand;
+                        if (!newExpansionReason) {
+                            incoming.open = current.open;
+                        }
+                    }
+                    return result;
+                },
+            },
+        });
+    };
+}
 
 
 
@@ -46,6 +74,21 @@ function getFocusSelector(evt) {
 }
 
 function configureHtmx() {
+
+    document.body.addEventListener('htmx:beforeRequest', (event) => {
+        // TODO: this belongs in the upstream modal lib
+        // The library opens modals from any [data-modal-slot], 
+        // but it only remembers the triggering button 
+        // when hx-target is literally #modal-slot. 
+        // Our nested slot has a different ID, 
+        // so that check misses it and focus can return to the wrong element 
+        // when the child closes
+        // we should replace the library’s existing listener 
+        // with this resolved-target check
+        if (event.detail.target?.matches('[data-modal-slot]')) {
+            window.ModalStack.setPendingTrigger(event.detail.elt);
+        }
+    });
 
     document.body.addEventListener('htmx:configRequest', (event) => {
         event.detail.headers['X-CSRFToken'] = csrfToken;

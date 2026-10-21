@@ -5,6 +5,11 @@ import htpy as h
 
 from proj.htpy.modal_component import ModalComponent
 
+from my_app.models import Citation, ScreeningResultStatus
+from my_app.views.screening.question_panels import (
+    QuestionPanels,
+    question_panel_id,
+)
 from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
     GenericForm,
@@ -12,7 +17,6 @@ from shortcuts import (
     View,
     cached_property,
     get_object_or_404,
-    reverse,
     tdt,
 )
 
@@ -39,8 +43,7 @@ class ScreeningHumanAnswerViewMixin(MustAccessReviewMixin, View):
     answer_model = None
     form_class = None
     prefix = None
-    route_name = None
-    render_control_component = None
+    stage = None
     result_select_related = (
         "citation",
         "question",
@@ -56,14 +59,33 @@ class ScreeningHumanAnswerViewMixin(MustAccessReviewMixin, View):
             ),
             pk=self.kwargs["result_pk"],
             citation__dataset__review=self.review,
+            question__review=self.review,
+        )
+
+    @property
+    def citation(self):
+        return self.result.citation
+
+    @property
+    def question(self):
+        return self.result.question
+
+    @property
+    def form_identifier(self):
+        return str(self.result.pk)
+
+    @property
+    def control_id(self):
+        return question_panel_id(
+            self.stage, self.citation.pk, self.question.pk
         )
 
     @cached_property
     def current_answer(self):
         return (
             self.answer_model.objects.filter(
-                citation=self.result.citation,
-                question=self.result.question,
+                citation=self.citation,
+                question=self.question,
                 user=self.request.user,
             )
             .order_by("-updated_at", "-id")
@@ -71,34 +93,35 @@ class ScreeningHumanAnswerViewMixin(MustAccessReviewMixin, View):
         )
 
     def render_control(self):
-        return str(
-            self.render_control_component(
-                self.result,
-                self.review,
-                self.request.user,
-            )
+        panels = QuestionPanels(
+            self.citation, self.review, self.request.user, self.stage
         )
+        return str(panels.panel(self.question).render())
 
     def can_validate(self):
-        return self.result.selected_option_id is not None
+        return (
+            self.result is not None
+            and self.result.status == ScreeningResultStatus.COMPLETED
+            and self.result.selected_option_id is not None
+        )
 
     def validated_answer_values(self):
         return {"selected_option": self.result.selected_option}
 
     def human_answer_form_kwargs(self):
-        return {"question": self.result.question}
+        return {"question": self.question}
 
 
 class ValidateAIAnswerView:
     def post(self, request, *args, **kwargs):
         answers = self.answer_model.objects.filter(
-            citation=self.result.citation,
-            question=self.result.question,
+            citation=self.citation,
+            question=self.question,
         )
         if not answers.exists() and self.can_validate():
             self.answer_model.objects.create(
-                citation=self.result.citation,
-                question=self.result.question,
+                citation=self.citation,
+                question=self.question,
                 user=request.user,
                 **self.validated_answer_values(),
             )
@@ -111,8 +134,8 @@ class HumanAnswerFormView:
         if self.current_answer is not None:
             return self.current_answer
         return self.answer_model(
-            citation=self.result.citation,
-            question=self.result.question,
+            citation=self.citation,
+            question=self.question,
             user=self.request.user,
         )
 
@@ -125,17 +148,17 @@ class HumanAnswerFormView:
         )
 
     def render_modal(self):
-        form_id = f"{self.prefix}-human-answer-form-{self.result.id}"
+        form_id = f"{self.prefix}-human-answer-form-{self.form_identifier}"
         footer = h.fragment[
             h.button(
                 ".btn.btn-secondary",
-                id=f"{self.prefix}-human-answer-cancel-{self.result.id}",
+                id=f"{self.prefix}-human-answer-cancel-{self.form_identifier}",
                 type="button",
                 **{"data-modal-close": True},
             )[tdt("Cancel")],
             h.button(
                 ".btn.btn-primary",
-                id=f"{self.prefix}-human-answer-save-{self.result.id}",
+                id=f"{self.prefix}-human-answer-save-{self.form_identifier}",
                 type="submit",
                 form=form_id,
                 **{"hx-disabled-elt": "this"},
@@ -144,18 +167,16 @@ class HumanAnswerFormView:
         return str(
             ModalComponent(
                 title=self.modal_title,
-                modal_id=f"{self.prefix}-human-answer-modal-{self.result.id}",
+                modal_id=f"{self.prefix}-human-answer-modal-{self.form_identifier}",
                 footer=footer,
             )[
+                h.h2(".h5.mb-3")[self.question.title],
                 h.form(
                     id=form_id,
-                    hx_post=reverse(
-                        self.route_name,
-                        args=[self.review.id, self.result.id],
-                    ),
+                    hx_post=self.request.path,
                     hx_target="#modal-slot",
                     hx_swap="innerHTML",
-                )[GenericForm(self.form)]
+                )[GenericForm(self.form)],
             ]
         )
 
@@ -168,9 +189,41 @@ class HumanAnswerFormView:
 
         self.form.save()
         response = HttpResponse(self.render_control())
-        response["HX-Retarget"] = (
-            f"#{self.prefix}-human-review-{self.result.id}"
-        )
+        response["HX-Retarget"] = f"#{self.control_id}"
         response["HX-Reswap"] = "morph:outerHTML"
         response["HX-Trigger-After-Settle"] = "modal-close"
         return response
+
+
+class QuestionHumanAnswerViewMixin:
+    question_model = None
+
+    @cached_property
+    def citation(self):
+        return get_object_or_404(
+            Citation.objects.select_related("dataset", "document"),
+            pk=self.kwargs["citation_id"],
+            dataset__review=self.review,
+        )
+
+    @cached_property
+    def question(self):
+        return get_object_or_404(
+            self.question_model.active_objects,
+            pk=self.kwargs["question_id"],
+            review=self.review,
+        )
+
+    @cached_property
+    def result(self):
+        return (
+            self.result_model.objects.filter(
+                citation=self.citation, question=self.question
+            )
+            .select_related("selected_option")
+            .first()
+        )
+
+    @property
+    def form_identifier(self):
+        return f"{self.citation.pk}-{self.question.pk}"

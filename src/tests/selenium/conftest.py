@@ -14,6 +14,7 @@ from tests.selenium.visual_comparison_utils import compare_screenshot
 from tests.selenium.visual_comparison_utils import (
     save_screenshot as save_visual_screenshot,
 )
+from tests.selenium.visual_comparison_utils import set_viewport
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -37,6 +38,7 @@ def driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--headless=new")
     browser = webdriver.Chrome(options=options)
+    set_viewport(browser)
     yield browser
     browser.quit()
 

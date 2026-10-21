@@ -12,9 +12,7 @@ CHANNEL_TOLERANCE = 20
 VIEWPORT_SIZE = (1280, 800)
 
 
-def _prepare_page(driver):
-    from selenium.webdriver.support.ui import WebDriverWait
-
+def set_viewport(driver):
     width, height = VIEWPORT_SIZE
     driver.set_window_size(width, height)
     driver.execute_cdp_cmd(
@@ -26,6 +24,11 @@ def _prepare_page(driver):
             "mobile": False,
         },
     )
+
+
+def _prepare_page(driver):
+    from selenium.webdriver.support.ui import WebDriverWait
+
     WebDriverWait(driver, 10).until(
         lambda browser: browser.execute_script(
             "return document.readyState === 'complete' "
@@ -77,41 +80,67 @@ def _difference(expected, actual):
     return fraction, diff
 
 
-def _capture_screenshot(driver, element=None):
-    from PIL import Image
+def _element_bounds(driver, element):
+    return driver.execute_script(
+        """const rect = arguments[0].getBoundingClientRect();
+        return [rect.left, rect.top, rect.right, rect.bottom];""",
+        element,
+    )
 
-    try:
-        _prepare_page(driver)
-        if element is not None:
-            driver.execute_script(
-                "arguments[0].scrollIntoView({block: 'center', behavior: 'instant'});",
-                element,
+
+def scroll_into_view(driver, element):
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    previous_bounds = None
+
+    def settled(browser):
+        nonlocal previous_bounds
+        browser.execute_async_script(
+            """
+            const [element, done] = arguments;
+            element.scrollIntoView({block: 'center', behavior: 'instant'});
+            requestAnimationFrame(() => requestAnimationFrame(() => done()));
+            """,
+            element,
+        )
+        bounds = _element_bounds(browser, element)
+        stable = bounds == previous_bounds
+        previous_bounds = bounds
+        return stable
+
+    WebDriverWait(driver, 10, poll_frequency=0.1).until(settled)
+
+
+def _capture_screenshot(driver, element=None):
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    _prepare_page(driver)
+    if element is None:
+        return Image.open(BytesIO(driver.get_screenshot_as_png())).convert(
+            "RGB"
+        )
+
+    def capture(browser):
+        scroll_into_view(browser, element)
+        bounds = _element_bounds(browser, element)
+        viewport = Image.open(
+            BytesIO(browser.get_screenshot_as_png())
+        ).convert("RGB")
+        # Capturing can itself flush pending layout and scroll anchoring.
+        if bounds != _element_bounds(browser, element):
+            return False
+        if (
+            bounds[0] < 0
+            or bounds[1] < 0
+            or bounds[2] > viewport.width
+            or bounds[3] > viewport.height
+        ):
+            raise AssertionError(
+                f"Snapshot element is outside the viewport: {bounds}"
             )
-            bounds = driver.execute_script(
-                """const rect = arguments[0].getBoundingClientRect();
-                return [rect.left, rect.top, rect.right, rect.bottom];""",
-                element,
-            )
-            viewport = Image.open(
-                BytesIO(driver.get_screenshot_as_png())
-            ).convert("RGB")
-            if (
-                bounds[0] < 0
-                or bounds[1] < 0
-                or bounds[2] > viewport.width
-                or bounds[3] > viewport.height
-            ):
-                raise AssertionError(
-                    f"Snapshot element is outside the viewport: {bounds}"
-                )
-            actual = viewport.crop(tuple(round(edge) for edge in bounds))
-        else:
-            actual = Image.open(
-                BytesIO(driver.get_screenshot_as_png())
-            ).convert("RGB")
-    finally:
-        driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
-    return actual
+        return viewport.crop(tuple(round(edge) for edge in bounds))
+
+    return WebDriverWait(driver, 10, poll_frequency=0.1).until(capture)
 
 
 def save_screenshot(driver, snapshot_name, element=None):

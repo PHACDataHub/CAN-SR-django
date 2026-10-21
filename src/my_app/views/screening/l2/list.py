@@ -2,8 +2,6 @@ from dataclasses import dataclass
 
 import htpy as h
 
-from proj.htpy.util import polling_attrs
-
 from my_app.models import Citation, CitationStatus, L2ScreeningQuestion, Review
 from my_app.queries import (
     L2ScreeningStatusFetcher,
@@ -30,6 +28,7 @@ from my_app.views.screening.filters import (
     ScreeningFilters,
 )
 from my_app.views.screening.l2.components import L2ScreeningBadge
+from my_app.views.screening.refresh import workflow_refresh_attrs
 from my_app.views.view_utils import (
     paginated_component_response,
     url_with_same_params,
@@ -111,15 +110,13 @@ class L2ScreeningComponent:
     def render(self):
         return h.div(
             id="l2-screening-component",
-            hx_target="this",
-            hx_get=self.page_url(self.page_number, self.component_url),
             hx_swap="morph:outerHTML",
-            hx_disabled_elt="#refresh-button",
-            **polling_attrs(
-                "click from:#refresh-button, citations-update from:body"
+            **workflow_refresh_attrs(
+                self.page_url(self.page_number, self.component_url),
+                citations_update=True,
             ),
         )[
-            h.div(".row.g-4")[
+            h.div(".row.g-4", hx_sync="body:replace")[
                 h.div(".col-lg-5")[self.render_progress_panel()],
                 h.div(".col-lg-7")[self.render_citations_panel()],
             ]

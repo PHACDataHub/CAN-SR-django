@@ -101,7 +101,11 @@ def ScreeningFilters(form, action):
     )
     return h.details(".border.rounded.p-3.mb-4", open=filters_active)[
         h.summary[tdt("Filters")],
-        h.form(method="get", action=action)[
+        h.form(
+            id="screening-filters",
+            method="get",
+            action=action,
+        )[
             GenericForm(form, include_csrf=False),
             h.button(".btn.btn-primary", type="submit")[tdt("Filter")],
         ],

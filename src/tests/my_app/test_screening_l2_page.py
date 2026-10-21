@@ -78,7 +78,7 @@ def test_screening_l2_shell_renders_component_and_refresh_button(
     assert 'hx-target="#l2-screening-component"' in body
     assert 'hx-swap="morph:outerHTML"' in body
     assert (
-        'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s"'
+        'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s [!document.hidden]"'
         in body
     )
     assert "Refresh" in body
@@ -313,7 +313,7 @@ def test_screen_l2_row_details_view_renders_citation_and_results(
     assert 'id="citation-pdf-pages"' in body
     assert "citation_pdf.js" in body
     assert "citation_pdf.css" in body
-    assert 'class="btn btn-sm btn-outline-primary evidence-chip"' in body
+    assert 'class="btn btn-xs btn-outline-primary evidence-chip"' in body
     assert (
         'data-evidence-type="sentence" data-evidence-index="1">Sentence 1</button>'
         in body
@@ -505,6 +505,7 @@ def test_l2_validation_creates_human_answer_matching_ai_answer(
         citation=row,
         question=question,
         selected_option=selected_option,
+        status=ScreeningResultStatus.COMPLETED,
     )
 
     with patch_rules(can_access_review=True):
@@ -522,8 +523,8 @@ def test_l2_validation_creates_human_answer_matching_ai_answer(
     assert human_answer.question == question
     assert human_answer.selected_option == selected_option
     assert human_answer.notes is None
-    assert "Validated" in body
-    assert "Your answer" in body
+    assert "Included" in body
+    assert "Edit your answer" in body
     assert f'id="l2-validate-answer-{result.id}"' not in body
 
 
@@ -600,12 +601,14 @@ def test_l2_human_answer_modal_saves_question_option_and_notes(
     assert human_answer.selected_option == answer
     assert human_answer.notes == "Human review notes."
     assert response["HX-Trigger-After-Settle"] == "modal-close"
-    assert response["HX-Retarget"] == f"#l2-human-review-{result.id}"
+    assert (
+        response["HX-Retarget"] == f"#l2-question-panel-{row.id}-{question.id}"
+    )
     assert response["HX-Reswap"] == "morph:outerHTML"
     assert answer.option_text in body
     assert "Human review notes." in body
-    assert "Your answer" in body
-    assert other_reviewer_answer.user.username in body
+    assert "Edit your answer" in body
+    assert "Human" in body
     assert "Edit" in body
 
     with patch_rules(can_access_review=True):

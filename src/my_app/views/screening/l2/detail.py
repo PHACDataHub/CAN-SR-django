@@ -1,14 +1,6 @@
 import htpy as h
 
-from proj.htpy import definition_list as DefList
-from proj.htpy.components import PercentFormatter
-
-from my_app.models import (
-    Citation,
-    L2HumanAnswer,
-    L2ScreeningResult,
-    ScreeningResultStatus,
-)
+from my_app.models import Citation, ScreeningResultStatus
 from my_app.queries import (
     L2ScreeningStatusFetcher,
     ReviewStage,
@@ -17,23 +9,16 @@ from my_app.queries import (
 from my_app.router import route
 from my_app.views.pdf_components import (
     DocumentWorkflowCitationPanel,
-    EvidenceDefinitionItems,
     PdfPanel,
     PdfViewerAssets,
     PdfWorkflowPageContent,
-    WorkflowResultsPanel,
 )
-from my_app.views.screening.components import (
-    CitationScreeningProgressNav,
-    CriticalAgentDefinitionItems,
-)
+from my_app.views.screening.components import CitationScreeningProgressNav
 from my_app.views.screening.document_util_components import (
     DocumentCitationDetailView,
 )
-from my_app.views.screening.l2.components import (
-    L2ScreeningBadge,
-    render_l2_human_review_control,
-)
+from my_app.views.screening.l2.components import L2ScreeningBadge
+from my_app.views.screening.question_panels import QuestionPanels
 from my_app.views.screening.util import can_start_l2_screening
 from shortcuts import BasePageTemplate
 from shortcuts import breadcrumbs as bc
@@ -89,6 +74,7 @@ class L2PdfScreeningPage(BasePageTemplate):
         citation_row = self.citation_row
 
         return PdfWorkflowPageContent(
+            refresh_url=self.request.get_full_path(),
             assets=PdfViewerAssets(
                 citation_row,
                 review,
@@ -104,11 +90,11 @@ class L2PdfScreeningPage(BasePageTemplate):
             ],
             title=tdt("L2 PDF screening"),
             progress_navigation=CitationScreeningProgressNav(
-                citation_row,
-                review,
+                self.citation_row,
+                self.review,
                 stage=ReviewStage.L2_SCREENING,
                 detail_route_name="l2_citation_detail",
-                progress_stats=get_l2_screening_progress_stats(review.id),
+                progress_stats=get_l2_screening_progress_stats(self.review.id),
                 nav_label=tdt("L2 citation navigation"),
             ),
             pdf_panel=PdfPanel(citation_row),
@@ -152,68 +138,10 @@ class L2PdfScreeningPage(BasePageTemplate):
             hx_disabled_elt="this",
         )[tdt("Re-screen")]
 
-    def render_results_panel(self, citation_row: Citation):
-        results = self.get_results(citation_row)
-        self.human_answers_by_question_id = (
-            self.get_human_answers_by_question_id(citation_row, results)
-        )
-        return WorkflowResultsPanel(
-            title=tdt("L2 screening results"),
-            results=results,
-            empty_message=tdt("No screening results yet."),
-            render_result=self.render_result,
-        )
-
-    def get_results(self, citation_row: Citation):
-        return list(
-            L2ScreeningResult.objects.filter(citation=citation_row)
-            .select_related(
-                "question",
-                "selected_option",
-                "critical_result__selected_option",
-            )
-            .order_by("question_id")
-        )
-
-    def get_human_answers_by_question_id(self, citation_row, results):
-        answers = (
-            L2HumanAnswer.objects.filter(
-                citation=citation_row,
-                question_id__in=[result.question_id for result in results],
-            )
-            .select_related("selected_option", "user")
-            .order_by("-updated_at", "-id")
-        )
-        grouped_answers = {}
-        for answer in answers:
-            grouped_answers.setdefault(answer.question_id, []).append(answer)
-        return grouped_answers
-
-    def render_result(self, result: L2ScreeningResult):
-
-        return DefList.DL(
-            [
-                (tdt("Question"), result.question.question_text),
-                (
-                    tdt("Status"),
-                    ScreeningResultStatus(result.status).label,
-                ),
-                (
-                    tdt("Answers"),
-                    render_l2_human_review_control(
-                        result,
-                        self.review,
-                        self.request.user,
-                        self.human_answers_by_question_id.get(
-                            result.question_id, []
-                        ),
-                    ),
-                ),
-                (tdt("Confidence"), PercentFormatter(result.confidence)),
-                *CriticalAgentDefinitionItems(result),
-                *EvidenceDefinitionItems(result),
-            ]
-        )
+    def render_results_panel(self, citation_row):
+        return QuestionPanels(
+            citation_row, self.review, self.request.user, "l2"
+        ).render(tdt("L2 screening results"))
 
 
 @route(

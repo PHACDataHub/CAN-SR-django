@@ -11,11 +11,11 @@ from my_app.views.screening.document_util_components import (
 )
 from my_app.views.screening.human_answers import (
     HumanAnswerFormView,
+    QuestionHumanAnswerViewMixin,
     ScreeningHumanAnswerForm,
     ScreeningHumanAnswerViewMixin,
     ValidateAIAnswerView,
 )
-from my_app.views.screening.l2.components import render_l2_human_review_control
 from my_app.views.screening.l2.detail import render_l2_screening_control
 from my_app.views.screening.util import can_start_l2_screening
 from my_app.views.view_utils import MustAccessReviewMixin
@@ -30,12 +30,11 @@ class L2HumanAnswerForm(ScreeningHumanAnswerForm):
 
 
 class L2HumanReviewMixin(ScreeningHumanAnswerViewMixin):
+    stage = "l2"
     result_model = L2ScreeningResult
     answer_model = L2HumanAnswer
     form_class = L2HumanAnswerForm
     prefix = "l2"
-    route_name = "l2_citation_human_answer"
-    render_control_component = staticmethod(render_l2_human_review_control)
 
 
 @route(
@@ -94,3 +93,13 @@ class L2PdfScreeningProcessView(DocumentCitationMixin):
 )
 class L2PdfCitationMetadataView(PdfCitationMetadataView):
     result_model = L2ScreeningResult
+
+
+@route(
+    "/reviews/<int:review_id>/screening_l2/citations/<int:citation_id>/questions/<int:question_id>/human-answer/",
+    name="l2_question_human_answer",
+)
+class L2QuestionHumanAnswerView(
+    QuestionHumanAnswerViewMixin, L2HumanReviewMixin, HumanAnswerFormView
+):
+    question_model = L2ScreeningQuestion

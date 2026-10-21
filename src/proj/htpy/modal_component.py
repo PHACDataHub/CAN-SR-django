@@ -1,8 +1,16 @@
 import htpy
 import htpy as h
+from data_fetcher.util import get_request
 from htpy import Node, Renderable
 
 from proj.text import tdt, tm
+
+
+def get_modal_size_for_current_request():
+    size = get_request().GET.get("size", "xl")
+    if size not in {"xl", "lg", "md", "sm"}:
+        return "xl"
+    return size
 
 
 @h.with_children

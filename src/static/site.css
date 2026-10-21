@@ -203,3 +203,61 @@ table.table--framework-table .table-cell-content {
     background-color: var(--bs-body-bg, #fff);
     box-shadow: inset 0 -1px 0 var(--bs-border-color, #dee2e6);
 }
+
+
+
+
+
+.btn-group-xs>.btn,
+.btn-xs {
+    --bs-btn-padding-y: 0.125rem;
+    --bs-btn-padding-x: 0.25rem;
+    --bs-btn-font-size: 0.875rem;
+    --bs-btn-border-radius: 0.25rem;
+}
+
+.citation-detail-modal .modal-dialog {
+    width: 100%;
+    max-width: var(--bs-modal-width);
+    margin: 0;
+}
+
+.citation-detail-modal .modal-content {
+    max-height: calc(100dvh - 4rem);
+}
+
+.citation-detail-modal .modal-body {
+    overflow-y: auto;
+}
+
+.citation-detail-modal .detail-value {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.question-panel {
+    min-width: 0;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background: #fcfcfc;
+}
+
+.question-panel > dl.custom-dl,
+.question-panel > details > dl.custom-dl {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.question-panel > details {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #ccc;
+}
+
+.question-panel > details > summary {
+    margin-bottom: 0.75rem;
+}

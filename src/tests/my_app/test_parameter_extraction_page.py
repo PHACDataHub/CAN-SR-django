@@ -60,7 +60,7 @@ def test_parameter_extraction_shell_renders_component_and_refresh_button(
     assert 'hx-target="#parameter-extraction-component"' in body
     assert 'hx-swap="morph:outerHTML"' in body
     assert (
-        'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s"'
+        'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s [!document.hidden]"'
         in body
     )
     assert "Refresh" in body
@@ -204,7 +204,7 @@ def test_parameter_extraction_row_details_view_renders_pdf_and_results(
     assert 'id="citation-pdf-pages"' in body
     assert "citation_pdf.js" in body
     assert "citation_pdf.css" in body
-    assert 'class="btn btn-sm btn-outline-primary evidence-chip"' in body
+    assert 'class="btn btn-xs btn-outline-primary evidence-chip"' in body
     assert (
         'data-evidence-type="sentence" data-evidence-index="1">Sentence 1</button>'
         in body
@@ -314,8 +314,8 @@ def test_parameter_extraction_validate_ai_answer_creates_human_answer(
     assert human_answer.found is True
     assert human_answer.value == "10 mg"
     assert human_answer.notes is None
-    assert "Correct" in body
-    assert "Your answer" in body
+    assert "Completed" in body
+    assert "Edit your answer" in body
     assert "10 mg" in body
 
 
@@ -369,10 +369,10 @@ def test_parameter_extraction_human_answer_modal_saves_and_edits_values(
     assert human_answer.found is False
     assert human_answer.value == "Not reported"
     assert human_answer.notes == "Checked the full text."
-    assert "Your answer" in post_body
-    assert other_reviewer_answer.user.username in post_body
-    assert "Detection disagreement" in post_body
-    assert "Not reported" in post_body
+    assert "Edit your answer" in post_body
+    assert "Human" in post_body
+    assert "Controversial" in post_body
+    assert "Not found" in post_body
 
     with patch_rules(can_access_review=True):
         edit_response = vanilla_client.post(
