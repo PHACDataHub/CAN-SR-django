@@ -1,6 +1,6 @@
 # Changelog
 
-Each release separates user-facing changes from technical changes. Clients can
+Each release separates user-facing changes from technical changes. Users can
 skip the technical section; it records maintenance and development work.
 
 ## [1.1.0](https://github.com/PHACDataHub/CAN-SR-django/compare/v1.0.0...v1.1.0) (2026-10-21)
