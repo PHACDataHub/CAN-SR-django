@@ -136,7 +136,6 @@ def test_create_review_creates_link_and_redirects(
     ).exists()
 
     body = vanilla_user_client.get(url).content.decode()
-    assert "Systematic Reviews" in body
     assert "Create systematic review" in body
     assert "Cancel" not in body
 
@@ -250,7 +249,8 @@ def test_edit_review_uses_rule(vanilla_user_client, vanilla_user):
         response = vanilla_user_client.get(url)
         assert response.status_code == 200
         body = response.content.decode()
-        assert "Systematic Reviews" in body
+        assert 'aria-label="breadcrumb"' in body
+        assert "Systematic Reviews" not in body
         assert review.title in body
         assert "Edit review" in body
         assert "Cancel" not in body
@@ -338,7 +338,8 @@ def test_detail_review_uses_rule(vanilla_user_client, vanilla_user):
         response = vanilla_user_client.get(url)
         assert response.status_code == 200
         body = response.content.decode()
-        assert "Systematic Reviews" in body
+        assert 'aria-label="breadcrumb"' in body
+        assert "Systematic Reviews" not in body
         assert review.title in body
 
 
@@ -390,7 +391,8 @@ def test_screening_criteria_page_uses_rule_and_detail_links_to_it(
         response = vanilla_user_client.get(url)
         assert response.status_code == 200
         body = response.content.decode()
-        assert "Systematic Reviews" in body
+        assert 'aria-label="breadcrumb"' in body
+        assert "Systematic Reviews" not in body
         assert review.title in body
         assert "Screening criteria" in body
 
@@ -413,7 +415,8 @@ def test_list_reviews_only_shows_linked_reviews_for_user(
     body = response.content.decode()
     assert "Linked review" in body
     assert other_review.title not in body
-    assert "Systematic Reviews" in body
+    assert 'aria-label="breadcrumb"' not in body
+    assert "Systematic Reviews" not in body
 
 
 def test_admin_sees_all_reviews(vanilla_user_client):
@@ -427,7 +430,8 @@ def test_admin_sees_all_reviews(vanilla_user_client):
     assert response.status_code == 200
     assert len(response.context["object_list"]) == 2
     body = response.content.decode()
-    assert "Systematic Reviews" in body
+    assert 'aria-label="breadcrumb"' not in body
+    assert "Systematic Reviews" not in body
 
 
 @pytest.mark.parametrize("is_admin", [False, True])
