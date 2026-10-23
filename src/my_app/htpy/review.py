@@ -12,9 +12,6 @@ class ReviewListPage(BasePageTemplate):
         reviews = self.context["object_list"]
 
         return [
-            bc.BreadcrumbTrail()[
-                bc.BreadcrumbItem(label=tdt("Systematic Reviews"))
-            ],
             h.h1[tdt("Systematic review list")],
             h.div(".mb-3")[
                 h.a(
@@ -46,10 +43,6 @@ class ReviewCreatePage(BasePageTemplate):
 
     def content(self):
         return [
-            bc.BreadcrumbTrail()[
-                bc.ListReviewsItem(),
-                bc.BreadcrumbItem(label=tdt("Create systematic review")),
-            ],
             h.h1[tdt("Create systematic review")],
             GenericFormWithContainer(
                 self.context["form"],

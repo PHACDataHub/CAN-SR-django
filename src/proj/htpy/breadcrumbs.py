@@ -21,12 +21,6 @@ def BreadcrumbItem(label, href: Optional[str] = None):
     return h.li(".breadcrumb-item.active", aria_current="page")[label]
 
 
-def ListReviewsItem():
-    return BreadcrumbItem(
-        label=tdt("Systematic Reviews"), href=reverse("review_list")
-    )
-
-
 def ReviewRootItem(review):
     label = review.title
     if review.is_deleted:
@@ -41,7 +35,6 @@ def ReviewRootItem(review):
 @h.with_children
 def BreadcrumbTrailForReview(children, review):
     return BreadcrumbTrail()[
-        ListReviewsItem(),
         ReviewRootItem(review),
         h.fragment[children],
     ]

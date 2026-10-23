@@ -91,6 +91,7 @@ def test_review_confidence_is_optional_and_bounded():
             {
                 "title": "Review",
                 "description": "Description",
+                "disable_filtering": "False",
                 "confidence": value,
             }
         )
@@ -122,6 +123,7 @@ def test_create_review_creates_link_and_redirects(
     good_data = {
         "title": "Test systematic review",
         "description": "This is a test systematic review.",
+        "disable_filtering": "False",
     }
 
     response = vanilla_user_client.post(url, good_data)
@@ -134,25 +136,26 @@ def test_create_review_creates_link_and_redirects(
     ).exists()
 
     body = vanilla_user_client.get(url).content.decode()
-    assert "Systematic Reviews" in body
     assert "Create systematic review" in body
     assert "Cancel" not in body
 
 
-def test_create_review_can_enable_disable_filtering(vanilla_user_client):
+@pytest.mark.parametrize("value,expected", [("True", True), ("False", False)])
+def test_create_review_saves_disable_filtering(
+    vanilla_user_client, value, expected
+):
     response = vanilla_user_client.post(
         reverse("create_review"),
         {
             "title": "Review without stage filtering",
             "description": "Description",
-            "disable_filtering": "on",
+            "disable_filtering": value,
         },
     )
 
     assert response.status_code == 302
-    assert Review.objects.get(
-        title="Review without stage filtering"
-    ).disable_filtering
+    review = Review.objects.get(title="Review without stage filtering")
+    assert review.disable_filtering is expected
 
 
 def test_create_review_saves_confidence(vanilla_user_client):
@@ -161,6 +164,7 @@ def test_create_review_saves_confidence(vanilla_user_client):
         {
             "title": "Review with confidence",
             "description": "Description",
+            "disable_filtering": "False",
             "confidence": "0.8",
         },
     )
@@ -179,6 +183,7 @@ def test_create_review_saves_selected_users_and_creator(
         {
             "title": "Review with users",
             "description": "Description",
+            "disable_filtering": "False",
             "users": [selected_user.id],
         },
     )
@@ -199,6 +204,7 @@ def test_edit_review_requires_non_admin_to_retain_access(
         {
             "title": review.title,
             "description": review.description,
+            "disable_filtering": "False",
             "users": [],
         },
     )
@@ -220,6 +226,7 @@ def test_admin_can_remove_all_review_users(admin_client):
         {
             "title": review.title,
             "description": review.description,
+            "disable_filtering": "False",
             "users": [],
         },
     )
@@ -242,7 +249,8 @@ def test_edit_review_uses_rule(vanilla_user_client, vanilla_user):
         response = vanilla_user_client.get(url)
         assert response.status_code == 200
         body = response.content.decode()
-        assert "Systematic Reviews" in body
+        assert 'aria-label="breadcrumb"' in body
+        assert "Systematic Reviews" not in body
         assert review.title in body
         assert "Edit review" in body
         assert "Cancel" not in body
@@ -330,7 +338,8 @@ def test_detail_review_uses_rule(vanilla_user_client, vanilla_user):
         response = vanilla_user_client.get(url)
         assert response.status_code == 200
         body = response.content.decode()
-        assert "Systematic Reviews" in body
+        assert 'aria-label="breadcrumb"' in body
+        assert "Systematic Reviews" not in body
         assert review.title in body
 
 
@@ -382,7 +391,8 @@ def test_screening_criteria_page_uses_rule_and_detail_links_to_it(
         response = vanilla_user_client.get(url)
         assert response.status_code == 200
         body = response.content.decode()
-        assert "Systematic Reviews" in body
+        assert 'aria-label="breadcrumb"' in body
+        assert "Systematic Reviews" not in body
         assert review.title in body
         assert "Screening criteria" in body
 
@@ -405,7 +415,8 @@ def test_list_reviews_only_shows_linked_reviews_for_user(
     body = response.content.decode()
     assert "Linked review" in body
     assert other_review.title not in body
-    assert "Systematic Reviews" in body
+    assert 'aria-label="breadcrumb"' not in body
+    assert "Systematic Reviews" not in body
 
 
 def test_admin_sees_all_reviews(vanilla_user_client):
@@ -419,7 +430,8 @@ def test_admin_sees_all_reviews(vanilla_user_client):
     assert response.status_code == 200
     assert len(response.context["object_list"]) == 2
     body = response.content.decode()
-    assert "Systematic Reviews" in body
+    assert 'aria-label="breadcrumb"' not in body
+    assert "Systematic Reviews" not in body
 
 
 @pytest.mark.parametrize("is_admin", [False, True])

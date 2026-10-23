@@ -192,12 +192,12 @@ class BasePageTemplate(HtpyComponent):
             self.head_extra_scripts_css(),
         ]
 
-    def nav_logo(self):
+    def footer_logo(self):
         lang = "en" if get_lang_code() == "en-ca" else "fr"
         return Markup(
             phac_aspc.phac_aspc_inline_svg(
                 f"phac_aspc_helpers/phac_logos/{lang}__dark.svg",
-                style="height: 2rem; padding-right: 2rem;",
+                style="height: 2rem;",
             )
         )
 
@@ -214,7 +214,12 @@ class BasePageTemplate(HtpyComponent):
 
         return h.nav(".navbar.navbar-expand-md.navbar-dark.bg-dark")[
             h.div(".container")[
-                self.nav_logo(),
+                h.div(".navbar-brand.mb-0.h1.fs-4")[
+                    h.a(
+                        ".text-decoration-none.text-white",
+                        href=reverse("root"),
+                    )[tdt("CAN-SR")],
+                ],
                 self.available_apps(),
                 h.button(
                     ".navbar-toggler",
@@ -285,18 +290,7 @@ class BasePageTemplate(HtpyComponent):
                             ),
                         ],
                     ],
-                    h.ul(".list-unstyled.my-3.list-inline")[
-                        h.li(".list-inline-item")[
-                            h.a(".text-white", href="#")[
-                                tdt("User agreement (todo)")
-                            ]
-                        ],
-                        h.li(".list-inline-item")[
-                            h.a(".text-white", href="#")[
-                                tdt("Accessibility statement (todo)")
-                            ]
-                        ],
-                    ],
+                    self.footer_logo(),
                 ],
             ],
         ]
