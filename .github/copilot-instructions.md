@@ -134,3 +134,4 @@ We use black/isort to format .py files. It can be run globally, but preferably w
 - Dont go beyond what was requested
 - When in doubt look for similar examples in the repo
 - Follow existing patterns
+- don't touch git staging area, do not commit and stage changes
