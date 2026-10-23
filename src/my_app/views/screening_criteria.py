@@ -42,7 +42,14 @@ from shortcuts import (
     StandardFormMixin,
 )
 from shortcuts import breadcrumbs as bc
-from shortcuts import cached_property, dataclass, reverse, tdt, tm, transaction
+from shortcuts import (
+    cached_property,
+    dataclass,
+    reverse,
+    tdt,
+    tm,
+    transaction,
+)
 
 ParentType = L1ScreeningQuestion | L2ScreeningQuestion | Parameter
 ChildType = (
@@ -113,11 +120,6 @@ class L1FormsetAdapter(FormsetAdapter):
     child_relation_name = "options"
 
     class FormClass(ModelForm, StandardFormMixin):
-        disable_screening = forms.BooleanField(
-            label=tdt("Disable screening"),
-            help_text=tdt("Do not use this question to filter citations."),
-            required=False,
-        )
 
         class Meta:
             model = L1ScreeningQuestion
@@ -162,11 +164,6 @@ class L2FormsetAdapter(FormsetAdapter):
     child_relation_name = "options"
 
     class FormClass(ModelForm, StandardFormMixin):
-        disable_screening = forms.BooleanField(
-            label=tdt("Disable screening"),
-            help_text=tdt("Do not use this question to filter citations."),
-            required=False,
-        )
 
         class Meta:
             model = L2ScreeningQuestion

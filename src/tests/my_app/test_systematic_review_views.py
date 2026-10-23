@@ -91,6 +91,7 @@ def test_review_confidence_is_optional_and_bounded():
             {
                 "title": "Review",
                 "description": "Description",
+                "disable_filtering": "False",
                 "confidence": value,
             }
         )
@@ -122,6 +123,7 @@ def test_create_review_creates_link_and_redirects(
     good_data = {
         "title": "Test systematic review",
         "description": "This is a test systematic review.",
+        "disable_filtering": "False",
     }
 
     response = vanilla_user_client.post(url, good_data)
@@ -139,20 +141,22 @@ def test_create_review_creates_link_and_redirects(
     assert "Cancel" not in body
 
 
-def test_create_review_can_enable_disable_filtering(vanilla_user_client):
+@pytest.mark.parametrize("value,expected", [("True", True), ("False", False)])
+def test_create_review_saves_disable_filtering(
+    vanilla_user_client, value, expected
+):
     response = vanilla_user_client.post(
         reverse("create_review"),
         {
             "title": "Review without stage filtering",
             "description": "Description",
-            "disable_filtering": "on",
+            "disable_filtering": value,
         },
     )
 
     assert response.status_code == 302
-    assert Review.objects.get(
-        title="Review without stage filtering"
-    ).disable_filtering
+    review = Review.objects.get(title="Review without stage filtering")
+    assert review.disable_filtering is expected
 
 
 def test_create_review_saves_confidence(vanilla_user_client):
@@ -161,6 +165,7 @@ def test_create_review_saves_confidence(vanilla_user_client):
         {
             "title": "Review with confidence",
             "description": "Description",
+            "disable_filtering": "False",
             "confidence": "0.8",
         },
     )
@@ -179,6 +184,7 @@ def test_create_review_saves_selected_users_and_creator(
         {
             "title": "Review with users",
             "description": "Description",
+            "disable_filtering": "False",
             "users": [selected_user.id],
         },
     )
@@ -199,6 +205,7 @@ def test_edit_review_requires_non_admin_to_retain_access(
         {
             "title": review.title,
             "description": review.description,
+            "disable_filtering": "False",
             "users": [],
         },
     )
@@ -220,6 +227,7 @@ def test_admin_can_remove_all_review_users(admin_client):
         {
             "title": review.title,
             "description": review.description,
+            "disable_filtering": "False",
             "users": [],
         },
     )

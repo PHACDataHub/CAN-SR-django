@@ -84,6 +84,11 @@ class UserListPage(BasePageTemplate):
         return [
             h.div(".row.align-items-center.mb-3")[
                 h.div(".col")[h.h1(".mb-0")[tdt("Users")]],
+                h.div(".alert.alert-warning")[
+                    tdt(
+                        "User creation will not work until single-sign-on is configured. do not attempt to create users, ask a developer to do that. Editing roles in this interface should still work."
+                    )
+                ],
                 h.div(".col-auto")[
                     h.a(
                         ".btn.btn-primary",

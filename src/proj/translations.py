@@ -1,7 +1,7 @@
 translation_entries = {
     "site_title": {
-        "en": "Example Project",
-        "fr": "Le Example Project",
+        "en": "CAN-SR",
+        "fr": "CAN-SR",
     },
     "other_lang": {
         "en": "Français",
