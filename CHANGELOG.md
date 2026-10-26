@@ -5,6 +5,13 @@ skip the technical section; it records maintenance and development work.
 
 See our [user-facing-issues](https://github.com/PHACDataHub/CAN-SR-django/issues?q=is%3Aissue+state%3Aopen+label%3Auser-facing) for a list of open user-facing features and bugs that we're already aware of. 
 
+## [2.1.0](https://github.com/PHACDataHub/CAN-SR-django/compare/v2.0.0...v2.1.0) (2026-10-26)
+
+
+### User-facing changes
+
+* first deployment tweaks ([#72](https://github.com/PHACDataHub/CAN-SR-django/issues/72)) ([5470bc7](https://github.com/PHACDataHub/CAN-SR-django/commit/5470bc7a4b78313f6b80d3f4821b909290f2ac56))
+
 ## [2.0.0](https://github.com/PHACDataHub/CAN-SR-django/compare/v1.1.0...v2.0.0) (2026-10-21)
 
 
