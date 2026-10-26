@@ -17,7 +17,9 @@ class AbstractScreeningQuestion(SoftDeleteMixin, models.Model):
     disable_screening = fields.BooleanField(
         default=False,
         verbose_name=tdt("Disable screening"),
-        help_text=tdt("Don't use this question's results to filter citations"),
+        help_text=tdt(
+            "Don't use this question's results to filter citations. Useful for testing alternative questions"
+        ),
     )
     confidence = fields.FloatField(
         null=True,

@@ -43,7 +43,7 @@ class Review(models.Model):
     disable_filtering = fields.BooleanField(
         verbose_name=tdt("Disable filtering"),
         help_text=tdt(
-            "Useful to skip straight to fulltext screening or parameter extraction"
+            "Useful to test fulltext screening or parameter extraction without going through earlier screening. Can be toggled anytime."
         ),
         default=False,
     )
@@ -53,7 +53,7 @@ class Review(models.Model):
         default=None,
         validators=[MinValueValidator(0), MaxValueValidator(1)],
         verbose_name=tdt("Confidence"),
-        help_text=tdt("Defaults to 0.9."),
+        help_text=tdt("Defaults to 0.9 if unset"),
     )
 
     def __str__(self):

@@ -43,6 +43,7 @@ def test_editor_helper_class_new_question():
 
     data = {
         "question_text": "Is this a test question?",
+        "disable_screening": "False",
         **add_prefix(
             fs_prefix,
             {"TOTAL_FORMS": 2, "INITIAL_FORMS": 0},
@@ -115,7 +116,7 @@ def test_question_editor_saves_disable_screening(adapter, question_model):
         parent=question_model(review=review),
         data={
             "question_text": "Should this question affect filtering?",
-            "disable_screening": "on",
+            "disable_screening": "True",
             **add_prefix("options", {"TOTAL_FORMS": 1, "INITIAL_FORMS": 0}),
             **add_formset_prefix(
                 "options",
@@ -136,7 +137,11 @@ def test_question_editor_saves_disable_screening(adapter, question_model):
     assert question.disable_screening is True
 
     edit_form = adapter.FormClass(
-        {"question_text": question.question_text}, instance=question
+        {
+            "question_text": question.question_text,
+            "disable_screening": "False",
+        },
+        instance=question,
     )
     assert edit_form.is_valid()
     assert edit_form.save().disable_screening is False
@@ -159,7 +164,11 @@ def test_question_confidence_is_optional_bounded_and_saved(
     assert "review-level confidence, which defaults to 0.9" in field.help_text
 
     form = form_class(
-        {"question_text": "Question", "confidence": "0.75"},
+        {
+            "question_text": "Question",
+            "disable_screening": "False",
+            "confidence": "0.75",
+        },
         instance=question_model(review=ReviewFactory()),
     )
     assert form.is_valid()
@@ -167,7 +176,11 @@ def test_question_confidence_is_optional_bounded_and_saved(
 
     for value in ("-0.1", "1.1"):
         invalid_form = form_class(
-            {"question_text": "Question", "confidence": value}
+            {
+                "question_text": "Question",
+                "disable_screening": "False",
+                "confidence": value,
+            }
         )
         assert not invalid_form.is_valid()
         assert "confidence" in invalid_form.errors
@@ -184,6 +197,7 @@ def test_editor_helper_class_modify_question():
 
     data = {
         "question_text": "Is this a modified test question?",
+        "disable_screening": "False",
         **add_prefix(
             fs_prefix,
             {"TOTAL_FORMS": 2, "INITIAL_FORMS": 1},
@@ -298,7 +312,7 @@ def test_edit_l1_question_updates_existing_l2_mirror():
         adapter=L1FormsetAdapter,
         data={
             "question_text": "Updated question",
-            "disable_screening": "on",
+            "disable_screening": "True",
             **add_prefix("options", {"TOTAL_FORMS": 1, "INITIAL_FORMS": 1}),
             **add_formset_prefix(
                 "options",
@@ -342,6 +356,7 @@ def test_l1_option_soft_deletion_syncs_to_l2():
         adapter=L1FormsetAdapter,
         data={
             "question_text": question.question_text,
+            "disable_screening": "False",
             **add_prefix("options", {"TOTAL_FORMS": 1, "INITIAL_FORMS": 1}),
             **add_formset_prefix(
                 "options",
@@ -370,7 +385,11 @@ def test_l1_option_soft_deletion_syncs_to_l2():
 def test_l1_question_soft_deletion_syncs_to_l2():
     question = L1ScreeningQuestionFactory()
     form = L1FormsetAdapter.FormClass(
-        {"question_text": question.question_text}, instance=question
+        {
+            "question_text": question.question_text,
+            "disable_screening": "False",
+        },
+        instance=question,
     )
     assert form.is_valid()
     form.save()
@@ -434,6 +453,7 @@ def test_editor_new_invalid_data():
 
     data = {
         "question_text": "Is this a test question?",
+        "disable_screening": "False",
         **add_prefix(
             fs_prefix,
             {"TOTAL_FORMS": 1, "INITIAL_FORMS": 0},
@@ -577,6 +597,7 @@ def test_mirrored_l2_question_is_hidden_and_cannot_be_edited(
             url,
             {
                 "question_text": "Changed",
+                "disable_screening": "False",
                 "options-TOTAL_FORMS": 0,
                 "options-INITIAL_FORMS": 0,
             },
@@ -735,6 +756,7 @@ def test_add_l1_question_modal_saves_valid_data(
     url = reverse("add_l1_question", args=[review.pk])
     data = {
         "question_text": "Is this a test question?",
+        "disable_screening": "False",
         **add_prefix("options", {"TOTAL_FORMS": 2, "INITIAL_FORMS": 0}),
         **add_formset_prefix(
             "options",
@@ -782,6 +804,7 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
     url = reverse("add_l1_question", args=[review.pk])
     data = {
         "question_text": "Is this a test question?",
+        "disable_screening": "False",
         **add_prefix("options", {"TOTAL_FORMS": 1, "INITIAL_FORMS": 0}),
         **add_formset_prefix(
             "options",
