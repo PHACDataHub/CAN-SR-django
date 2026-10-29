@@ -28,6 +28,8 @@ from .logging import configure_project_logging
 
 GROBID_URL = config("GROBID_URL", default="")
 
+UNPAYWALL_EMAIL = config("UNPAYWALL_EMAIL", None)
+
 # During tests, modify settings or monkeypatch things
 IS_RUNNING_PYTESTS = False
 if "test" in sys.argv or "pytest" in " ".join(sys.argv):
