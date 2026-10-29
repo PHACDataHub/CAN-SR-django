@@ -207,6 +207,9 @@ class CitationDatasetImporter:
                         abstract=self._get_special_value(
                             values, column_specs["abstract_index"]
                         ),
+                        doi=self._get_special_value(
+                            values, column_specs["doi_index"]
+                        ),
                         data={
                             column_spec["name"]: values[column_spec["index"]]
                             for column_spec in column_specs["data_columns"]
@@ -223,7 +226,7 @@ class CitationDatasetImporter:
         )
 
     def _get_column_specs(self, column_names):
-        special_indices = {"title": None, "abstract": None}
+        special_indices = {"title": None, "abstract": None, "doi": None}
         data_columns = []
 
         used_names = set()
@@ -253,6 +256,7 @@ class CitationDatasetImporter:
         return {
             "title_index": special_indices["title"],
             "abstract_index": special_indices["abstract"],
+            "doi_index": special_indices["doi"],
             "data_columns": data_columns,
         }
 

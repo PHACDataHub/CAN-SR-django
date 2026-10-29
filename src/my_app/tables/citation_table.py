@@ -44,6 +44,7 @@ class CitationDatasetTableDef(ReviewTableDef):
                 "title", tdt("Title"), sort_field="title"
             ),
             AbbreviatedAttributeColumn("abstract", tdt("Abstract")),
+            AbbreviatedAttributeColumn("doi", tdt("DOI")),
         ]
 
     def get_columns(self):
