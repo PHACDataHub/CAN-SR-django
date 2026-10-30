@@ -82,6 +82,8 @@ def test_answer_modal_states(vanilla_client, stage, case):
 )
 def test_citation_modal_stage_and_details(vanilla_client, stage, expected):
     data = create_answer_case("l1", "multiple-humans")
+    data.citation.doi = "10.1234/example"
+    data.citation.save(update_fields=["doi"])
     parameter = ParameterFactory(review=data.review, name="Study setting")
     ParameterExtractionResultFactory(
         citation=data.citation,
@@ -112,6 +114,18 @@ def test_citation_modal_stage_and_details(vanilla_client, stage, expected):
     ] == [expected]
     text = soup.get_text(" ", strip=True)
     assert data.citation.title in text and data.citation.abstract in text
+    assert data.citation.doi in text
+    assert not any(
+        heading.get_text(strip=True) == "DOI"
+        for heading in soup.select("h1, h2, h3, h4, h5, h6")
+    )
+    doi_label = soup.find("dt", string="DOI")
+    assert doi_label.parent.find("dt") == doi_label
+    assert (
+        doi_label.find_next_sibling("dd").get_text(strip=True)
+        == data.citation.doi
+    )
+    assert doi_label.find_parent("details").has_attr("open")
     assert text.index("Population") < text.index("Authors")
     assert "Community clinics" in text and "Primary care clinics" in text
     assert "Screening status" in text

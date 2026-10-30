@@ -122,6 +122,48 @@ def test_build_citation_dataset_from_source_rolls_back_on_row_length_mismatch():
     assert CitationDataset.objects.filter(review=review).count() == 0
 
 
+@pytest.mark.parametrize(
+    "content,format",
+    [
+        (
+            "title,abstract, DOI ,year\nFirst,Summary,10.1234/example,2020\n"
+            "Second,Summary,,2021\n",
+            "csv",
+        ),
+        (
+            "TY  - JOUR\nTI  - First\nAB  - Summary\n"
+            "DO  - 10.1234/example\nPY  - 2020\nER  - \n"
+            "TY  - JOUR\nTI  - Second\nAB  - Summary\n"
+            "PY  - 2021\nER  - \n",
+            "ris",
+        ),
+    ],
+)
+def test_import_stores_optional_doi_as_static_field(content, format):
+    from my_app.model_factories import ReviewFactory
+
+    result = import_citation_dataset(ReviewFactory(), content, format=format)
+    first, second = result.dataset.rows.all()
+
+    assert first.doi == "10.1234/example"
+    assert second.doi == ""
+    assert "doi" not in first.data
+    assert result.dataset.columns.filter(name="year").exists()
+    assert not result.dataset.columns.filter(name__iexact="doi").exists()
+    assert result.column_count == result.dataset.columns.count()
+
+
+def test_import_rejects_duplicate_doi_mappings():
+    from my_app.model_factories import ReviewFactory
+
+    with pytest.raises(ValueError, match="same dataset column"):
+        import_citation_dataset(
+            ReviewFactory(),
+            "identifier,other\nfirst,second\n",
+            mappings=["doi", "DOI"],
+        )
+
+
 example_csv = """title,year,abstract,month,day
 First citation,2020,An abstract,January,1
 Second citation,2021,Another abstract,February,2
@@ -270,6 +312,7 @@ def test_citation_upload_creates_dataset_and_redirects(
     assert [row.order for row in rows] == [1, 2]
     assert rows[0].title == "First citation"
     assert rows[0].abstract == ""
+    assert rows[0].doi == ""
     assert rows[0].data == {"year": "2020"}
     assert f"citation_import_{review.id}" not in vanilla_user_client.session
 
@@ -367,6 +410,48 @@ def test_citation_upload_appends_with_mapping_and_exclusion(
     assert second.title == "Second"
     assert second.data == {"year": "2021", "comment": "note"}
     assert f"citation_import_{review.id}" not in vanilla_user_client.session
+
+
+@pytest.mark.parametrize("header", ["DOI", "identifier"])
+def test_citation_mapping_supports_doi(vanilla_user_client, header):
+    from my_app.model_factories import (
+        CitationDatasetColumnFactory,
+        CitationDatasetFactory,
+    )
+
+    dataset = CitationDatasetFactory()
+    CitationDatasetColumnFactory(dataset=dataset, name="year")
+    review = dataset.review
+    mapping_url = reverse("citation_upload_mapping", args=[review.pk])
+    with patch_rules(can_access_review=True):
+        vanilla_user_client.post(
+            reverse("citation_upload", args=[review.pk]),
+            {
+                "format": "csv",
+                "citation_file": SimpleUploadedFile(
+                    "citations.csv",
+                    f"title,abstract,{header}\nFirst,Summary,10.1234/example\n".encode(),
+                ),
+            },
+        )
+        response = vanilla_user_client.get(mapping_url)
+        form = response.context["formset"].forms[2]
+        assert ("doi", "DOI") in form.fields["existing_column"].choices
+        if header == "DOI":
+            assert form["existing_column"].value() == "doi"
+        response = submit_mappings(
+            vanilla_user_client,
+            review,
+            ["title", "abstract", header],
+            **{"form-2-existing_column": "doi"},
+        )
+
+    assert response.status_code == 200
+    citation = dataset.rows.get()
+    assert citation.doi == "10.1234/example"
+    assert citation.data == {}
+    assert "10.1234/example" in response.content.decode()
+    assert list(dataset.columns.values_list("name", flat=True)) == ["year"]
 
 
 def test_citation_mapping_rejects_duplicate_targets_and_preserves_file(

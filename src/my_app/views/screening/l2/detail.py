@@ -11,6 +11,7 @@ from my_app.views.pdf_components import (
     DocumentWorkflowCitationPanel,
     PdfPanel,
     PdfViewerAssets,
+    PdfViewerData,
     PdfWorkflowPageContent,
 )
 from my_app.views.screening.components import CitationScreeningProgressNav
@@ -75,7 +76,8 @@ class L2PdfScreeningPage(BasePageTemplate):
 
         return PdfWorkflowPageContent(
             refresh_url=self.request.get_full_path(),
-            assets=PdfViewerAssets(
+            assets=PdfViewerAssets(),
+            viewer_data=PdfViewerData(
                 citation_row,
                 review,
                 data_id="l2-citation-data",

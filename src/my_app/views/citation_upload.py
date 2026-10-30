@@ -144,6 +144,7 @@ class ColumnMappingForm(StandardFormMixin):
             ("", tdt("Create by name")),
             ("title", tdt("Title")),
             ("abstract", tdt("Abstract")),
+            ("doi", tdt("DOI")),
             *[
                 (f"column:{column.id}", column.name)
                 for column in existing_columns
@@ -184,7 +185,7 @@ class ColumnMappingForm(StandardFormMixin):
         if not data["include"]:
             return None
         selected = data["existing_column"]
-        if selected in ("title", "abstract"):
+        if selected in ("title", "abstract", "doi"):
             return selected
         if selected:
             return self.existing_columns[selected]
@@ -226,7 +227,7 @@ class CitationMappingPage(BasePageTemplate):
             ],
             h.div(".text-muted")[
                 tdt(
-                    "Choose an existing column or create one by name for each uploaded column. Title and abstract are stored separately."
+                    "Choose an existing column or create one by name for each uploaded column. Title, abstract and DOI are stored separately"
                 )
             ],
             h.div(".alert.alert-warning.p-1.fw-bold")[
@@ -447,6 +448,7 @@ class CitationMappingView(
         if self.existing_columns:
             existing_by_name["title"] = "title"
             existing_by_name["abstract"] = "abstract"
+            existing_by_name["doi"] = "doi"
         return [
             {
                 "name": name,
