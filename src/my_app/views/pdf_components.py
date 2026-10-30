@@ -18,6 +18,7 @@ from my_app.models import (
     TextExtractionResult,
 )
 from my_app.pdf.text_extraction.evidence import group_evidence_sentences
+from my_app.services.doi_pdf_service import is_doi_pdf_configured
 from my_app.views.screening.refresh import (
     WorkflowRefreshButton,
     workflow_refresh_attrs,
@@ -458,6 +459,7 @@ def DoiPdfDownloadControl(citation_row, review, *, error=None):
     status_reason = None
     button = None
     has_doi = bool(citation_row.doi.strip())
+    configured = is_doi_pdf_configured()
     if status == PdfFromDOIRequest.Status.PENDING:
         status_message = tdt("PDF download in progress")
     else:
@@ -482,10 +484,12 @@ def DoiPdfDownloadControl(citation_row, review, *, error=None):
             ]
         if not has_doi and error is None:
             error = tdt("A DOI is required for automatic PDF download.")
+        if not configured and error is None:
+            error = tdt("Automatic PDF download is not configured.")
         button = h.button(
             ".btn.btn-outline-primary.btn-sm",
             type="button",
-            disabled=not has_doi,
+            disabled=not has_doi or not configured,
             hx_post=reverse(
                 "citation_download_pdf_from_doi",
                 args=[review.pk, citation_row.pk],

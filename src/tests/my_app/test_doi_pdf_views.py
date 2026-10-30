@@ -23,6 +23,63 @@ pytestmark = pytest.mark.view
 DETAIL_ROUTES = ["l2_citation_detail", "parameter_extraction_citation_detail"]
 
 
+@pytest.fixture(autouse=True)
+def doi_pdf_settings(settings):
+    settings.UNPAYWALL_EMAIL = "contact@example.org"
+    settings.OPENALEX_API_KEY = None
+
+
+@pytest.mark.parametrize("route", DETAIL_ROUTES)
+@pytest.mark.parametrize(
+    "email,key,enabled",
+    [
+        (None, None, False),
+        ("", "", False),
+        ("   ", "   ", False),
+        ("contact@example.org", None, True),
+        (None, "test-openalex-key", True),
+        ("contact@example.org", "test-openalex-key", True),
+    ],
+)
+def test_download_button_requires_a_configured_provider(
+    vanilla_client, settings, route, email, key, enabled
+):
+    settings.UNPAYWALL_EMAIL = email
+    settings.OPENALEX_API_KEY = key
+    citation = CitationFactory(doi="10.1234/example")
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.get(
+            reverse(route, args=[citation.dataset.review_id, citation.pk])
+        )
+    assert response.status_code == 200
+    control = soup_from_str(response.content).find(
+        id=f"doi-pdf-download-control-{citation.pk}"
+    )
+    assert control.find("button").has_attr("disabled") == (not enabled)
+    assert ("Automatic PDF download is not configured." in control.text) == (
+        not enabled
+    )
+
+
+def test_unconfigured_download_post_does_not_queue(vanilla_client, settings):
+    settings.UNPAYWALL_EMAIL = None
+    settings.OPENALEX_API_KEY = None
+    citation = CitationFactory(doi="10.1234/example")
+    with (
+        patch_rules(can_access_review=True),
+        patch.object(QueueDoiPdfService, "perform") as perform,
+    ):
+        response = vanilla_client.post(download_url(citation))
+    assert response.status_code == 200
+    assert (
+        "Automatic PDF download is not configured."
+        in response.content.decode()
+    )
+    assert soup_from_str(response.content).find("button").has_attr("disabled")
+    perform.assert_not_called()
+    assert not PdfFromDOIRequest.objects.filter(citation=citation).exists()
+
+
 def download_url(citation):
     return reverse(
         "citation_download_pdf_from_doi",

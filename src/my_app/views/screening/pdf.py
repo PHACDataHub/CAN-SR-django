@@ -16,9 +16,11 @@ from my_app.models import (
 )
 from my_app.router import route
 from my_app.services.doi_pdf_service import (
+    DoiPdfConfigurationError,
     DoiPdfError,
     PdfFromDOIAlreadyPendingError,
     QueueDoiPdfService,
+    is_doi_pdf_configured,
     log_doi_pdf_event,
 )
 from my_app.services.process_document import QueueProcessDocumentService
@@ -119,11 +121,22 @@ class CitationDoiPdfDownloadView(DocumentCitationMixin):
             )
             if citation.document_id is None:
                 try:
+                    if not is_doi_pdf_configured():
+                        log_doi_pdf_event(
+                            "frontend_download_not_configured",
+                            level=logging.WARNING,
+                            citation_id=citation.pk,
+                        )
+                        raise DoiPdfConfigurationError(
+                            tdt("Automatic PDF download is not configured.")
+                        )
                     QueueDoiPdfService(
                         citation, requesting_user=request.user
                     ).perform()
                 except PdfFromDOIAlreadyPendingError:
                     pass
+                except DoiPdfConfigurationError as exc:
+                    error = str(exc)
                 except (DoiPdfError, ValueError) as exc:
                     log_doi_pdf_event(
                         "frontend_doi_rejected",

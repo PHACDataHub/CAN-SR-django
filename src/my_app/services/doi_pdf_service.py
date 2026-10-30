@@ -45,6 +45,13 @@ PDF_FROM_DOI_TIMEOUT = (10, 30)
 PDF_FROM_DOI_MAX_SECONDS = 120
 
 
+def is_doi_pdf_configured():
+    return any(
+        (value or "").strip()
+        for value in (settings.UNPAYWALL_EMAIL, settings.OPENALEX_API_KEY)
+    )
+
+
 def redact_doi_pdf_error(error):
     message = re.sub(
         r"\?(?!<redacted>)[^\s'\"<>)]*", "?<redacted>", str(error)
