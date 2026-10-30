@@ -9,6 +9,7 @@ from django.core.management import CommandError, call_command
 from django.test import override_settings
 
 import pytest
+import requests
 
 from proj.util import MissingPreconditionError
 
@@ -58,6 +59,7 @@ PDF = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
 @pytest.fixture(autouse=True)
 def doi_settings(settings):
     settings.UNPAYWALL_EMAIL = "researcher@example.org"
+    settings.OPENALEX_API_KEY = None
     settings.STORAGES = {
         "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
         "staticfiles": {
@@ -97,6 +99,10 @@ def resolved_pdf():
         f"https://dx.doi.org/{DOI}",
         f"https://doi.org/{DOI}",
         f" DOI:{DOI.upper()} ",
+        f"dx.doi.org/{DOI}",
+        f"doi.org/{DOI}",
+        f"www.doi.org/{DOI}",
+        f" DX.DOI.ORG/{DOI.upper()} ",
     ],
 )
 def test_normalize_doi(value):
@@ -289,11 +295,14 @@ def test_dispatch_failure_marks_request_failed():
 
 def test_fulfills_request_and_attaches_new_document(resolved_pdf):
     citation, result = pending_request()
+    result.error = "Previous failure"
+    result.save()
     outcome = DoiPdfService(citation).perform()
     resolved_pdf.assert_called_once_with(citation.doi)
     citation.refresh_from_db()
     assert outcome.status == result.Status.FULFILLED
     assert outcome.selected_url == PDF_URL
+    assert outcome.error == ""
     assert citation.document.file.read() == PDF
 
 
@@ -374,6 +383,38 @@ def test_failed_download_keeps_existing_document_and_tries_next():
     assert get.call_count == 2
     assert outcome.status == result.Status.FULFILLED
     assert outcome.selected_url == PDF_URL
+
+
+@pytest.mark.parametrize("failure", ["http", "html", "connection"])
+def test_real_download_failures_advance_to_next_url(failure):
+    # Exercise the downloader's real exception conversion, rather than making
+    # the download helper itself raise DoiPdfError. HTML must not abort retries.
+    citation, result = pending_request()
+    first_url = "https://publisher.example/article.pdf"
+    first = mock_response(b"<html>JavaScript required</html>", url=first_url)
+    if failure == "http":
+        first.status_code = 403
+    elif failure == "connection":
+        first = requests.ConnectionError("Connection refused")
+    second = mock_response(PDF, url=PDF_URL)
+    with (
+        patch.object(
+            UnpaywallClient,
+            "iter_pdf_urls",
+            return_value=iter([first_url, PDF_URL]),
+        ),
+        patch("my_app.services.doi_pdf_service.validate_public_url"),
+        patch(
+            "my_app.services.doi_pdf_service.requests.get",
+            side_effect=[first, second],
+        ) as get,
+    ):
+        outcome = DoiPdfService(citation).perform()
+    assert get.call_count == 2
+    assert outcome.status == result.Status.FULFILLED
+    assert outcome.selected_url == PDF_URL
+    citation.refresh_from_db()
+    assert citation.document.file.read() == PDF
 
 
 def test_download_failures_are_capped_and_leave_old_content():
@@ -545,3 +586,45 @@ def test_check_command_reports_no_pdf():
     with patch.object(UnpaywallClient, "iter_pdf_urls", return_value=iter([])):
         with pytest.raises(CommandError, match="No open-access PDF URL"):
             call_command("check_doi_pdf_resolution")
+
+
+def test_check_command_downloads_and_tries_next_candidate():
+    urls = ["https://publisher.example/article.pdf", PDF_URL]
+    output = StringIO()
+
+    @contextmanager
+    def download(url):
+        if url == urls[0]:
+            raise DoiPdfError("The first URL returned HTML")
+        yield BytesIO(PDF)
+
+    with (
+        patch.object(
+            UnpaywallClient, "iter_pdf_urls", return_value=iter(urls)
+        ),
+        patch(
+            "my_app.management.commands.check_doi_pdf_resolution.download_pdf",
+            side_effect=download,
+        ) as get,
+    ):
+        call_command("check_doi_pdf_resolution", download=True, stdout=output)
+    assert get.call_count == 2
+    assert "PDF download check passed" in output.getvalue()
+    assert PDF_URL in output.getvalue()
+    assert urls[0] not in output.getvalue()
+
+
+def test_check_command_download_failures_are_capped():
+    urls = [f"https://publisher.example/{index}.pdf" for index in range(10)]
+    with (
+        patch.object(
+            UnpaywallClient, "iter_pdf_urls", return_value=iter(urls)
+        ),
+        patch(
+            "my_app.management.commands.check_doi_pdf_resolution.download_pdf",
+            side_effect=DoiPdfError("JavaScript required"),
+        ) as get,
+    ):
+        with pytest.raises(CommandError, match="JavaScript required"):
+            call_command("check_doi_pdf_resolution", download=True)
+    assert get.call_count == PDF_FROM_DOI_MAX_RETRIES

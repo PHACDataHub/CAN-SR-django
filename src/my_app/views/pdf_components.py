@@ -12,6 +12,7 @@ from my_app.models import (
     Citation,
     Document,
     FigureExtractionResult,
+    PdfFromDOIRequest,
     Review,
     ScreeningResultStatus,
     TextExtractionResult,
@@ -262,7 +263,7 @@ def DocumentWorkflowCitationRow(
     ]
 
 
-def PdfViewerAssets(
+def PdfViewerData(
     citation_row: Citation,
     review: Review,
     data_id: str,
@@ -280,14 +281,17 @@ def PdfViewerAssets(
             args=[review.id, citation_row.id],
         )
 
+    return h.template(
+        id=data_id,
+        data_citation_id=str(citation_row.id),
+        data_review_id=str(review.id),
+        data_pdf_url=pdf_url,
+        data_metadata_url=metadata_url,
+    )
+
+
+def PdfViewerAssets():
     return h.fragment[
-        h.template(
-            id=data_id,
-            data_citation_id=str(citation_row.id),
-            data_review_id=str(review.id),
-            data_pdf_url=pdf_url,
-            data_metadata_url=metadata_url,
-        ),
         h.script(
             src=static_no_cache("citation_pdf.js"),
             type="module",
@@ -333,6 +337,7 @@ def PdfWorkflowPageContent(
     *,
     refresh_url,
     assets,
+    viewer_data,
     breadcrumbs,
     title,
     progress_navigation,
@@ -352,6 +357,7 @@ def PdfWorkflowPageContent(
             hx_swap="morph:outerHTML",
             **workflow_refresh_attrs(refresh_url),
         )[
+            viewer_data,
             progress_navigation,
             h.div(".row.g-4.citation-workflow-layout", hx_sync="body:replace")[
                 h.div(".col-lg-9")[pdf_panel],
@@ -380,14 +386,29 @@ def DocumentWorkflowCitationPanel(
         figure_extraction_badge = NotStartedBadge()
 
     document = citation_row.document
+
+    citation_modal_url = reverse(
+        "citation_detail_modal", args=[citation_row.pk]
+    )
+
     return h.section(".border.rounded.p-3.bg-body-tertiary")[
-        h.h2(".h5.mb-3")[tdt("Citation")],
+        h.div(".d-flex.justify-content-between.align-items-center.mb-3")[
+            h.h2(".h5.mb-0")[tdt("Citation")],
+            h.button(
+                ".btn.btn-outline-primary.btn-sm",
+                type="button",
+                hx_get=citation_modal_url,
+                hx_target="#modal-slot",
+                hx_swap="innerHTML",
+            )[tdt("Details")],
+        ],
         h.div(
             ".fw-semibold",
             title=citation_row.title or None,
         )[Truncator(citation_row.title or tdt("Untitled citation")).chars(60)],
         h.div(".vstack.gap-2.mt-3.small")[
             DocumentUploadControl(citation_row, review),
+            DoiPdfDownloadControl(citation_row, review),
             DocumentExtractionControl(
                 citation_row,
                 review,
@@ -420,6 +441,66 @@ def DocumentUploadControl(citation_row, review):
             if citation_row.document is None
             else None
         ),
+    ]
+
+
+def DoiPdfDownloadControl(citation_row, review, *, error=None):
+    control_id = f"doi-pdf-download-control-{citation_row.pk}"
+    if citation_row.document_id is not None:
+        return h.div(id=control_id)
+
+    result = getattr(citation_row, "pdf_from_doi_request", None)
+    status = None
+    if result is not None:
+        status = result.status
+
+    status_message = None
+    status_reason = None
+    button = None
+    has_doi = bool(citation_row.doi.strip())
+    if status == PdfFromDOIRequest.Status.PENDING:
+        status_message = tdt("PDF download in progress")
+    else:
+        if status == PdfFromDOIRequest.Status.FAILED:
+            status_message = tdt(
+                "PDF download failed. Try again or upload a PDF."
+            )
+        elif status == PdfFromDOIRequest.Status.CANCELED:
+            status_message = tdt("PDF download was canceled.")
+        if (
+            status
+            in (
+                PdfFromDOIRequest.Status.FAILED,
+                PdfFromDOIRequest.Status.CANCELED,
+            )
+            and result.error
+        ):
+            status_reason = h.div(".text-break")[
+                tdt("Reason"),
+                ": ",
+                result.error,
+            ]
+        if not has_doi and error is None:
+            error = tdt("A DOI is required for automatic PDF download.")
+        button = h.button(
+            ".btn.btn-outline-primary.btn-sm",
+            type="button",
+            disabled=not has_doi,
+            hx_post=reverse(
+                "citation_download_pdf_from_doi",
+                args=[review.pk, citation_row.pk],
+            ),
+            hx_target=f"#{control_id}",
+            hx_swap="outerHTML",
+            hx_disabled_elt="this",
+        )[tdt("Auto-download PDF")]
+
+    return h.div(".vstack.gap-2", id=control_id)[
+        h.div(role="status", aria_live="polite")[
+            status_message, status_reason
+        ],
+        h.div(".text-danger", role="alert")[error],
+        button,
     ]
 
 

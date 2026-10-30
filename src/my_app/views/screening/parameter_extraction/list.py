@@ -19,6 +19,7 @@ from my_app.views.pdf_components import (
     DocumentWorkflowCitationRow,
     PdfPanel,
     PdfViewerAssets,
+    PdfViewerData,
     PdfWorkflowPageContent,
     render_pdf_detail_link,
     render_pdf_modal_button,
@@ -247,7 +248,8 @@ class ParameterExtractionPdfPage(BasePageTemplate):
 
         return PdfWorkflowPageContent(
             refresh_url=self.request.get_full_path(),
-            assets=PdfViewerAssets(
+            assets=PdfViewerAssets(),
+            viewer_data=PdfViewerData(
                 citation_row,
                 review,
                 data_id="parameter-extraction-citation-data",

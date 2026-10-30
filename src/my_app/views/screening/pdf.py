@@ -1,8 +1,11 @@
+import logging
+
 from django import forms
 from django.core.validators import FileExtensionValidator
 from django.http import FileResponse, HttpResponse
 
 from my_app.models import (
+    Citation,
     Document,
     L1ScreeningResult,
     L2ScreeningQuestion,
@@ -12,10 +15,17 @@ from my_app.models import (
     ParameterExtractionResult,
 )
 from my_app.router import route
+from my_app.services.doi_pdf_service import (
+    DoiPdfError,
+    PdfFromDOIAlreadyPendingError,
+    QueueDoiPdfService,
+    log_doi_pdf_event,
+)
 from my_app.services.process_document import QueueProcessDocumentService
 from my_app.views.pdf_components import (
     CitationDocumentUploadModal as BaseCitationDocumentUploadModal,
 )
+from my_app.views.pdf_components import DoiPdfDownloadControl
 from my_app.views.screening.document_util_components import (
     DocumentCitationMixin,
 )
@@ -88,6 +98,51 @@ class CitationDocumentPdfView(DocumentCitationMixin):
             content_type="application/pdf",
             as_attachment=False,
             filename=document_file.name,
+        )
+
+
+@route(
+    "/reviews/<int:review_id>/citations/<int:row_pk>/document/download-from-doi/",
+    name="citation_download_pdf_from_doi",
+)
+class CitationDoiPdfDownloadView(DocumentCitationMixin):
+    def post(self, request, *args, **kwargs):
+        error = None
+        log_doi_pdf_event(
+            "frontend_download_requested",
+            citation_id=self.citation_row.pk,
+            requesting_user_id=request.user.pk,
+        )
+        with transaction.atomic():
+            citation = Citation.objects.select_for_update().get(
+                pk=self.citation_row.pk
+            )
+            if citation.document_id is None:
+                try:
+                    QueueDoiPdfService(
+                        citation, requesting_user=request.user
+                    ).perform()
+                except PdfFromDOIAlreadyPendingError:
+                    pass
+                except (DoiPdfError, ValueError) as exc:
+                    log_doi_pdf_event(
+                        "frontend_doi_rejected",
+                        level=logging.WARNING,
+                        citation_id=citation.pk,
+                        error=str(exc),
+                    )
+                    error = tdt(
+                        "A valid DOI is required for automatic PDF download."
+                    )
+            else:
+                log_doi_pdf_event(
+                    "frontend_pdf_already_attached",
+                    citation_id=citation.pk,
+                    document_id=citation.document_id,
+                )
+        citation.refresh_from_db()
+        return HttpResponse(
+            str(DoiPdfDownloadControl(citation, self.review, error=error))
         )
 
 
