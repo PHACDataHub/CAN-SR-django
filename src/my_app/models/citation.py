@@ -333,6 +333,7 @@ class Citation(models.Model):
     abstract = fields.TextField(
         blank=True, default="", verbose_name=tdt("Abstract")
     )
+    doi = fields.TextField(blank=True, default="", verbose_name=tdt("DOI"))
     data = models.JSONField(default=dict, blank=True, verbose_name=tdt("Data"))
     order = fields.IntegerField(verbose_name=tdt("Insertion order"))
 
@@ -351,7 +352,9 @@ class Citation(models.Model):
     def serialize_for_prompt(self, columns: List[CitationDatasetColumn]):
         # could be used to flexibly include different columns in the prompt
         column_data = [
-            (col.name, self.data.get(col.name, "")) for col in columns
+            (col.name, self.data.get(col.name, ""))
+            for col in columns
+            if col.name.strip().casefold() != "doi"
         ]
         included_data = [
             ("Title", self.title),

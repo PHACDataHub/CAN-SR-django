@@ -20,6 +20,7 @@ from my_app.models import (
     ParameterExtractionResult,
     ParameterHumanAnswer,
     ParameterOption,
+    PdfFromDOIRequest,
     Review,
     ReviewUserLink,
     ScreeningResultStatus,
@@ -98,6 +99,13 @@ class CitationFactory(factory.django.DjangoModelFactory):
     order = factory.Sequence(lambda n: n + 1)
     title = factory.LazyAttribute(lambda obj: f"Citation {obj.order}")
     abstract = factory.Faker("sentence")
+
+
+class PdfFromDOIRequestFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = PdfFromDOIRequest
+
+    citation = factory.SubFactory(CitationFactory, doi="10.1234/example")
 
 
 class L1ScreeningQuestionFactory(factory.django.DjangoModelFactory):

@@ -47,7 +47,12 @@ class PlainConsoleRenderer:
     def __call__(self, wrapped_logger, name, event_dict):
         level = event_dict["level"].upper()
         logger_name = event_dict["logger"]
-        return f"{level}:{logger_name}:{event_dict['event']}"
+        message = f"{level}:{logger_name}:{event_dict['event']}"
+        for key in ("exception", "stack"):
+            detail = event_dict.get(key)
+            if detail:
+                message += f"\n{detail}"
+        return message
 
 
 def configure_project_logging(is_local_dev=False):

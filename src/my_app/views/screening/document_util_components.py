@@ -23,6 +23,7 @@ def document_citations_for_review(review, stage=None):
         "document",
         "document__text_extraction_result",
         "document__figure_extraction_result",
+        "pdf_from_doi_request",
     ).order_by("order", "id")
 
 

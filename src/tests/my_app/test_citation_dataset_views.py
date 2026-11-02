@@ -113,6 +113,7 @@ def test_dataset_table_defaults_and_available_columns(
     assert [column.key for column in table.enabled_columns] == [
         "title",
         "abstract",
+        "doi",
     ]
     dataset_keys = {
         f"dataset_{column.pk}"
@@ -122,6 +123,7 @@ def test_dataset_table_defaults_and_available_columns(
         "id",
         "title",
         "abstract",
+        "doi",
         *dataset_keys,
     }
     assert not table.filter_forms

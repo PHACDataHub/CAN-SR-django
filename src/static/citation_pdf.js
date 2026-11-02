@@ -2,8 +2,12 @@ const PDFJS_VERSION = '4.10.38';
 const PDFJS_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.mjs`;
 const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.mjs`;
 
-const dataElement = document.querySelector('[data-pdf-url], [data-metadata-url]');
-const args = dataElement ? dataElement.dataset : {};
+function pdfViewerArgs() {
+    const dataElement = document.querySelector('template[data-citation-id]');
+    return dataElement ? dataElement.dataset : {};
+}
+
+let args = pdfViewerArgs();
 const pagesElement = document.getElementById('citation-pdf-pages');
 const scrollElement = document.getElementById('citation-pdf-scroll');
 const statusElement = document.getElementById('citation-pdf-status');
@@ -24,6 +28,7 @@ document.body.addEventListener('citations-update', () => {
 
 document.body.addEventListener('htmx:afterSettle', (event) => {
     if (event.detail.elt?.id === 'workflow-detail-component') {
+        args = pdfViewerArgs();
         refreshEvidenceMetadata();
     }
 });
@@ -273,11 +278,15 @@ async function initializePdfViewer() {
             import(PDFJS_URL),
             fetch(args.metadataUrl),
         ]);
-        if (!metadataResponse.ok) {
+        if (!metadataResponse.ok && metadataResponse.status !== 404) {
             throw new Error(`Metadata request failed with status ${metadataResponse.status}`);
         }
 
-        metadata = await metadataResponse.json();
+        if (metadataResponse.status === 404) {
+            metadata = {pages: [], highlights: []};
+        } else {
+            metadata = await metadataResponse.json();
+        }
         evidenceSignature = signature;
         pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
         pdfDocument = await pdfjsLib.getDocument(args.pdfUrl).promise;

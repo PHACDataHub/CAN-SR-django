@@ -100,6 +100,29 @@ def test_screening_prompt_builder():
     )
 
 
+@pytest.mark.parametrize("legacy_name", [None, "doi", "DOI"])
+def test_screening_prompt_excludes_doi(legacy_name):
+    _, dataset, row, question, *options = _build_screening_prompt_context()
+    row.doi = "10.1234/static"
+    if legacy_name:
+        column = CitationDatasetColumn.objects.create(
+            dataset=dataset, name=legacy_name
+        )
+        dataset.screening_columns.add(column)
+        row.data[legacy_name] = "10.1234/legacy"
+    row.save()
+
+    prompt = L1ScreeningPromptBuilder(
+        question=question, options=options, citation=row
+    ).build_str()
+
+    assert "10.1234/static" not in prompt
+    assert "10.1234/legacy" not in prompt
+    assert "Title: Test Title" in prompt
+    assert "Abstract: Test Abstract" in prompt
+    assert "custom_col1: Custom Value 1" in prompt
+
+
 def test_handlebars_prompt_preserves_content_and_removes_comments():
     prompt = render_prompt(
         "l1_screening_prompt.hbs",

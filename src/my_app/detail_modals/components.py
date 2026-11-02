@@ -700,14 +700,15 @@ def CitationDetails(citation, stage):
                 ],
             ]
         ],
-        h.details(".border.rounded.p-3.mb-3")[
+        h.details(".border.rounded.p-3.mb-3", open=True)[
             h.summary(".fw-semibold")[tdt("Citation fields")],
             h.p(".small.text-muted.mt-2")[
-                tdt("Fields used in L1 screening appear first.")
+                tdt("Fields used in L1 screening are marked.")
             ],
-            (
-                DefinitionList(
-                    [
+            DefinitionList(
+                [
+                    (tdt("DOI"), citation.doi or tdt("Not provided")),
+                    *[
                         (
                             name,
                             h.fragment[
@@ -722,10 +723,8 @@ def CitationDetails(citation, stage):
                             ],
                         )
                         for name, value in fields
-                    ]
-                )
-                if fields
-                else h.p[tdt("No additional fields.")]
+                    ],
+                ]
             ),
         ],
         ScreeningSection(citation, "l1", stage == "l1"),
