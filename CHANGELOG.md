@@ -5,6 +5,13 @@ skip the technical section; it records maintenance and development work.
 
 See our [user-facing-issues](https://github.com/PHACDataHub/CAN-SR-django/issues?q=is%3Aissue+state%3Aopen+label%3Auser-facing) for a list of open user-facing features and bugs that we're already aware of. 
 
+## [3.0.0](https://github.com/PHACDataHub/CAN-SR-django/compare/v2.1.0...v3.0.0) (2026-11-02)
+
+
+### User-facing changes
+
+* add doi field, auto PDF downloads ([#83](https://github.com/PHACDataHub/CAN-SR-django/issues/83)) ([201ac59](https://github.com/PHACDataHub/CAN-SR-django/commit/201ac590eb3658517df5e7c90cca763b0f01e9cf))
+
 ## [2.1.0](https://github.com/PHACDataHub/CAN-SR-django/compare/v2.0.0...v2.1.0) (2026-10-26)
 
 
