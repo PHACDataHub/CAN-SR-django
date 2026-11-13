@@ -964,8 +964,9 @@ class DoiPdfService:
                 citation.document = document
                 stage = "link_citation"
                 citation.save(update_fields=["document"])
-                stage = "clear_downstream_results"
-                self.clear_downstream_results(citation, document)
+                if initial_document_id is not None:
+                    stage = "clear_downstream_results"
+                    self.clear_downstream_results(citation, document)
                 result.selected_url = url
                 result.status = result.Status.FULFILLED
                 result.error = ""
