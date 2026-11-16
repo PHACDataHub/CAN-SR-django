@@ -2,7 +2,9 @@ import logging
 
 from django import forms
 from django.core.validators import FileExtensionValidator
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
+
+from proj.util import MissingPreconditionError
 
 from my_app.models import (
     Citation,
@@ -13,17 +15,22 @@ from my_app.models import (
     L2ScreeningResult,
     Parameter,
     ParameterExtractionResult,
+    PdfFromDOIRequest,
 )
 from my_app.router import route
 from my_app.services.doi_pdf_service import (
     DoiPdfConfigurationError,
     DoiPdfError,
     PdfFromDOIAlreadyPendingError,
+    PendingDocumentProcessingError,
     QueueDoiPdfService,
+    delete_stored_file,
+    ensure_no_pending_processing,
     is_doi_pdf_configured,
     log_doi_pdf_event,
 )
 from my_app.services.process_document import QueueProcessDocumentService
+from my_app.views.delete_confirmation import DeleteConfirmation
 from my_app.views.pdf_components import (
     CitationDocumentUploadModal as BaseCitationDocumentUploadModal,
 )
@@ -157,6 +164,90 @@ class CitationDoiPdfDownloadView(DocumentCitationMixin):
         return HttpResponse(
             str(DoiPdfDownloadControl(citation, self.review, error=error))
         )
+
+
+@route(
+    "/reviews/<int:review_id>/citations/<int:row_pk>/document/<int:document_id>/delete/",
+    name="citation_delete_pdf",
+)
+class CitationDocumentDeleteView(DocumentCitationMixin):
+    def render_confirmation(self, *, error=None):
+        return HttpResponse(
+            DeleteConfirmation(
+                tdt("Delete PDF"),
+                tdt(
+                    "This will delete the PDF, its extracted text, figures and tables, "
+                    "and the AI results for L2 screening and parameter extraction. "
+                    "The citation, L1 results and human answers will be kept."
+                ),
+                self.request.path,
+                error=error,
+            )
+        )
+
+    def get(self, *args, **kwargs):
+        if self.citation_row.document_id != self.kwargs["document_id"]:
+            raise Http404
+        return self.render_confirmation()
+
+    def post(self, *args, **kwargs):
+        try:
+            with transaction.atomic():
+                self.delete_document()
+        except PendingDocumentProcessingError:
+            return self.render_confirmation(
+                error=tdt(
+                    "Wait for processing to finish before deleting the PDF."
+                )
+            )
+        except MissingPreconditionError as exc:
+            return self.render_confirmation(error=str(exc))
+        return HttpResponse(
+            headers={"HX-Trigger": "citations-update", "HX-Reswap": "none"}
+        )
+
+    def delete_document(self):
+        citation = Citation.objects.select_for_update().get(
+            pk=self.citation_row.pk
+        )
+        if citation.document_id != self.kwargs["document_id"]:
+            raise MissingPreconditionError(
+                tdt("The attached PDF has changed.")
+            )
+
+        document = Document.objects.select_for_update().get(
+            pk=citation.document_id
+        )
+        if document.citations.exclude(pk=citation.pk).exists():
+            raise MissingPreconditionError(
+                tdt(
+                    "This PDF is shared by another citation and cannot be deleted here."
+                )
+            )
+        if PdfFromDOIRequest.objects.filter(
+            citation=citation, status=PdfFromDOIRequest.Status.PENDING
+        ).exists():
+            raise MissingPreconditionError(
+                tdt(
+                    "Wait for the PDF download to finish before deleting the PDF."
+                )
+            )
+        ensure_no_pending_processing(citation)
+
+        files = [
+            document.file,
+            *(figure.file for figure in document.documentfigures.all()),
+        ]
+        L2ScreeningResult.objects.filter(citation=citation).delete()
+        ParameterExtractionResult.objects.filter(citation=citation).delete()
+        document.delete()
+        for file in files:
+            if file.name:
+                transaction.on_commit(
+                    lambda storage=file.storage, name=file.name: delete_stored_file(
+                        storage, name, reason="deleted_document_file"
+                    )
+                )
 
 
 @route(

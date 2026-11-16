@@ -29,6 +29,7 @@ from my_app.queries import (
     ActiveParameterOptionByParentFetcher,
 )
 from my_app.router import route
+from my_app.views.delete_confirmation import DeleteConfirmation
 from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
     BasePageTemplate,
@@ -149,6 +150,10 @@ class L1FormsetAdapter(FormsetAdapter):
     def get_edit_url(obj):
         return reverse("edit_l1_question", args=[obj.review_id, obj.pk])
 
+    @staticmethod
+    def get_delete_url(obj):
+        return reverse("delete_l1_question", args=[obj.review_id, obj.pk])
+
 
 class L2FormsetAdapter(FormsetAdapter):
     parent_model = L2ScreeningQuestion
@@ -174,6 +179,10 @@ class L2FormsetAdapter(FormsetAdapter):
     @staticmethod
     def get_edit_url(obj):
         return reverse("edit_l2_question", args=[obj.review_id, obj.pk])
+
+    @staticmethod
+    def get_delete_url(obj):
+        return reverse("delete_l2_question", args=[obj.review_id, obj.pk])
 
 
 class ParameterFormsetAdapter(FormsetAdapter):
@@ -225,6 +234,17 @@ class ParameterFormsetAdapter(FormsetAdapter):
             h.h3(".h6")[tdt("Parameter options")],
             super().formset_renderer(formset),
         ]
+
+
+def DeleteQuestionButton(question, adapter):
+    if isinstance(question, Parameter):
+        return None
+    return h.button(
+        ".btn.btn-outline-danger.btn-sm",
+        type="button",
+        hx_get=adapter.get_delete_url(question),
+        hx_target="#modal-slot",
+    )[tdt("Delete question")]
 
 
 class ScreeningCriteriaPageContent(HtpyComponent):
@@ -318,7 +338,7 @@ class ScreeningCriteriaPageContent(HtpyComponent):
                                 if isinstance(parent, Parameter)
                                 else None
                             ),
-                            h.div[
+                            h.div(".d-flex.flex-wrap.gap-2")[
                                 h.button(
                                     ".btn.btn-outline-primary.btn-sm",
                                     hx_get=adapter.get_edit_url(parent),
@@ -326,7 +346,8 @@ class ScreeningCriteriaPageContent(HtpyComponent):
                                     # hx-preserve requires a stable ID
                                     id=f"edit-{section_id}-{parent.pk}-button",
                                     hx_preserve="true",
-                                )[tm("edit")]
+                                )[tm("edit")],
+                                DeleteQuestionButton(parent, adapter),
                             ],
                         ],
                         h.div[adapter.child_list_label],
@@ -644,6 +665,68 @@ class AddL2ScreeningQuestionView(ChildEditorCreateView):
     name="edit_l2_question",
 )
 class EditL2ScreeningQuestionView(ChildEditorEditView):
+    adapter = L2FormsetAdapter
+
+
+class DeleteScreeningQuestionView(MustAccessReviewMixin):
+    def get_question(self, *, lock=False):
+        queryset = self.adapter.parent_model.active_objects.filter(
+            review=self.review
+        )
+        if self.adapter is L2FormsetAdapter:
+            queryset = queryset.filter(l1_question__isnull=True)
+        if lock:
+            queryset = queryset.select_for_update()
+        try:
+            return queryset.get(pk=self.kwargs["parent_pk"])
+        except self.adapter.parent_model.DoesNotExist as exc:
+            raise Http404 from exc
+
+    def get(self, *args, **kwargs):
+        question = self.get_question()
+        message = tdt(
+            "This question will be removed from active screening. "
+            "Past answers and results will be kept."
+        )
+        if isinstance(question, L1ScreeningQuestion):
+            message = tdt(
+                "This question and its L2 copy will be removed from active screening. "
+                "Past answers and results will be kept."
+            )
+        return HttpResponse(
+            DeleteConfirmation(
+                tdt("Delete question"),
+                message,
+                self.adapter.get_delete_url(question),
+            )
+        )
+
+    def post(self, *args, **kwargs):
+        with transaction.atomic():
+            self.get_question(lock=True).soft_delete()
+        return HttpResponse(
+            ScreeningCriteriaPageContent(self.review).render(),
+            headers={
+                "HX-Reswap": "none",
+                "HX-Trigger-After-Settle": "modal-close",
+                "HX-Refocus": f"#{self.adapter.get_section_name()}",
+            },
+        )
+
+
+@route(
+    "reviews/<int:review_id>/l1_screening_questions/<int:parent_pk>/delete/",
+    name="delete_l1_question",
+)
+class DeleteL1ScreeningQuestionView(DeleteScreeningQuestionView):
+    adapter = L1FormsetAdapter
+
+
+@route(
+    "reviews/<int:review_id>/l2_screening_questions/<int:parent_pk>/delete/",
+    name="delete_l2_question",
+)
+class DeleteL2ScreeningQuestionView(DeleteScreeningQuestionView):
     adapter = L2FormsetAdapter
 
 

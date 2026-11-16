@@ -559,6 +559,16 @@ def DocumentMoreDetails(
             h.div(".d-flex.gap-2.flex-wrap")[
                 render_pdf_modal_button(citation_row, review),
                 rerun_action,
+                h.button(
+                    ".btn.btn-outline-danger.btn-sm",
+                    type="button",
+                    hx_get=reverse(
+                        "citation_delete_pdf",
+                        args=[review.pk, citation_row.pk, document.pk],
+                    ),
+                    hx_target="#modal-slot",
+                    hx_swap="innerHTML",
+                )[tdt("Delete PDF")],
             ],
         ],
     ]
