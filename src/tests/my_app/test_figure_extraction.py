@@ -257,3 +257,24 @@ def test_process_figure_extraction_task_saves_database_result(
     )
     assert DocumentFigure.objects.filter(document=document).count() == 1
     assert DocumentTable.objects.filter(document=document).count() == 1
+
+
+def test_failed_figure_extraction_records_failure_and_preserves_previous_tables():
+    document = DocumentFactory()
+    FigureExtractionResult.objects.create(document=document, status="pending")
+    table = DocumentTable.objects.create(
+        document=document, index=1, table_markdown="previous", bounding_box=[]
+    )
+    with (
+        patch(
+            "my_app.services.figure_extraction_service.FigureExtractionService.save_figures",
+            side_effect=RuntimeError("extraction failed"),
+        ),
+        pytest.raises(RuntimeError),
+    ):
+        FigureExtractionService(document).perform()
+    assert (
+        FigureExtractionResult.objects.get(document=document).status
+        == "failed"
+    )
+    assert DocumentTable.objects.filter(pk=table.pk).exists()

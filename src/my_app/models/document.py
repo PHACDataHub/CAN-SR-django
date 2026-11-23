@@ -56,6 +56,14 @@ class FigureExtractionStatus(models.TextChoices):
 class TextExtractionResult(models.Model):
     TextExtractionStatus = TextExtractionStatus
 
+    workflow_request = models.ForeignKey(
+        "my_app.Phase2CitationWorkflowRequest",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="text_extraction_results",
+    )
+
     document = fields.OneToOneField(
         Document,
         related_name="text_extraction_result",
@@ -131,6 +139,14 @@ class DocumentFigure(AbstractArtifact):
 @add_to_admin
 class FigureExtractionResult(models.Model):
     Status = FigureExtractionStatus
+
+    workflow_request = models.ForeignKey(
+        "my_app.Phase2CitationWorkflowRequest",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="figure_extraction_results",
+    )
 
     document = fields.OneToOneField(
         Document,

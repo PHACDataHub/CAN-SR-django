@@ -99,6 +99,13 @@ class L1ScreeningResult(CitationQueryResult):
 
 
 class L2ScreeningResult(CitationQueryResult):
+    workflow_request = models.ForeignKey(
+        "my_app.Phase2CitationWorkflowRequest",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="screening_results",
+    )
     question = models.ForeignKey(
         "L2ScreeningQuestion", on_delete=models.CASCADE
     )

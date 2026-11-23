@@ -51,6 +51,13 @@ def CitationRowDisplay(citation_row: Citation, review: Review, status_fetcher):
             L2ScreeningBadge(citation_row, status_fetcher),
         ],
         actions=[
+            h.a(
+                ".btn.btn-outline-primary",
+                href=reverse(
+                    "phase2_citation_workflow",
+                    args=[review.pk, citation_row.pk],
+                ),
+            )[tdt("Process this citation")],
             render_pdf_detail_link(
                 citation_row,
                 review,
@@ -179,6 +186,12 @@ class L2ScreeningPageTemplate(BasePageTemplate):
             review,
             tdt("L2 Screening"),
             [
+                h.p[
+                    h.a(
+                        ".btn.btn-primary",
+                        href=reverse("phase2_bulk_workflow", args=[review.pk]),
+                    )[tdt("Run all")]
+                ],
                 ScreeningFilters(
                     self.context["filter_form"],
                     reverse("l2_citations_list", args=[review.id]),

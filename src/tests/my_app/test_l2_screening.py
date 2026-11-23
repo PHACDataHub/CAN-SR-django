@@ -101,7 +101,9 @@ def _build_l2_screening_context(
     return review, dataset, citation, text_extraction_result, question
 
 
-def test_deferred_l2_screening_service_enqueues_created_results():
+def test_deferred_l2_screening_service_enqueues_created_results(
+    django_capture_on_commit_callbacks,
+):
     model = LanguageModel.get_default_model()
     review, _, row_1, _, question = _build_l2_screening_context(
         language_model=model
@@ -119,9 +121,12 @@ def test_deferred_l2_screening_service_enqueues_created_results():
     task_mock = MagicMock()
     task_mock.enqueue = MagicMock()
 
-    with patch(
-        "my_app.tasks.l2_screening.process_l2_screening_task",
-        task_mock,
+    with (
+        patch(
+            "my_app.tasks.l2_screening.process_l2_screening_task",
+            task_mock,
+        ),
+        django_capture_on_commit_callbacks(execute=True),
     ):
         service = EnqueueL2ScreeningService(
             rows=[row_1, row_2],
@@ -145,7 +150,9 @@ def test_deferred_l2_screening_service_enqueues_created_results():
     assert task_mock.enqueue.call_args.kwargs == {"result_id": results[1].id}
 
 
-def test_deferred_l2_screening_service_overwrite_targets_only_requested_rows_and_questions():
+def test_deferred_l2_screening_service_overwrite_targets_only_requested_rows_and_questions(
+    django_capture_on_commit_callbacks,
+):
     _, _, target_row, _, question = _build_l2_screening_context()
     _, _, untouched_row, _, other_question = _build_l2_screening_context()
     untouched_row.dataset = target_row.dataset
@@ -181,9 +188,12 @@ def test_deferred_l2_screening_service_overwrite_targets_only_requested_rows_and
     task_mock = MagicMock()
     task_mock.enqueue = MagicMock()
 
-    with patch(
-        "my_app.tasks.l2_screening.process_l2_screening_task",
-        task_mock,
+    with (
+        patch(
+            "my_app.tasks.l2_screening.process_l2_screening_task",
+            task_mock,
+        ),
+        django_capture_on_commit_callbacks(execute=True),
     ):
         service = EnqueueL2ScreeningService(
             rows=[target_row],
