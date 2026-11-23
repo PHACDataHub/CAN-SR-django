@@ -31,7 +31,7 @@ These aren't background tasks in the technical sense, but a vague process that c
 - scope: (citation, question) pair
 - just requires shallow data (title, abstract, json fields, L1 questions configured), no PDF or anything 
 - technically, this isn't one task, it's a chain of two tasks (initial prompt, critical prompt) per question. These are sequential, not concurrent: the critical task requires output from the initial task. 
-- there is no code that runs on "completing" the entire process.  To query completeness, we check that all results in the DB are non-pending 
+- phase 1 bulk requests are completed by the shared bulk checker after all linked initial and required critical results settle
 - what can run next?
     - we're bundling critical screening in here, but that's technically a separate step, per question
     - no other tasks should ever be run automatically after this process pair
@@ -69,7 +69,7 @@ These aren't background tasks in the technical sense, but a vague process that c
     - L2 questions configured
 - can be done immediately, or can be done after L1 screening
 - technically, this isn't one task, it's a chain of two tasks (initial prompt, critical prompt) per question
-- standalone L2 behavior remains available; phase 2 checks all expected initial and critical results before recording workflow completion
+- standalone L2 behavior remains available; phase 2 checks linked initial and required critical results before recording workflow completion
 - entrypoint (queue): my_app/services/l2_screening.py::EnqueueL2ScreeningService
     - validates citation prerequisites before deleting any results, loads citation dependencies in one query, bulk-creates results, and dispatches tasks after commit
 
@@ -80,99 +80,86 @@ These aren't background tasks in the technical sense, but a vague process that c
     - parameter definitions configured
 - can be done immediately, or after L2 screening
 - technically, this isn't one task, it's one task per parameter
-- there is no code that runs on "completing" the entire process. To query completeness, we check that all results in the DB are non-pending 
+- phase 3 bulk requests are completed by the shared bulk checker after all linked parameter results settle
 - entrypoint (queue): my_app/services/parameter_extraction.py::EnqueueParameterExtractionService
 
 
-## Overall flow and bulk-chaining of tasks
+## Checker tasks
 
-Finally, there are the functions that scope out which citations should be run through these flows. This is best understood as more of a user-story,
+Checker tasks monitor workflows made up of multiple background tasks and persist their completion status in the DB. Processing tasks update result records; checkers decide whether the workflow is still pending, has completed, or has failed.
 
-1. Users create a systematic review
-    - (not implemented) optionally running `DownloadShallowData` then manually cleaning out downloaded citation rows that don't apply, and adding a few manually
-    - alternatively or supplementarily, users can manually add citation rows via,
-        - CSV/RIS input (implemented)
-        - web forms (not implemented)
-2. Users run the L1 screening in bulk
-    - This is just queuing a bunch of L1 screening initial tasks
-        - not implemented yet
-        - doesn't _need_ to run in the background, it can run in a request handler provided we refactor for bulk-friendliness to avoid N+1 issues, as the user may be queuing hundreds of citations at once. Right now, the entrypoint to L1 screening is NOT bulk-friendly
-    - This is considered complete when all citations are either complete or failed 
-3. Users do more manual stuff, looking over screened records, marking citations as included/excluded
-4. L1 screened-in citations (using overall status annotation) are then put through a bulk processing flow
-    - implemented for PDF download, PDF processing, and L2 screening; DOI recovery remains hypothetical
-    - request records are created in bulk; each citation advances independently through its selected processes
-    - This is a complex chain of compound processes. Implemented naïvely, a single queue will approximate a breadth-first traversal. We may want to tweak this later. 
-    - the sub-processes here, in order, are: 
-        1. (hypothetically maybe) DOI recovery supplementation (only rows with empty DOIs, citations can be skipped and move onto the next task otherwise)
-        2. PDF downloads (only rows with DOIs and without PDFs, citations can be skipped and move onto the next task otherwise) 
-        3. PDF Processing (both grobid/text and docint/images)
-        4. L2 screening (one task per question)
-    - However, users may start this at any point, opt-out of any step, so we want to remain flexible
-5. Users do more manual stuff, marking more inclusions/exclusions
-6. The final-list of doubly-screened citations are each put through the Parameter process
-    - need another bulk-friendly way to queue all the tasks for every (citation,parameter) pair
+| Checker | Monitors | Updates |
+| --- | --- | --- |
+| `tasks.bulk_workflow.check_bulk_workflow` | Phase 1 initial/critical results, phase 2 citation workflows, or phase 3 parameter results | `BulkWorkflowRequest.status` and `finished_at` |
+| `tasks.phase2_workflow.check_citation_workflow` | The current process for one phase 2 citation | Advances `current_process`, starts the next selected process, or sets request `status`, `finished_at`, and `error` |
 
-### Accordingly, there are 3 bulk-tasks here:
+Both checkers reschedule themselves after five seconds while work remains. Each check is a short task/transaction, not a worker sleeping while it waits. Request locking prevents simultaneous checks from advancing or finishing the same request twice; checks of terminal requests do nothing.
 
-1. Bulk phase 1 processes (L1)
-    - not implemented yet
-    - queue up (ideally in a bulk-friendly way) all the L1 screening tasks
-2. Bulk phase 2 processes
-    - implemented: scope in citations with L1 overall status `In`, across the review (independent of list filters)
-    - create a `BulkWorkflowRequest` and one `Phase2CitationWorkflowRequest` per selected citation, with boolean PDF download / PDF processing / L2 options
-    - citation checker tasks advance each citation independently; a separate bulk checker records completion after every child is terminal
-    - DOI recovery remains unimplemented
-3. Bulk phase 3 processes (Parameter extraction)
-    - not implemented yet
-    - scope in appropriate citations, based on L2 overall status
-    - queue up all the initial tasks for Parameter extraction, and commit necessary information to the DB so that successful tasks can queue up the next tasks in the chain
+`finished_at` records when a checker observes a terminal outcome. It is set once for the whole request, not after each subprocess. Execution success is independent of whether screening includes/excludes a citation or a parameter is found.
 
+## Bulk workflows: phases 1, 2, and 3
 
-## Canceling tasks (not implemented)
+All three use `BulkWorkflowRequest`. Its fields are `id`, `review`, `phase` (1/2/3, default 2), `requested_by`, `requested_at`, `status`, `finished_at`, and `error`. Status is `pending`, `completed`, or `failed`; requester and finish time can be null, and error defaults to blank.
 
-There is a review-wide cancel button that will cancel all tasks associated with the review. Every task functions are expected to check for cancellation and terminate early, this can be a simple before-ware type function. Tasks that are already running and have cleared the initial cancellation check don't need to check it again before completion. 
+| Phase | Citation selection | Work and tracking | Complete when |
+| --- | --- | --- | --- |
+| **1 — L1 screening** | All citations in the review | One initial → critical chain per active, enabled L1 question. Initial results link to the bulk request through `bulk_request`; critical results link to their initial result. | All initial results and required critical results have settled. |
+| **2 — PDF/L2 workflow** | Citations whose L1 overall status is `In` | One `Phase2CitationWorkflowRequest` per citation, linked through `bulk_request`. Each independently runs its selected processes, described below. | All citation workflows are terminal. |
+| **3 — Parameter extraction** | Citations whose L2 overall status is `In` | One extraction task per active parameter, with results linked through `bulk_request`. No critical screening step. | All extraction results have settled. |
 
+Bulk-layer behavior:
 
-## Implemented phase 2 workflow requests
+- Selection covers the review and ignores frontend list filters. Users review results and make inclusion/exclusion decisions between phases; finishing one bulk phase does not automatically start another.
+- Only one pending bulk request per review/phase is allowed. Different phases may run independently. Phase 2 also permits only one pending workflow per citation, including requests started individually; a conflicting bulk submission is rejected atomically.
+- Selected screening/extraction steps require their questions/options or parameters to be configured. Phase 3 also validates completed text and figure extraction for every selected citation before replacing any results.
+- Request/result rows are prepared in batches and tasks are dispatched after commit. Phase 2 citations advance independently; a slow citation does not hold up other citations' next steps.
+- The checker waits for all work to settle, even if some has failed. The bulk request then fails if any work failed, otherwise completes. An empty batch completes successfully.
+- L1/L2 initial results marked `abandoned` need no critical result. A completed initial result requires a completed/abandoned critical result; a missing or pending critical result keeps the workflow pending. Any abandoned result makes the request fail after all work settles.
+- Screening and parameter runs replace previous results for the selected citation/question or citation/parameter pairs. Request records preserve request/status information, not historical answers. Question changes and deleted results during a run are not specially accommodated; no question snapshot or expected count is stored.
 
-### Request records and entrypoints
+Queue entrypoints: `services.bulk_workflow.QueueBulkResultsService` handles phases 1/3; `services.phase2_workflow.QueueBulkWorkflowService` handles phase 2. Review-authorized launch/status endpoints exist for each phase, plus a citation-scoped phase 2 endpoint.
 
-- `my_app.models.Phase2CitationWorkflowRequest` records one invocation for one citation: requester, request/finish timestamps, pending/completed/failed status, error, optional bulk parent, and boolean `should_download_pdf`, `should_process_pdf`, `should_run_l2` options.
-- `current_process` records execution position in the fixed order: PDF download → PDF processing → L2. Options describe intent and are not cleared as work progresses. At least one option must be selected.
-- `QueueCitationWorkflowService(citation, requested_by=..., should_download_pdf=..., should_process_pdf=..., should_run_l2=...).perform()` creates a request and queues its checker after commit.
-- `QueueBulkWorkflowService(review, ...same options...).perform()` selects all citations whose L1 overall status is `In`, creates all citation requests in bulk, then queues their checkers and a bulk checker after commit.
-- The bulk parent stores review, requester, timestamps, status and error. Effective options are stored on its citation children.
-- Only one pending phase 2 workflow per citation is permitted, enforced by a database constraint. A bulk submission containing an already-pending citation is rejected atomically; completed or failed workflows may be requested again.
-- L2 uses the review's current active, enabled questions when screening starts. Questions/options must be configured when requesting L2. No question snapshot or expected count is stored; changing questions during a workflow is not accommodated.
-- L2 results created by a workflow reference that request. Existing answers are replaced when the L2 process starts; this does not retain historical answers.
-- Launch/status pages are linked from the L2 list: a bulk launch above the list and a citation launch on each row. Pages use the existing review access permission. Status pages have a manual refresh link.
+## Phase 2 citation workflow
 
-### Fixed process order and skips
+`Phase2CitationWorkflowRequest` records one invocation for one citation. It can run on its own or belong to a phase 2 bulk request.
 
-1. Download a missing PDF if requested. An attached PDF skips downloading. The workflow calls `QueueDoiPdfService` directly: an already-pending download is rejected without queuing a duplicate, and the workflow fails. Previously finished/failed/canceled download requests are reset and queued using the same behavior as a standalone request. Missing/invalid DOI fails rather than attempting DOI recovery. No PDF download run ID is stored on the workflow.
-2. Process the PDF if requested. An attached document is required. `QueueProcessDocumentService` creates and queues only missing text/figure extractions in parallel; existing document results are reused. The citation checker reads both result statuses directly from the document and waits for both to settle before reporting failures or advancing. A shared PDF is not processed again for each citation. The workflow has no task-group FK and uses no `gather_tasks()` call. The document is always obtained from the citation; document replacement during a workflow is not accommodated.
-3. Run L2 if requested. If PDF processing was omitted, existing text and figure extraction must already be completed. Both extractions remain required, matching current L2 prerequisites; optional/failed figure extraction is not implemented. One initial task is dispatched per current active, enabled question, and each successful initial task dispatches its critical task as before.
+### Request fields
 
-L1 and parameter workflows, their bulk flows, DOI recovery, and review-wide cancellation are outside this implementation.
+| Field | Meaning |
+| --- | --- |
+| `id` | Request identifier. |
+| `citation` | Required citation FK. Its current document supplies the PDF and extraction results. |
+| `bulk_request` | Optional parent `BulkWorkflowRequest` FK; null for an individual request. |
+| `should_download_pdf` | Whether to download a missing PDF; defaults to true. |
+| `should_process_pdf` | Whether to queue missing text/figure extraction; defaults to true. |
+| `should_run_l2` | Whether to run L2 initial/critical screening; defaults to true. |
+| `current_process` | Most recently started process: `not_started` (default), `download_pdf`, `process_pdf`, or `l2`. Terminal outcome is stored in `status`, not this field. |
+| `status` | `pending` (default), `completed`, or `failed`. |
+| `requested_by` | Optional user FK. |
+| `requested_at` | Automatically recorded request creation time. |
+| `finished_at` | Null until the checker records completion/failure. |
+| `error` | Failure explanation; blank by default. |
 
-### Two checker levels
+At least one process flag must be true. Flags record the requested work and are not cleared as it progresses. There is no document FK or task-group FK on the request.
 
-Checker tasks are background tasks that repeatedly check the status of ongoing processes. They reschedule themselves until the process they monitor reaches a terminal state, ensuring that workflows progress without blocking worker threads.
+### Process order and completion
 
-- New `my_app.tasks.phase2_workflow.check_citation_workflow`: checks the current citation process, advances one process at a time, and reschedules after five seconds while the workflow remains pending. It loads the request and citation through cached properties using `select_for_update()` inside its transaction, and terminal/missing requests are no-ops. Separate helpers check completion and start each process (PDF download, PDF processing, and L2); `advance()` only selects the next process or marks the workflow completed.
-- New `my_app.tasks.phase2_workflow.check_bulk_workflow`: checks child workflow statuses and reschedules after five seconds while any child is pending. A failed child does not stop other citations. After all settle, the parent is failed if any child failed, otherwise completed. An empty batch completes successfully.
+Selected processes always run in this order. Users can omit steps, but downstream prerequisites still apply.
 
-All checks are short background tasks; no worker sleeps while waiting. New phase 2 workflows require a backend supporting deferred tasks (the configured database backend); the immediate backend is rejected.
+1. **PDF download.** Skip if a PDF is already attached. Otherwise, call `QueueDoiPdfService` and wait for its request to be fulfilled. A missing/invalid DOI or a failed/canceled download fails the citation workflow. An already-pending download is rejected without duplication or reuse. A previously finished download request can be reset and queued again when the PDF is missing.
+2. **PDF processing.** Require an attached document. Queue missing text and figure extraction as independent, parallel tasks. Existing document result records are reused: completed results are accepted, pending results are waited on, and failed results are not automatically retried. If only one result is missing, queue only that extraction. Wait for both to settle; either failing fails the citation workflow.
+3. **L2 screening.** Use the current active, enabled L2 questions. Replace previous screening results and queue an initial → critical chain per question. Wait for every linked initial/required critical result to settle. Abandoned results fail the workflow; screening inclusion/exclusion does not affect execution status.
 
-### Completion and failures
+After the last selected process succeeds, the checker marks the citation request completed. A failure stops later processes for that citation; other citation workflows continue.
 
-- PDF completion means the document's text and figure results both settled successfully. `current_process` remains `process_pdf` until both settle; the workflow checker owns completion and advancement. Existing result ownership does not affect reuse, so a workflow can wait for work originally queued by an upload or another citation workflow.
-- L2 completion checks the result rows linked to the workflow: all must be completed/abandoned. Every completed initial result must also have a completed/abandoned critical result. Missing critical rows remain incomplete; abandoned initial results do not require a critical row.
-- L2 waits for every pair to settle even if another pair is abandoned. Any abandoned initial or critical result makes the citation workflow fail after settlement. This is execution success, independent of whether answers screen the citation in or out.
-- Figure extraction records `FAILED` outside its rolled-back extraction transaction, allowing later retries while preserving previous extracted data.
-- An initial L2 dispatch failure abandons that result and logs the error while allowing dispatch of the other results to continue. Critical dispatch failures also abandon the pending critical result.
-- Unexpected initial/critical task errors mark workflow-owned pending results abandoned and re-raise, so a failed task cannot leave the workflow waiting forever. Standalone task error behavior remains unchanged. Existing prompt-output retries still run inside the processing services.
-- Preparation/dispatch errors mark the workflow failed; unexpected exceptions are also re-raised for task error reporting. Failures stop further processes for that citation.
-- Citation `finished_at` is set when its checker recognizes a terminal outcome, not after every subprocess. Bulk `finished_at` similarly records when the bulk checker observes all children terminal. These timestamps are not rewritten by repeated checks.
-- No generic checker framework or task afterware is introduced. Processing tasks update results; checkers own advancement and workflow completion.
+Text/figure results remain document-scoped, with an optional FK to the workflow that created them. Reuse does not change ownership, so citations sharing a PDF can use results queued by an upload or another workflow. The checker reads the document's results directly; no `gather_tasks()` is used. `QueueProcessDocumentService` only prepares and queues missing extractions. L2 results instead link directly to their citation workflow through `workflow_request`.
+
+Queue entrypoint: `services.phase2_workflow.QueueCitationWorkflowService`. The request does not pin a document or snapshot questions; changing these during execution is not accommodated.
+
+## Failure handling and remaining limits
+
+- Dispatch failures mark the affected workflow-owned result failed/abandoned and allow other independent dispatches to continue. Unexpected processing exceptions also record terminal result states and re-raise for task reporting. Existing prompt-output retries remain unchanged; parameter extraction has no critical follow-up.
+- Current L2 and parameter prerequisites require **both** completed text and figure extraction. Optional/failed figure extraction is not supported yet. Skipping PDF processing therefore requires existing successful extraction results.
+- Workflows require a backend supporting deferred tasks, such as the configured database backend. The immediate backend is rejected for workflows, though individual processing tasks can still use it.
+- DOI recovery and shallow-data download remain unimplemented.
+- Review-wide cancellation is planned but unimplemented: tasks would check at entry, while already-running tasks could finish without another cancellation check.

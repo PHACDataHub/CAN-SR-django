@@ -34,9 +34,24 @@ class WorkflowRequest(models.Model):
 
 @add_to_admin
 class BulkWorkflowRequest(WorkflowRequest):
-    """A phase 2 batch; its children hold the effective processing options."""
+    class Phase(models.IntegerChoices):
+        L1 = 1, tdt("Phase 1")
+        L2 = 2, tdt("Phase 2")
+        PARAMETERS = 3, tdt("Phase 3")
 
+    phase = models.PositiveSmallIntegerField(
+        choices=Phase.choices, default=Phase.L2
+    )
     review = models.ForeignKey("my_app.Review", on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["review", "phase"],
+                condition=Q(status=WorkflowStatus.PENDING),
+                name="one_pending_bulk_workflow_per_phase",
+            ),
+        ]
 
 
 @add_to_admin

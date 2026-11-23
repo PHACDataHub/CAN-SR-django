@@ -1,10 +1,5 @@
 from django import forms
-from django.http import HttpResponseRedirect
-from django.views.generic import DetailView, FormView
-
-import htpy as h
-
-from proj.util import MissingPreconditionError
+from django.views.generic import DetailView
 
 from my_app.models import (
     BulkWorkflowRequest,
@@ -16,10 +11,13 @@ from my_app.services.phase2_workflow import (
     QueueBulkWorkflowService,
     QueueCitationWorkflowService,
 )
+from my_app.views.screening.workflows import (
+    BulkWorkflowStatusView,
+    WorkflowLaunchView,
+    WorkflowStatusTemplate,
+)
 from my_app.views.view_utils import MustAccessReviewMixin
 from shortcuts import (
-    BasePageTemplate,
-    GenericForm,
     HtpyTemplateMixin,
     StandardFormMixin,
     cached_property,
@@ -59,49 +57,9 @@ class Phase2WorkflowForm(StandardFormMixin, forms.Form):
         return data
 
 
-class Phase2WorkflowTemplate(BasePageTemplate):
-    def content(self):
-        citation = self.context.get("citation")
-        form = self.context["form"]
-        errors = None
-        if form.non_field_errors():
-            errors = h.div(".alert.alert-danger", role="alert")[
-                h.ul[(h.li[error] for error in form.non_field_errors())]
-            ]
-        description = tdt(
-            "Run phase 2 for all citations whose L1 overall status is included. List filters do not change this selection."
-        )
-        if citation is not None:
-            description = citation.title
-        return h.div(".container")[
-            h.h1[tdt("Phase 2 workflow")],
-            h.p[description],
-            h.p[
-                tdt(
-                    "Processes run in order: download missing PDFs, process PDFs, then L2 screening. Existing PDF extraction results are reused. L2 screening replaces previous screening results."
-                )
-            ],
-            h.form(method="post")[
-                errors,
-                GenericForm(form),
-                h.button(".btn.btn-primary", type="submit")[
-                    tdt("Start workflow")
-                ],
-            ],
-        ]
-
-
-class Phase2WorkflowView(MustAccessReviewMixin, HtpyTemplateMixin, FormView):
+class Phase2WorkflowView(WorkflowLaunchView):
+    phase = BulkWorkflowRequest.Phase.L2
     form_class = Phase2WorkflowForm
-    template_component = Phase2WorkflowTemplate
-
-    def form_valid(self, form):
-        try:
-            workflow = self.queue(form.cleaned_data)
-        except MissingPreconditionError as exc:
-            form.add_error(None, str(exc))
-            return self.form_invalid(form)
-        return HttpResponseRedirect(self.status_url(workflow))
 
 
 @route("/reviews/<int:review_id>/phase-2/", name="phase2_bulk_workflow")
@@ -146,50 +104,12 @@ class CitationPhase2WorkflowView(Phase2WorkflowView):
         )
 
 
-class Phase2WorkflowStatusTemplate(BasePageTemplate):
-    def content(self):
-        workflow = self.context["object"]
-        children = []
-        if isinstance(workflow, BulkWorkflowRequest):
-            children = [
-                h.li[
-                    h.a(
-                        href=reverse(
-                            "phase2_citation_workflow_status",
-                            args=[workflow.review_id, child.pk],
-                        )
-                    )[child.citation.title],
-                    ": ",
-                    child.get_status_display(),
-                ]
-                for child in workflow.citation_requests.select_related(
-                    "citation"
-                )
-            ]
-        return h.div(".container")[
-            h.h1[tdt("Phase 2 workflow status")],
-            h.p[workflow.get_status_display()],
-            h.p[workflow.error],
-            h.p[tdt("Requested at"), ": ", str(workflow.requested_at)],
-            h.p[tdt("Finished at"), ": ", str(workflow.finished_at or "")],
-            h.ul[children],
-            h.a(".btn.btn-secondary", href=self.request.path)[
-                tdt("Refresh status")
-            ],
-        ]
-
-
 @route(
     "/reviews/<int:review_id>/phase-2/requests/<int:pk>/",
     name="phase2_bulk_workflow_status",
 )
-class BulkPhase2WorkflowStatusView(
-    MustAccessReviewMixin, HtpyTemplateMixin, DetailView
-):
-    template_component = Phase2WorkflowStatusTemplate
-
-    def get_queryset(self):
-        return BulkWorkflowRequest.objects.filter(review=self.review)
+class BulkPhase2WorkflowStatusView(BulkWorkflowStatusView):
+    phase = BulkWorkflowRequest.Phase.L2
 
 
 @route(
@@ -199,7 +119,7 @@ class BulkPhase2WorkflowStatusView(
 class CitationPhase2WorkflowStatusView(
     MustAccessReviewMixin, HtpyTemplateMixin, DetailView
 ):
-    template_component = Phase2WorkflowStatusTemplate
+    template_component = WorkflowStatusTemplate
 
     def get_queryset(self):
         return Phase2CitationWorkflowRequest.objects.filter(

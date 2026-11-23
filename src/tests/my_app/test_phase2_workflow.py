@@ -39,11 +39,11 @@ from my_app.models import (
     TextExtractionResult,
     WorkflowStatus,
 )
+from my_app.services.bulk_workflow import check_bulk_workflow_result
 from my_app.services.l2_screening import EnqueueL2ScreeningService
 from my_app.services.phase2_workflow import (
     QueueBulkWorkflowService,
     QueueCitationWorkflowService,
-    check_bulk_workflow_result,
     check_citation_workflow_result,
 )
 from my_app.tasks.l2_screening import (
@@ -413,7 +413,7 @@ def test_bulk_selects_only_l1_included_and_prepares_all_children_before_dispatch
             "my_app.tasks.phase2_workflow.check_citation_workflow"
         ) as enqueue,
         patch(
-            "my_app.tasks.phase2_workflow.check_bulk_workflow"
+            "my_app.tasks.bulk_workflow.check_bulk_workflow"
         ) as bulk_enqueue,
     ):
         with django_capture_on_commit_callbacks(execute=True):
@@ -628,7 +628,7 @@ def test_bulk_checker_reschedules_without_finishing(
         with django_capture_on_commit_callbacks(execute=True):
             check_bulk_workflow_result(bulk.pk)
         task = DBTaskResult.objects.get(
-            task_path="my_app.tasks.phase2_workflow.check_bulk_workflow"
+            task_path="my_app.tasks.bulk_workflow.check_bulk_workflow"
         )
         assert task.run_after == timezone.now() + timedelta(seconds=5)
     bulk.refresh_from_db()

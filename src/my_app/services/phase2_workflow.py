@@ -1,4 +1,3 @@
-from datetime import timedelta
 from functools import partial
 
 from django.db import transaction
@@ -17,9 +16,14 @@ from my_app.models import (
     L2ScreeningQuestion,
     PdfFromDOIRequest,
     Phase2CitationWorkflowRequest,
-    ScreeningResultStatus,
     TextExtractionResult,
     WorkflowStatus,
+)
+from my_app.services.bulk_workflow import (
+    CHECK_INTERVAL,
+    check_bulk_available,
+    finish_request,
+    screening_status,
 )
 from my_app.services.doi_pdf_service import DoiPdfError, QueueDoiPdfService
 from my_app.services.l2_screening import EnqueueL2ScreeningService
@@ -28,8 +32,6 @@ from my_app.services.service_util import (
     get_figure_extraction_result_for_citation,
     get_text_extraction_result_for_citation,
 )
-
-CHECK_INTERVAL = timedelta(seconds=5)
 
 
 def validate_options(should_download_pdf, should_process_pdf, should_run_l2):
@@ -134,13 +136,12 @@ class QueueBulkWorkflowService:
         }
 
     def perform(self):
-        from my_app.tasks.phase2_workflow import (
-            check_bulk_workflow,
-            check_citation_workflow,
-        )
+        from my_app.tasks.bulk_workflow import check_bulk_workflow
+        from my_app.tasks.phase2_workflow import check_citation_workflow
 
         validate_options(**self.options)
         with transaction.atomic():
+            check_bulk_available(self.review, BulkWorkflowRequest.Phase.L2)
             # Serialize batch membership against citation-scoped requests too.
             citations = list(
                 Citation.objects.filter(dataset__review=self.review)
@@ -182,13 +183,6 @@ class QueueBulkWorkflowService:
                 partial(check_bulk_workflow.enqueue, request_id=bulk.pk)
             )
         return bulk
-
-
-def finish_request(request, status, error=""):
-    request.status = status
-    request.error = error
-    request.finished_at = timezone.now()
-    request.save(update_fields=["status", "error", "finished_at"])
 
 
 class CheckCitationWorkflowService:
@@ -287,28 +281,12 @@ class CheckCitationWorkflowService:
         return True
 
     def screening_finished(self):
-        workflow = self.workflow
-        results = list(
-            workflow.screening_results.select_related("critical_result")
+        status = screening_status(
+            self.workflow.screening_results.select_related("critical_result")
         )
-        pending = False
-        failed = False
-        for result in results:
-            if result.status == ScreeningResultStatus.ABANDONED:
-                failed = True
-            elif result.status != ScreeningResultStatus.COMPLETED:
-                pending = True
-            else:
-                critical = getattr(result, "critical_result", None)
-                if critical is None:
-                    pending = True
-                elif critical.status == ScreeningResultStatus.ABANDONED:
-                    failed = True
-                elif critical.status != ScreeningResultStatus.COMPLETED:
-                    pending = True
-        if pending:
+        if status == WorkflowStatus.PENDING:
             return False
-        if failed:
+        if status == WorkflowStatus.FAILED:
             raise MissingPreconditionError(
                 tdt("L2 screening finished with abandoned results.")
             )
@@ -382,31 +360,3 @@ def check_citation_workflow_result(request_id):
                 finish_request(workflow, WorkflowStatus.FAILED, error)
         if not isinstance(exc, (MissingPreconditionError, DoiPdfError)):
             raise
-
-
-def check_bulk_workflow_result(request_id):
-    from my_app.tasks.phase2_workflow import check_bulk_workflow
-
-    with transaction.atomic():
-        bulk = (
-            BulkWorkflowRequest.objects.select_for_update()
-            .filter(pk=request_id)
-            .first()
-        )
-        if bulk is None or bulk.status != WorkflowStatus.PENDING:
-            return
-        children = bulk.citation_requests.all()
-        if children.filter(status=WorkflowStatus.PENDING).exists():
-            transaction.on_commit(
-                partial(
-                    check_bulk_workflow.using(
-                        run_after=timezone.now() + CHECK_INTERVAL
-                    ).enqueue,
-                    request_id=bulk.pk,
-                )
-            )
-            return
-        status = WorkflowStatus.COMPLETED
-        if children.filter(status=WorkflowStatus.FAILED).exists():
-            status = WorkflowStatus.FAILED
-        finish_request(bulk, status)

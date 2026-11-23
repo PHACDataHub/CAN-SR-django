@@ -84,6 +84,13 @@ class HumanAnswer(models.Model):
 
 
 class L1ScreeningResult(CitationQueryResult):
+    bulk_request = models.ForeignKey(
+        "my_app.BulkWorkflowRequest",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="l1_results",
+    )
     question = models.ForeignKey(
         "L1ScreeningQuestion", on_delete=models.CASCADE
     )
@@ -169,6 +176,13 @@ class ParameterHumanAnswer(HumanAnswer):
 
 
 class ParameterExtractionResult(CitationQueryResult):
+    bulk_request = models.ForeignKey(
+        "my_app.BulkWorkflowRequest",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="parameter_results",
+    )
     question = models.ForeignKey("Parameter", on_delete=models.CASCADE)
     found = models.BooleanField(default=False)
     value = models.TextField(null=True, blank=True)

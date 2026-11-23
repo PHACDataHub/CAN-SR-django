@@ -1,3 +1,4 @@
+from functools import partial
 from typing import List
 
 from django.db import transaction
@@ -25,76 +26,90 @@ from shortcuts import logger
 
 
 class EnqueueParameterExtractionService:
-    """
-    creates the empty result objects
-    to be later used by the processing task
-
-
-    will make N+1 queries (N=parameters, not citations)
-    ideally parameters are not very numerous
-    """
+    """Prepare result rows in batches and dispatch their tasks after commit."""
 
     def __init__(
         self,
         rows: List[Citation],
         questions: List[Parameter],
         overwrite_existing=False,
+        bulk_request=None,
     ):
         self.rows = rows
         self.questions = [
             question for question in questions if question.is_active
         ]
         self.overwrite_existing = overwrite_existing
+        self.bulk_request = bulk_request
 
     def perform(self):
-        citation_ids = {row.id for row in self.rows}
-        citations_by_id = {row.id: row for row in self.rows}
-
-        if self.overwrite_existing:
-            ParameterExtractionResult.objects.filter(
+        citations = list(
+            Citation.objects.filter(
+                pk__in=[row.pk for row in self.rows]
+            ).select_related(
+                "document__text_extraction_result",
+                "document__figure_extraction_result",
+            )
+        )
+        for citation in citations:
+            get_text_extraction_result_for_citation(citation)
+            get_figure_extraction_result_for_citation(citation)
+        citation_ids = {citation.pk for citation in citations}
+        models_by_review = {
+            review_id: get_model_for_review(review_id)
+            for review_id in {
+                question.review_id for question in self.questions
+            }
+        }
+        with transaction.atomic():
+            existing = ParameterExtractionResult.objects.filter(
                 question__in=self.questions,
                 citation_id__in=citation_ids,
-            ).delete()
-
-        for question in self.questions:
-            model = get_model_for_review(question.review_id)
-            existing_results = ParameterExtractionResult.objects.filter(
-                question=question,
-                citation_id__in=citation_ids,
             )
-            citations_with_existing_results = {
-                result.citation_id for result in existing_results
-            }
-
-            citations_to_process = [
-                citation_id
-                for citation_id in citation_ids
-                if citation_id not in citations_with_existing_results
-            ]
-
-            for citation_id in citations_to_process:
-                citation = citations_by_id[citation_id]
-                get_text_extraction_result_for_citation(citation)
-                get_figure_extraction_result_for_citation(citation)
-                result = ParameterExtractionResult.objects.create(
-                    citation_id=citation_id,
-                    question_id=question.id,
-                    language_model=model,
-                    status=ScreeningResultStatus.PENDING,
+            if self.overwrite_existing:
+                existing.delete()
+                existing_pairs = set()
+            else:
+                existing_pairs = set(
+                    existing.values_list("citation_id", "question_id")
                 )
+            results = ParameterExtractionResult.objects.bulk_create(
+                [
+                    ParameterExtractionResult(
+                        citation_id=citation_id,
+                        question=question,
+                        language_model=models_by_review[question.review_id],
+                        status=ScreeningResultStatus.PENDING,
+                        bulk_request=self.bulk_request,
+                    )
+                    for question in self.questions
+                    for citation_id in citation_ids
+                    if (citation_id, question.pk) not in existing_pairs
+                ]
+            )
+            for result in results:
+                transaction.on_commit(
+                    partial(self.enqueue_task_for_result, result.pk)
+                )
+        return results
 
-                self.enqueue_task_for_result(result.id)
-
-    def enqueue_task_for_result(self, result_id: int):
-        logger.info(
-            "Enqueuing background parameter extraction processing for result_id=%s",
-            result_id,
-        )
+    def enqueue_task_for_result(self, result_id):
         from my_app.tasks.parameter_extraction import (
             process_parameter_extraction_task,
         )
 
-        process_parameter_extraction_task.enqueue(result_id=result_id)
+        try:
+            process_parameter_extraction_task.enqueue(result_id=result_id)
+        except Exception:
+            if self.bulk_request is None:
+                raise
+            ParameterExtractionResult.objects.filter(pk=result_id).update(
+                status=ScreeningResultStatus.ABANDONED,
+                abandoned_at=timezone.now(),
+            )
+            logger.exception(
+                "Could not dispatch ParameterExtractionResult id=%s", result_id
+            )
 
 
 class ProcessParameterExtractionService:
