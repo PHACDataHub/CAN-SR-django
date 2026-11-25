@@ -22,6 +22,7 @@ from my_app.queries import get_model_for_review, options_for_question
 from my_app.services.task_cancellation import (
     current_cancellation_generation_id,
 )
+from my_app.services.workflow_scheduling import DEPENDENT_TASK_PRIORITY
 from shortcuts import logger
 
 
@@ -227,8 +228,13 @@ class ProcessL1ScreeningService:
                 process_l1_critical_screening_task,
             )
 
+            critical_task = process_l1_critical_screening_task
+            if result.bulk_request_id:
+                critical_task = critical_task.using(
+                    priority=DEPENDENT_TASK_PRIORITY
+                )
             transaction.on_commit(
-                lambda: process_l1_critical_screening_task.enqueue(
+                lambda: critical_task.enqueue(
                     result_id=critical_result.pk,
                     cancellation_generation_id=self.cancellation_generation_id,
                 )

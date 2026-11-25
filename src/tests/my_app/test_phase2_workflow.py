@@ -191,9 +191,12 @@ def test_download_only_skips_existing_document_and_finishes():
     assert not PdfFromDOIRequest.objects.exists()
 
 
+@freeze_time("2026-11-17 12:00:00")
 def test_download_is_started_then_rechecked_without_duplicate_dispatch(
     django_capture_on_commit_callbacks,
 ):
+    from django_tasks_db.models import DBTaskResult
+
     workflow = Phase2CitationWorkflowRequestFactory(
         citation__doi="10.1234/example",
         should_process_pdf=False,
@@ -207,6 +210,9 @@ def test_download_is_started_then_rechecked_without_duplicate_dispatch(
         workflow.refresh_from_db()
         request = PdfFromDOIRequest.objects.get(citation=workflow.citation)
         assert workflow.current_process == "download_pdf"
+        checker = DBTaskResult.objects.get()
+        assert checker.run_after == timezone.now() + timedelta(seconds=5)
+        assert checker.priority > 0
         enqueue.assert_called_once()
         check_citation_workflow_result(workflow.pk)
         assert enqueue.call_count == 1
@@ -383,6 +389,7 @@ def test_task_errors_set_workflow_owned_results_abandoned(critical):
     assert result.abandoned_at
 
 
+@override_settings(WORKFLOW_CHECK_FOLLOWUP_SECONDS=3)
 def test_checker_reschedules_incomplete_workflow(
     django_capture_on_commit_callbacks,
 ):
@@ -399,7 +406,37 @@ def test_checker_reschedules_incomplete_workflow(
         task = DBTaskResult.objects.get(
             task_path="my_app.tasks.phase2_workflow.check_citation_workflow"
         )
-        assert task.run_after == timezone.now() + timedelta(seconds=5)
+        assert task.run_after == timezone.now() + timedelta(seconds=3)
+        assert task.priority > 0
+
+
+@pytest.mark.parametrize("workers, expected_seconds", [(2, 18), (20, 12)])
+@override_settings(WORKFLOW_CHECK_INITIAL_SECONDS=6)
+def test_screening_stage_delays_first_check_for_estimated_work(
+    workers, expected_seconds, settings, django_capture_on_commit_callbacks
+):
+    from django_tasks_db.models import DBTaskResult
+
+    settings.WORKFLOW_EFFECTIVE_SCREENING_WORKERS = workers
+    citation, _, _ = screening_context()
+    for _ in range(2):
+        question = L2ScreeningQuestionFactory(review=citation.dataset.review)
+        L2ScreeningQuestionOptionFactory(question=question)
+    workflow = queue_screening(citation)
+    with freeze_time("2026-11-17 12:00:00"):
+        with django_capture_on_commit_callbacks(execute=True):
+            check_citation_workflow_result(workflow.pk)
+        tasks = DBTaskResult.objects.all()
+        checker = tasks.get(
+            task_path="my_app.tasks.phase2_workflow.check_citation_workflow"
+        )
+        assert checker.run_after == timezone.now() + timedelta(
+            seconds=expected_seconds
+        )
+        screening = tasks.filter(
+            task_path="my_app.tasks.l2_screening.process_l2_screening_task"
+        )
+        assert list(screening.values_list("priority", flat=True)) == [0, 0, 0]
 
 
 def test_bulk_selects_only_l1_included_and_prepares_all_children_before_dispatch(
@@ -427,7 +464,9 @@ def test_bulk_selects_only_l1_included_and_prepares_all_children_before_dispatch
         enqueue.enqueue.assert_called_once_with(
             request_id=bulk.citation_requests.get().pk
         )
-        bulk_enqueue.enqueue.assert_called_once_with(request_id=bulk.pk)
+        bulk_enqueue.using.return_value.enqueue.assert_called_once_with(
+            request_id=bulk.pk
+        )
     workflow = bulk.citation_requests.get()
     assert workflow.citation == citation
     assert (
@@ -487,6 +526,8 @@ def test_full_download_processing_screening_pipeline_with_database_worker(
     django_capture_on_commit_callbacks,
     bulk,
 ):
+    from django_tasks_db.models import DBTaskResult
+
     citation, question, option = screening_context()
     citation.document = None
     citation.doi = "10.1234/example"
@@ -577,6 +618,21 @@ def test_full_download_processing_screening_pipeline_with_database_worker(
             with django_capture_on_commit_callbacks(execute=True):
                 run_database_tasks()
             clock.tick(timedelta(seconds=6))
+        tasks = DBTaskResult.objects.all()
+        download_task = tasks.get(
+            task_path__endswith=".process_doi_pdf_request"
+        )
+        assert download_task.priority == 0
+        for task_name in (
+            "process_text_extraction_result",
+            "process_figure_extraction",
+            "process_l2_screening_task",
+            "process_l2_critical_screening_task",
+        ):
+            assert (
+                tasks.get(task_path__endswith=f".{task_name}").priority
+                > download_task.priority
+            )
         workflow.refresh_from_db()
         assert workflow.status == WorkflowStatus.COMPLETED
         assert workflow.finished_at

@@ -24,10 +24,12 @@ class QueueProcessDocumentService:
         *,
         workflow_request: Phase2CitationWorkflowRequest | None = None,
         review_id: int | None = None,
+        task_priority: int = 0,
     ) -> None:
         self.document = document
         self.workflow_request = workflow_request
         self.review_id = review_id
+        self.task_priority = task_priority
 
     def perform(self) -> tuple[TextExtractionResult, FigureExtractionResult]:
         from my_app.tasks.figure_extraction_task import (
@@ -96,14 +98,16 @@ class QueueProcessDocumentService:
             return result, True
         return result, created
 
-    @staticmethod
     def enqueue(
+        self,
         task: Task,
         result: TextExtractionResult | FigureExtractionResult,
         review_id: int | None,
         cancellation_generation_id: int,
     ) -> None:
         try:
+            if self.task_priority:
+                task = task.using(priority=self.task_priority)
             task.enqueue(
                 document_id=result.document_id,
                 review_id=review_id,

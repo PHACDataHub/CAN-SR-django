@@ -222,6 +222,10 @@ def test_bulk_checker_reschedules_while_results_are_pending(
             check_bulk_workflow_result(bulk.pk)
         task = DBTaskResult.objects.get()
         assert task.run_after == timezone.now() + timedelta(seconds=5)
+        if phase == 1:
+            assert task.priority < 0
+        else:
+            assert task.priority == 0
 
 
 @pytest.mark.parametrize("kind", ["initial", "critical", "parameter"])
@@ -314,6 +318,15 @@ def test_database_worker_completes_bulk(
     assert bulk.status == "completed"
     assert bulk.finished_at
     if phase == 1:
+        initial_tasks = DBTaskResult.objects.filter(
+            task_path__endswith=".process_l1_screening_task"
+        )
+        critical_tasks = DBTaskResult.objects.filter(
+            task_path__endswith=".process_l1_critical_screening_task"
+        )
+        assert list(initial_tasks.values_list("priority", flat=True)) == [0, 0]
+        assert len(critical_tasks) == 2
+        assert all(task.priority > 0 for task in critical_tasks)
         assert l1.call_count == review_task.call_count == 2
         assert parameters.call_count == 0
     else:

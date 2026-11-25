@@ -20,7 +20,7 @@ from my_app.models import (
     WorkflowStatus,
 )
 from my_app.services.bulk_workflow import (
-    CHECK_INTERVAL,
+    bulk_checker_task,
     check_bulk_available,
     finish_request,
     screening_status,
@@ -35,6 +35,12 @@ from my_app.services.service_util import (
 from my_app.services.task_cancellation import (
     current_cancellation_generation_id,
     task_was_canceled,
+)
+from my_app.services.workflow_scheduling import (
+    CITATION_CHECK_PRIORITY,
+    DEPENDENT_TASK_PRIORITY,
+    followup_check_delay,
+    initial_check_delay,
 )
 
 
@@ -141,7 +147,6 @@ class QueueBulkWorkflowService:
         }
 
     def perform(self):
-        from my_app.tasks.bulk_workflow import check_bulk_workflow
         from my_app.tasks.phase2_workflow import check_citation_workflow
 
         validate_options(**self.options)
@@ -188,7 +193,7 @@ class QueueBulkWorkflowService:
                     )
                 )
             transaction.on_commit(
-                partial(check_bulk_workflow.enqueue, request_id=bulk.pk)
+                partial(bulk_checker_task(bulk).enqueue, request_id=bulk.pk)
             )
         return bulk
 
@@ -235,13 +240,16 @@ class CheckCitationWorkflowService:
             ):
                 finish_request(workflow, WorkflowStatus.CANCELED)
                 return
+            delay = followup_check_delay()
             if self.current_process_finished():
-                self.advance()
+                question_count = self.advance()
+                delay = initial_check_delay(question_count)
             if workflow.status == WorkflowStatus.PENDING:
                 transaction.on_commit(
                     partial(
                         check_citation_workflow.using(
-                            run_after=timezone.now() + CHECK_INTERVAL
+                            priority=CITATION_CHECK_PRIORITY,
+                            run_after=timezone.now() + delay,
                         ).enqueue,
                         request_id=workflow.pk,
                     )
@@ -326,6 +334,11 @@ class CheckCitationWorkflowService:
             return self.start_l2_screening()
         finish_request(workflow, WorkflowStatus.COMPLETED)
 
+    def next_stage_priority(self):
+        if self.current_process == self.Process.NOT_STARTED:
+            return 0
+        return DEPENDENT_TASK_PRIORITY
+
     def start_pdf_download(self):
         workflow = self.workflow
         QueueDoiPdfService(
@@ -343,7 +356,9 @@ class CheckCitationWorkflowService:
             )
         workflow = self.workflow
         QueueProcessDocumentService(
-            self.citation.document, workflow_request=workflow
+            self.citation.document,
+            workflow_request=workflow,
+            task_priority=self.next_stage_priority(),
         ).perform()
         workflow.current_process = self.Process.PROCESS_PDF
         workflow.save(update_fields=["current_process"])
@@ -356,9 +371,11 @@ class CheckCitationWorkflowService:
             questions=questions,
             overwrite_existing=True,
             workflow_request=workflow,
+            task_priority=self.next_stage_priority(),
         ).perform()
         workflow.current_process = self.Process.L2
         workflow.save(update_fields=["current_process"])
+        return len(questions)
 
 
 def check_citation_workflow_result(request_id):

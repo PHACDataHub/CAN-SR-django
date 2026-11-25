@@ -26,8 +26,21 @@ from my_app.services.task_cancellation import (
     current_cancellation_generation_id,
     task_was_canceled,
 )
+from my_app.services.workflow_scheduling import BULK_CHECK_PRIORITY
 
 CHECK_INTERVAL = timedelta(seconds=5)
+
+
+def bulk_checker_task(bulk, *, run_after=None):
+    from my_app.tasks.bulk_workflow import check_bulk_workflow
+
+    if bulk.phase == BulkWorkflowRequest.Phase.PARAMETERS:
+        if run_after is None:
+            return check_bulk_workflow
+        return check_bulk_workflow.using(run_after=run_after)
+    return check_bulk_workflow.using(
+        priority=BULK_CHECK_PRIORITY, run_after=run_after
+    )
 
 
 def finish_request(request, status, error=""):
@@ -95,8 +108,6 @@ class QueueBulkResultsService:
         self.requested_by = requested_by
 
     def perform(self):
-        from my_app.tasks.bulk_workflow import check_bulk_workflow
-
         if self.phase not in (
             BulkWorkflowRequest.Phase.L1,
             BulkWorkflowRequest.Phase.PARAMETERS,
@@ -156,14 +167,12 @@ class QueueBulkResultsService:
                 bulk_request=bulk,
             ).perform()
             transaction.on_commit(
-                partial(check_bulk_workflow.enqueue, request_id=bulk.pk)
+                partial(bulk_checker_task(bulk).enqueue, request_id=bulk.pk)
             )
         return bulk
 
 
 def check_bulk_workflow_result(request_id):
-    from my_app.tasks.bulk_workflow import check_bulk_workflow
-
     with transaction.atomic():
         bulk = (
             BulkWorkflowRequest.objects.select_for_update()
@@ -197,8 +206,8 @@ def check_bulk_workflow_result(request_id):
         if status == WorkflowStatus.PENDING:
             transaction.on_commit(
                 partial(
-                    check_bulk_workflow.using(
-                        run_after=timezone.now() + CHECK_INTERVAL
+                    bulk_checker_task(
+                        bulk, run_after=timezone.now() + CHECK_INTERVAL
                     ).enqueue,
                     request_id=bulk.pk,
                 )

@@ -93,7 +93,11 @@ Checker tasks monitor workflows made up of multiple background tasks and persist
 | `tasks.bulk_workflow.check_bulk_workflow` | Phase 1 initial/critical results, phase 2 citation workflows, or phase 3 parameter results | `BulkWorkflowRequest.status` and `finished_at` |
 | `tasks.phase2_workflow.check_citation_workflow` | The current process for one phase 2 citation | Advances `current_process`, starts the next selected process, or sets request `status`, `finished_at`, and `error` |
 
-Both checkers reschedule themselves after five seconds while work remains. Each check is a short task/transaction, not a worker sleeping while it waits. Request locking prevents simultaneous checks from advancing or finishing the same request twice; checks of terminal requests do nothing.
+The citation checker launches at normal priority. Once it starts a stage, it schedules a check above normal priority using `run_after`. The initial delay is configured by `WORKFLOW_CHECK_INITIAL_SECONDS` (default 5). For L2 screening, this value is the estimated duration of one initial or critical task. The checker delay is that duration multiplied by the larger of 2 and twice the question count divided by `WORKFLOW_EFFECTIVE_SCREENING_WORKERS` (default 1). Use the estimated worker capacity available to one citation. If work is still pending, the checker retries after `WORKFLOW_CHECK_FOLLOWUP_SECONDS` (default 2).
+
+On the shared queue, workflow critical screening and phase 2 stages that follow an earlier stage have the highest priority. Active citation checks come next, followed by launches and first-stage work. Workers can start more citations whenever higher-priority work is unavailable. Running tasks continue uninterrupted, and strict priority does not guarantee fairness across reviews. Bulk completion checks for phases 1 and 2 run below normal priority. Bulk completion checks retain their five-second polling interval, and phase 3 keeps its existing priority.
+
+Each check uses a short transaction and releases the worker between polls. Request locking prevents simultaneous checks from advancing or finishing the same request twice. Checks of terminal requests do nothing.
 
 `finished_at` records when a checker observes a terminal outcome. It is set once for the whole request, not after each subprocess. Execution success is independent of whether screening includes/excludes a citation or a parameter is found.
 

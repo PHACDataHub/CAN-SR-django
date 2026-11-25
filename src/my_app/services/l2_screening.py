@@ -27,6 +27,7 @@ from my_app.services.service_util import (
 from my_app.services.task_cancellation import (
     current_cancellation_generation_id,
 )
+from my_app.services.workflow_scheduling import DEPENDENT_TASK_PRIORITY
 from shortcuts import logger
 
 
@@ -45,6 +46,7 @@ class EnqueueL2ScreeningService:
         questions: List[L2ScreeningQuestion],
         overwrite_existing=False,
         workflow_request=None,
+        task_priority=0,
     ):
         self.rows = rows
         self.questions = [
@@ -52,6 +54,7 @@ class EnqueueL2ScreeningService:
         ]
         self.overwrite_existing = overwrite_existing
         self.workflow_request = workflow_request
+        self.task_priority = task_priority
 
     def enqueue_task_for_result(
         self, result_id: int, cancellation_generation_id: int
@@ -63,7 +66,10 @@ class EnqueueL2ScreeningService:
         from my_app.tasks.l2_screening import process_l2_screening_task
 
         try:
-            process_l2_screening_task.enqueue(
+            task = process_l2_screening_task
+            if self.task_priority:
+                task = task.using(priority=self.task_priority)
+            task.enqueue(
                 result_id=result_id,
                 cancellation_generation_id=cancellation_generation_id,
             )
@@ -269,8 +275,13 @@ class ProcessL2ScreeningService:
                 process_l2_critical_screening_task,
             )
 
+            critical_task = process_l2_critical_screening_task
+            if result.workflow_request_id:
+                critical_task = critical_task.using(
+                    priority=DEPENDENT_TASK_PRIORITY
+                )
             transaction.on_commit(
-                lambda: process_l2_critical_screening_task.enqueue(
+                lambda: critical_task.enqueue(
                     result_id=critical_result.pk,
                     cancellation_generation_id=self.cancellation_generation_id,
                 )
