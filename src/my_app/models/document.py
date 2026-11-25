@@ -34,6 +34,7 @@ class TextExtractionStatus(models.TextChoices):
     PENDING = ("pending", tdt("Pending"))
     COMPLETED = ("completed", tdt("Completed"))
     FAILED = ("failed", tdt("Failed"))
+    CANCELED = ("canceled", tdt("Canceled"))
 
 
 class BoundingBoxJSONField(models.JSONField):
@@ -50,6 +51,7 @@ class FigureExtractionStatus(models.TextChoices):
     PENDING = ("pending", tdt("Pending"))
     COMPLETED = ("completed", tdt("Completed"))
     FAILED = ("failed", tdt("Failed"))
+    CANCELED = ("canceled", tdt("Canceled"))
 
 
 @add_to_admin

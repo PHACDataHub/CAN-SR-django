@@ -32,6 +32,10 @@ from my_app.services.service_util import (
     get_figure_extraction_result_for_citation,
     get_text_extraction_result_for_citation,
 )
+from my_app.services.task_cancellation import (
+    current_cancellation_generation_id,
+    task_was_canceled,
+)
 
 
 def validate_options(should_download_pdf, should_process_pdf, should_run_l2):
@@ -107,6 +111,7 @@ class QueueCitationWorkflowService:
             workflow = Phase2CitationWorkflowRequest.objects.create(
                 citation=citation,
                 requested_by=self.requested_by,
+                cancellation_generation_id=current_cancellation_generation_id(),
                 **self.options,
             )
             transaction.on_commit(
@@ -160,13 +165,16 @@ class QueueBulkWorkflowService:
                 )
             screening_questions(self.review.pk, self.options["should_run_l2"])
             bulk = BulkWorkflowRequest.objects.create(
-                review=self.review, requested_by=self.requested_by
+                review=self.review,
+                requested_by=self.requested_by,
+                cancellation_generation_id=current_cancellation_generation_id(),
             )
             workflows = Phase2CitationWorkflowRequest.objects.bulk_create(
                 [
                     Phase2CitationWorkflowRequest(
                         citation=citation,
                         bulk_request=bulk,
+                        cancellation_generation_id=bulk.cancellation_generation_id,
                         requested_by=self.requested_by,
                         **self.options,
                     )
@@ -221,6 +229,12 @@ class CheckCitationWorkflowService:
             workflow = self.workflow
             if workflow is None or workflow.status != WorkflowStatus.PENDING:
                 return
+            if task_was_canceled(
+                workflow.cancellation_generation_id,
+                review_ids=[self.citation.dataset.review_id],
+            ):
+                finish_request(workflow, WorkflowStatus.CANCELED)
+                return
             if self.current_process_finished():
                 self.advance()
             if workflow.status == WorkflowStatus.PENDING:
@@ -265,17 +279,19 @@ class CheckCitationWorkflowService:
         text_finished = text_result.status in (
             TextExtractionResult.TextExtractionStatus.COMPLETED,
             TextExtractionResult.TextExtractionStatus.FAILED,
+            TextExtractionResult.TextExtractionStatus.CANCELED,
         )
         figures_finished = figure_result.status in (
             FigureExtractionResult.Status.COMPLETED,
             FigureExtractionResult.Status.FAILED,
+            FigureExtractionResult.Status.CANCELED,
         )
         if not text_finished or not figures_finished:
             return False
         if (
             text_result.status
-            == TextExtractionResult.TextExtractionStatus.FAILED
-            or figure_result.status == FigureExtractionResult.Status.FAILED
+            != TextExtractionResult.TextExtractionStatus.COMPLETED
+            or figure_result.status != FigureExtractionResult.Status.COMPLETED
         ):
             raise MissingPreconditionError(tdt("PDF processing failed."))
         return True
@@ -313,7 +329,9 @@ class CheckCitationWorkflowService:
     def start_pdf_download(self):
         workflow = self.workflow
         QueueDoiPdfService(
-            self.citation, requesting_user=workflow.requested_by
+            self.citation,
+            requesting_user=workflow.requested_by,
+            cancellation_generation_id=workflow.cancellation_generation_id,
         ).perform()
         workflow.current_process = self.Process.DOWNLOAD_PDF
         workflow.save(update_fields=["current_process"])

@@ -322,7 +322,7 @@ def test_database_worker_completes_bulk(
         assert not L1CriticalScreeningResult.objects.exists()
 
 
-@pytest.mark.parametrize("phase,query_count", [(1, 4), (3, 5)])
+@pytest.mark.parametrize("phase,query_count", [(1, 5), (3, 6)])
 def test_batch_preparation_has_constant_queries(
     phase, query_count, django_assert_num_queries
 ):

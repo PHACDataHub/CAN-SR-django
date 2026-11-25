@@ -139,7 +139,10 @@ def test_deferred_parameter_extraction_service_enqueues_created_results(
     assert results[1].status == ScreeningResultStatus.PENDING
     assert results[1].language_model == model
     assert task_mock.enqueue.call_count == 1
-    assert task_mock.enqueue.call_args.kwargs == {"result_id": results[1].id}
+    assert task_mock.enqueue.call_args.kwargs == {
+        "result_id": results[1].id,
+        "cancellation_generation_id": 0,
+    }
 
 
 def test_deferred_parameter_extraction_service_overwrite_targets_only_requested_rows_and_parameters(
@@ -220,7 +223,8 @@ def test_deferred_parameter_extraction_service_overwrite_targets_only_requested_
     assert target_pair_results[0].status == ScreeningResultStatus.PENDING
     assert task_mock.enqueue.call_count == 1
     assert task_mock.enqueue.call_args.kwargs == {
-        "result_id": target_pair_results[0].id
+        "result_id": target_pair_results[0].id,
+        "cancellation_generation_id": 0,
     }
 
 

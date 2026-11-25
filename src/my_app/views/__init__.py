@@ -12,5 +12,6 @@ from . import (
     screening,
     screening_criteria,
     tables,
+    task_cancellation,
     user_management,
 )

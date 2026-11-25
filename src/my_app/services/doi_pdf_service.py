@@ -36,6 +36,9 @@ from my_app.models import (
     PdfFromDOIRequest,
     TextExtractionResult,
 )
+from my_app.services.task_cancellation import (
+    current_cancellation_generation_id,
+)
 from shortcuts import logger, tdt
 
 # Maximum distinct PDF download attempts per provider.
@@ -648,9 +651,16 @@ def delete_stored_file(storage, name, *, reason="replaced_pdf"):
 class QueueDoiPdfService:
     """Reset one request per citation and dispatch its task after commit."""
 
-    def __init__(self, citation: Citation, *, requesting_user=None):
+    def __init__(
+        self,
+        citation: Citation,
+        *,
+        requesting_user=None,
+        cancellation_generation_id: int | None = None,
+    ):
         self.citation = citation
         self.requesting_user = requesting_user
+        self.cancellation_generation_id = cancellation_generation_id
 
     def perform(self):
         context = {"citation_id": self.citation.pk}
@@ -699,7 +709,16 @@ class QueueDoiPdfService:
                 context.update(request_id=request_id, run_id=run_id)
                 log_doi_pdf_event("queue_request_saved", **context)
                 stage = "register_dispatch"
-                transaction.on_commit(lambda: self.enqueue(request_id, run_id))
+                cancellation_generation_id = self.cancellation_generation_id
+                if cancellation_generation_id is None:
+                    cancellation_generation_id = (
+                        current_cancellation_generation_id()
+                    )
+                transaction.on_commit(
+                    lambda: self.enqueue(
+                        request_id, run_id, cancellation_generation_id
+                    )
+                )
                 stage = "commit"
         except PdfFromDOIAlreadyPendingError:
             raise
@@ -717,7 +736,9 @@ class QueueDoiPdfService:
         return result
 
     @staticmethod
-    def enqueue(request_id, run_id):
+    def enqueue(
+        request_id: int, run_id: str, cancellation_generation_id: int = 0
+    ) -> None:
         context = {"request_id": request_id, "run_id": run_id}
         log_doi_pdf_event("task_enqueue_started", **context)
         stage = "import"
@@ -726,7 +747,9 @@ class QueueDoiPdfService:
 
             stage = "enqueue"
             task_result = process_doi_pdf_request.enqueue(
-                request_id=request_id, run_id=run_id
+                request_id=request_id,
+                run_id=run_id,
+                cancellation_generation_id=cancellation_generation_id,
             )
         except Exception as exc:
             log_doi_pdf_event(

@@ -466,7 +466,9 @@ def test_screen_l2_row_process_view_replaces_existing_screening_results(
     assert response.status_code == 200
     assert result.id != old_result.id
     assert result.status == ScreeningResultStatus.PENDING
-    task_mock.enqueue.assert_called_once_with(result_id=result.id)
+    task_mock.enqueue.assert_called_once_with(
+        result_id=result.id, cancellation_generation_id=0
+    )
 
 
 def test_screen_l2_row_process_view_rejects_unprocessed_document(
@@ -1086,7 +1088,9 @@ def test_citation_document_upload_view_ignores_removed_processing_options(
     row.refresh_from_db()
 
     assert response.status_code == 200
-    service_mock.assert_called_once_with(document=row.document)
+    service_mock.assert_called_once_with(
+        document=row.document, review_id=row.dataset.review_id
+    )
     service_mock.return_value.perform.assert_called_once_with()
 
 

@@ -253,7 +253,7 @@ class BasePageTemplate(HtpyComponent):
                                     aria_expanded="false",
                                 )[str(user)],
                                 h.div(
-                                    ".dropdown-menu",
+                                    ".dropdown-menu.dropdown-menu-end",
                                     aria_labelledby="navbarDropdown",
                                 )[get_top_right_dropdown_items(request)],
                             ]
@@ -365,6 +365,10 @@ def get_top_right_dropdown_items(request):
             ".dropdown-item",
             href=reverse("list_users"),
         )[tdt("Users")],
+        test_rule("is_admin", request.user)
+        and h.a(".dropdown-item", href=reverse("cancel_all_tasks"))[
+            tdt("Cancel tasks across all reviews")
+        ],
         test_rule("is_admin", request.user)
         and h.a(
             ".dropdown-item",

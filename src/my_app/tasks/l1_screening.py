@@ -7,11 +7,28 @@ from my_app.models import (
     ScreeningResultStatus,
 )
 from my_app.services.l1_screening import ProcessL1ScreeningService
+from my_app.services.task_cancellation import (
+    abandon_pending_results_if_canceled,
+)
 
 
 @task
-def process_l1_screening_task(result_id: int):
-    service = ProcessL1ScreeningService(result_id=result_id)
+def process_l1_screening_task(
+    result_id: int, cancellation_generation_id: int = 0
+) -> None:
+    result_queryset = L1ScreeningResult.objects.filter(pk=result_id)
+    if abandon_pending_results_if_canceled(
+        result_queryset,
+        review_ids=result_queryset.values_list(
+            "citation__dataset__review_id", flat=True
+        ),
+        cancellation_generation_id=cancellation_generation_id,
+    ):
+        return
+    service = ProcessL1ScreeningService(
+        result_id=result_id,
+        cancellation_generation_id=cancellation_generation_id,
+    )
     try:
         service.perform()
     except Exception:
@@ -33,7 +50,18 @@ def process_l1_screening_task(result_id: int):
 
 
 @task
-def process_l1_critical_screening_task(result_id: int):
+def process_l1_critical_screening_task(
+    result_id: int, cancellation_generation_id: int = 0
+) -> None:
+    result_queryset = L1CriticalScreeningResult.objects.filter(pk=result_id)
+    if abandon_pending_results_if_canceled(
+        result_queryset,
+        review_ids=result_queryset.values_list(
+            "initial_result__citation__dataset__review_id", flat=True
+        ),
+        cancellation_generation_id=cancellation_generation_id,
+    ):
+        return
     from my_app.services.critical_screening import (
         ProcessL1CriticalScreeningService,
     )

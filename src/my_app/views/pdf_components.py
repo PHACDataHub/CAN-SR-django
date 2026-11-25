@@ -38,6 +38,7 @@ BADGE_CLASSES = {
     TextExtractionResult.TextExtractionStatus.PENDING: "bg-warning text-dark",
     TextExtractionResult.TextExtractionStatus.COMPLETED: "bg-success",
     TextExtractionResult.TextExtractionStatus.FAILED: "bg-danger",
+    TextExtractionResult.TextExtractionStatus.CANCELED: "bg-secondary",
     FigureExtractionResult.Status.NOT_STARTED: "bg-secondary",
     FigureExtractionResult.Status.PENDING: "bg-warning text-dark",
     FigureExtractionResult.Status.COMPLETED: "bg-success",

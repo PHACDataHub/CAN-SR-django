@@ -6,13 +6,24 @@ from proj.model_util import add_to_admin
 from proj.text import tdt
 
 
+class CancellationGeneration(models.Model):
+    """An ordinal boundary for canceling previously requested background work."""
+
+    review = models.ForeignKey(
+        "my_app.Review", null=True, blank=True, on_delete=models.CASCADE
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class WorkflowStatus(models.TextChoices):
     PENDING = "pending", tdt("Pending")
     COMPLETED = "completed", tdt("Completed")
     FAILED = "failed", tdt("Failed")
+    CANCELED = "canceled", tdt("Canceled")
 
 
 class WorkflowRequest(models.Model):
+    cancellation_generation_id = models.PositiveBigIntegerField(default=0)
     status = models.CharField(
         max_length=20,
         choices=WorkflowStatus.choices,

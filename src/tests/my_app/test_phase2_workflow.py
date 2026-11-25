@@ -46,6 +46,7 @@ from my_app.services.phase2_workflow import (
     QueueCitationWorkflowService,
     check_citation_workflow_result,
 )
+from my_app.services.task_cancellation import cancel_review_tasks
 from my_app.tasks.l2_screening import (
     process_l2_critical_screening_task,
     process_l2_screening_task,
@@ -405,6 +406,7 @@ def test_bulk_selects_only_l1_included_and_prepares_all_children_before_dispatch
     django_capture_on_commit_callbacks,
 ):
     review = ReviewFactory()
+    cancellation = cancel_review_tasks(review)
     citation = included_citation(review)
     CitationFactory(dataset=citation.dataset)
     included_citation(ReviewFactory())
@@ -426,7 +428,12 @@ def test_bulk_selects_only_l1_included_and_prepares_all_children_before_dispatch
             request_id=bulk.citation_requests.get().pk
         )
         bulk_enqueue.enqueue.assert_called_once_with(request_id=bulk.pk)
-    assert bulk.citation_requests.get().citation == citation
+    workflow = bulk.citation_requests.get()
+    assert workflow.citation == citation
+    assert (
+        workflow.cancellation_generation_id == bulk.cancellation_generation_id
+    )
+    assert bulk.cancellation_generation_id == cancellation.pk
 
 
 def test_bulk_duplicate_selection_is_atomic():
@@ -593,8 +600,8 @@ def test_bulk_l2_preparation_uses_constant_queries(django_assert_num_queries):
     with patch(
         "my_app.services.l2_screening.get_model_for_review", return_value=None
     ):
-        # Fetch citations, existing pairs, bulk insert, and transaction savepoints.
-        with django_assert_num_queries(5):
+        # Fetch citations, the cancellation boundary, existing pairs, bulk insert, and transaction savepoints.
+        with django_assert_num_queries(6):
             results = EnqueueL2ScreeningService(
                 rows, [question, second]
             ).perform()

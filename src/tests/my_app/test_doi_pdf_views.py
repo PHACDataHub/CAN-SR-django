@@ -193,7 +193,7 @@ def test_post_queues_and_renders_pending(
     assert result.status == result.Status.PENDING
     assert result.requesting_user == vanilla_user
     assert result.error == ""
-    enqueue.assert_called_once_with(result.pk, str(result.run_id))
+    enqueue.assert_called_once_with(result.pk, str(result.run_id), 0)
 
 
 def test_duplicate_post_keeps_current_request(vanilla_client):

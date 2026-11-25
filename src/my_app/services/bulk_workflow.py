@@ -22,6 +22,10 @@ from my_app.services.l1_screening import EnqueueL1ScreeningService
 from my_app.services.parameter_extraction import (
     EnqueueParameterExtractionService,
 )
+from my_app.services.task_cancellation import (
+    current_cancellation_generation_id,
+    task_was_canceled,
+)
 
 CHECK_INTERVAL = timedelta(seconds=5)
 
@@ -143,6 +147,7 @@ class QueueBulkResultsService:
                 review=self.review,
                 phase=self.phase,
                 requested_by=self.requested_by,
+                cancellation_generation_id=current_cancellation_generation_id(),
             )
             service(
                 rows=rows,
@@ -167,6 +172,11 @@ def check_bulk_workflow_result(request_id):
         )
         if bulk is None or bulk.status != WorkflowStatus.PENDING:
             return
+        if task_was_canceled(
+            bulk.cancellation_generation_id, review_ids=[bulk.review_id]
+        ):
+            finish_request(bulk, WorkflowStatus.CANCELED)
+            return
         if bulk.phase == BulkWorkflowRequest.Phase.L1:
             status = screening_status(
                 bulk.l1_results.select_related("critical_result").only(
@@ -180,7 +190,9 @@ def check_bulk_workflow_result(request_id):
             status = WorkflowStatus.COMPLETED
             if children.filter(status=WorkflowStatus.PENDING).exists():
                 status = WorkflowStatus.PENDING
-            elif children.filter(status=WorkflowStatus.FAILED).exists():
+            elif children.filter(
+                status__in=[WorkflowStatus.FAILED, WorkflowStatus.CANCELED]
+            ).exists():
                 status = WorkflowStatus.FAILED
         if status == WorkflowStatus.PENDING:
             transaction.on_commit(

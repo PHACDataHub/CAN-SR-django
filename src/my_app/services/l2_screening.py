@@ -24,6 +24,9 @@ from my_app.services.service_util import (
     get_figure_extraction_result_for_citation,
     get_text_extraction_result_for_citation,
 )
+from my_app.services.task_cancellation import (
+    current_cancellation_generation_id,
+)
 from shortcuts import logger
 
 
@@ -50,7 +53,9 @@ class EnqueueL2ScreeningService:
         self.overwrite_existing = overwrite_existing
         self.workflow_request = workflow_request
 
-    def enqueue_task_for_result(self, result_id: int):
+    def enqueue_task_for_result(
+        self, result_id: int, cancellation_generation_id: int
+    ) -> None:
         logger.info(
             "Enqueuing background L2 screening processing for result_id=%s",
             result_id,
@@ -58,7 +63,10 @@ class EnqueueL2ScreeningService:
         from my_app.tasks.l2_screening import process_l2_screening_task
 
         try:
-            process_l2_screening_task.enqueue(result_id=result_id)
+            process_l2_screening_task.enqueue(
+                result_id=result_id,
+                cancellation_generation_id=cancellation_generation_id,
+            )
         except Exception:
             if self.workflow_request is None:
                 raise
@@ -89,6 +97,12 @@ class EnqueueL2ScreeningService:
                 question.review_id for question in self.questions
             }
         }
+        if self.workflow_request is None:
+            cancellation_generation_id = current_cancellation_generation_id()
+        else:
+            cancellation_generation_id = (
+                self.workflow_request.cancellation_generation_id
+            )
         with transaction.atomic():
             existing = L2ScreeningResult.objects.filter(
                 question__in=self.questions, citation_id__in=citation_ids
@@ -116,7 +130,11 @@ class EnqueueL2ScreeningService:
             )
             for result in results:
                 transaction.on_commit(
-                    partial(self.enqueue_task_for_result, result.pk),
+                    partial(
+                        self.enqueue_task_for_result,
+                        result.pk,
+                        cancellation_generation_id,
+                    ),
                 )
         return results
 
@@ -129,8 +147,11 @@ class ProcessL2ScreeningService:
 
     NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT = 3
 
-    def __init__(self, result_id: int):
+    def __init__(
+        self, result_id: int, cancellation_generation_id: int = 0
+    ) -> None:
         self.result_id = result_id
+        self.cancellation_generation_id = cancellation_generation_id
 
     def _mark_abandoned(self, result: L2ScreeningResult, error: Exception):
         result.status = ScreeningResultStatus.ABANDONED
@@ -250,6 +271,7 @@ class ProcessL2ScreeningService:
 
             transaction.on_commit(
                 lambda: process_l2_critical_screening_task.enqueue(
-                    result_id=critical_result.pk
+                    result_id=critical_result.pk,
+                    cancellation_generation_id=self.cancellation_generation_id,
                 )
             )

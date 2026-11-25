@@ -22,6 +22,9 @@ from my_app.services.service_util import (
     get_figure_extraction_result_for_citation,
     get_text_extraction_result_for_citation,
 )
+from my_app.services.task_cancellation import (
+    current_cancellation_generation_id,
+)
 from shortcuts import logger
 
 
@@ -61,6 +64,12 @@ class EnqueueParameterExtractionService:
                 question.review_id for question in self.questions
             }
         }
+        if self.bulk_request is None:
+            cancellation_generation_id = current_cancellation_generation_id()
+        else:
+            cancellation_generation_id = (
+                self.bulk_request.cancellation_generation_id
+            )
         with transaction.atomic():
             existing = ParameterExtractionResult.objects.filter(
                 question__in=self.questions,
@@ -89,17 +98,26 @@ class EnqueueParameterExtractionService:
             )
             for result in results:
                 transaction.on_commit(
-                    partial(self.enqueue_task_for_result, result.pk)
+                    partial(
+                        self.enqueue_task_for_result,
+                        result.pk,
+                        cancellation_generation_id,
+                    )
                 )
         return results
 
-    def enqueue_task_for_result(self, result_id):
+    def enqueue_task_for_result(
+        self, result_id: int, cancellation_generation_id: int
+    ) -> None:
         from my_app.tasks.parameter_extraction import (
             process_parameter_extraction_task,
         )
 
         try:
-            process_parameter_extraction_task.enqueue(result_id=result_id)
+            process_parameter_extraction_task.enqueue(
+                result_id=result_id,
+                cancellation_generation_id=cancellation_generation_id,
+            )
         except Exception:
             if self.bulk_request is None:
                 raise

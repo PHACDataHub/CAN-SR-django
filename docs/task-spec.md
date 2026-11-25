@@ -58,7 +58,7 @@ These aren't background tasks in the technical sense, but a vague process that c
     - phase 2's citation checker waits until both the document's `TextExtractionResult` and `FigureExtractionResult` have settled, then continues only if both completed successfully
     - result records remain document-scoped; newly queued extractions also have a nullable FK to the phase 2 workflow that requested them
     - `QueueProcessDocumentService` is an enqueue-only helper shared by uploads and workflows. It creates missing result rows under a document lock and queues text/figure tasks independently after commit. It does not create a task group or check completion.
-    - existing results are reused without resetting status or changing workflow ownership: completed results are accepted, pending results are waited on, and failed results are reported as failures rather than automatically retried. If only one result exists, only the missing extraction is queued.
+    - existing results are reused without resetting status or changing workflow ownership: completed results are accepted, pending results are waited on, and failed results are reported as failures. Canceled extractions can be queued again. If only one result exists, only the missing extraction is queued.
 - What can run next? L2 screening, through the phase 2 citation workflow (implemented). The PDF processing service only extracts text and figures; it accepts no downstream screening or parameter options. Uploading a PDF queues extraction only. Use a phase 2 workflow for L2 chaining and the separate parameter extraction action for parameters.
 - entrypoint to queue this process: my_app/services/process_document.py::QueueProcessDocumentService
 
@@ -99,7 +99,7 @@ Both checkers reschedule themselves after five seconds while work remains. Each 
 
 ## Bulk workflows: phases 1, 2, and 3
 
-All three use `BulkWorkflowRequest`. Its fields are `id`, `review`, `phase` (1/2/3, default 2), `requested_by`, `requested_at`, `status`, `finished_at`, and `error`. Status is `pending`, `completed`, or `failed`; requester and finish time can be null, and error defaults to blank.
+All three use `BulkWorkflowRequest`. Its fields are `id`, `review`, `phase` (1/2/3, default 2), `requested_by`, `requested_at`, `status`, `finished_at`, `error`, and `cancellation_generation_id`. Status is `pending`, `completed`, `failed`, or `canceled`; requester and finish time can be null, and error defaults to blank.
 
 | Phase | Citation selection | Work and tracking | Complete when |
 | --- | --- | --- | --- |
@@ -134,9 +134,10 @@ Queue entrypoints: `services.bulk_workflow.QueueBulkResultsService` handles phas
 | `should_process_pdf` | Whether to queue missing text/figure extraction; defaults to true. |
 | `should_run_l2` | Whether to run L2 initial/critical screening; defaults to true. |
 | `current_process` | Most recently started process: `not_started` (default), `download_pdf`, `process_pdf`, or `l2`. Terminal outcome is stored in `status`, not this field. |
-| `status` | `pending` (default), `completed`, or `failed`. |
+| `status` | `pending` (default), `completed`, `failed`, or `canceled`. |
 | `requested_by` | Optional user FK. |
 | `requested_at` | Automatically recorded request creation time. |
+| `cancellation_generation_id` | Cancellation boundary captured at launch or inherited from the bulk request. |
 | `finished_at` | Null until the checker records completion/failure. |
 | `error` | Failure explanation; blank by default. |
 
@@ -147,7 +148,7 @@ At least one process flag must be true. Flags record the requested work and are 
 Selected processes always run in this order. Users can omit steps, but downstream prerequisites still apply.
 
 1. **PDF download.** Skip if a PDF is already attached. Otherwise, call `QueueDoiPdfService` and wait for its request to be fulfilled. A missing/invalid DOI or a failed/canceled download fails the citation workflow. An already-pending download is rejected without duplication or reuse. A previously finished download request can be reset and queued again when the PDF is missing.
-2. **PDF processing.** Require an attached document. Queue missing text and figure extraction as independent, parallel tasks. Existing document result records are reused: completed results are accepted, pending results are waited on, and failed results are not automatically retried. If only one result is missing, queue only that extraction. Wait for both to settle; either failing fails the citation workflow.
+2. **PDF processing.** Require an attached document. Queue missing text and figure extraction as independent, parallel tasks. Reuse completed or pending results. Failed results cause the workflow to fail after both extractions settle. Queue each missing or canceled extraction.
 3. **L2 screening.** Use the current active, enabled L2 questions. Replace previous screening results and queue an initial → critical chain per question. Wait for every linked initial/required critical result to settle. Abandoned results fail the workflow; screening inclusion/exclusion does not affect execution status.
 
 After the last selected process succeeds, the checker marks the citation request completed. A failure stops later processes for that citation; other citation workflows continue.
@@ -162,4 +163,12 @@ Queue entrypoint: `services.phase2_workflow.QueueCitationWorkflowService`. The r
 - Current L2 and parameter prerequisites require **both** completed text and figure extraction. Optional/failed figure extraction is not supported yet. Skipping PDF processing therefore requires existing successful extraction results.
 - Workflows require a backend supporting deferred tasks, such as the configured database backend. The immediate backend is rejected for workflows, though individual processing tasks can still use it.
 - DOI recovery and shallow-data download remain unimplemented.
-- Review-wide cancellation is planned but unimplemented: tasks would check at entry, while already-running tasks could finish without another cancellation check.
+
+
+## Task cancellation
+
+Users with access to a review can request cancellation from its detail page. Admins can request cancellation across all reviews from the account dropdown. Each request inserts one timestamped `CancellationGeneration` record. A null review means the record applies globally. Generation refers to an ordinal cancellation boundary.
+
+A new workflow or standalone queue operation snapshots the latest committed cancellation ID, or zero when no cancellation record exists. Bulk and citation workflows store it as `cancellation_generation_id`. All downstream work inherits the original value, including citation workflows within a bulk request, PDF work and L2 screening started by phase 2, and critical screening dispatched by initial screening. Tasks queued before this feature was introduced start at zero.
+
+At entry, tasks check for a higher cancellation ID that applies globally or to their review. A task that clears this check runs to completion, including any follow-up dispatch. Those follow-up tasks check the inherited ID when they start. Workflow checkers record a canceled terminal outcome at their next entry. Skipped screening and parameter results become abandoned, and skipped DOI downloads and document extractions become canceled. A document extraction started for a specific review uses that review's scope even if the document is shared. Older extraction jobs without an originating review use the document's linked reviews.

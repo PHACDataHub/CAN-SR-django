@@ -278,7 +278,9 @@ class CitationDocumentUploadView(DocumentCitationMixin):
         )
         self.citation_row.document = document
         self.citation_row.save(update_fields=["document"])
-        QueueProcessDocumentService(document=document).perform()
+        QueueProcessDocumentService(
+            document=document, review_id=self.kwargs["review_id"]
+        ).perform()
 
     def form_valid(self):
         with transaction.atomic():
