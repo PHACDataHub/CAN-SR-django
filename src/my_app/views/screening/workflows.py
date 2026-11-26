@@ -1,6 +1,7 @@
 from itertools import groupby
 
 from django import forms
+from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.views.generic import DetailView, FormView
 
@@ -11,6 +12,7 @@ from proj.util import MissingPreconditionError
 from my_app.models import BulkWorkflowRequest
 from my_app.router import route
 from my_app.services.bulk_workflow import (
+    BulkWorkflowLimitError,
     QueueBulkResultsService,
     parameter_status,
     screening_status,
@@ -87,6 +89,9 @@ class WorkflowLaunchView(MustAccessReviewMixin, HtpyTemplateMixin, FormView):
     def form_valid(self, form):
         try:
             workflow = self.queue(form.cleaned_data)
+        except BulkWorkflowLimitError as exc:
+            messages.error(self.request, str(exc))
+            return self.form_invalid(form)
         except MissingPreconditionError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)

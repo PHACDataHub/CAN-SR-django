@@ -20,10 +20,12 @@ from my_app.models import (
     WorkflowStatus,
 )
 from my_app.services.bulk_workflow import (
+    MAX_BULK_CITATIONS,
     bulk_checker_task,
     check_bulk_available,
     finish_request,
     screening_status,
+    validate_bulk_size,
 )
 from my_app.services.doi_pdf_service import DoiPdfError, QueueDoiPdfService
 from my_app.services.l2_screening import EnqueueL2ScreeningService
@@ -158,8 +160,12 @@ class QueueBulkWorkflowService:
                 .add_l1_overall_status()
                 .filter(l1_overall_status=CitationStatus.In)
                 .order_by("pk")
-                .select_for_update()
+                .select_for_update()[: MAX_BULK_CITATIONS + 1]
             )
+            questions = screening_questions(
+                self.review.pk, self.options["should_run_l2"]
+            )
+            validate_bulk_size(len(citations), len(questions))
             if Phase2CitationWorkflowRequest.objects.filter(
                 citation__in=citations, status=WorkflowStatus.PENDING
             ).exists():
@@ -168,7 +174,6 @@ class QueueBulkWorkflowService:
                         "A selected citation already has a pending phase 2 workflow."
                     )
                 )
-            screening_questions(self.review.pk, self.options["should_run_l2"])
             bulk = BulkWorkflowRequest.objects.create(
                 review=self.review,
                 requested_by=self.requested_by,

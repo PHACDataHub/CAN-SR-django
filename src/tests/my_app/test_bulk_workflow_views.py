@@ -1,9 +1,14 @@
+from django.contrib.messages import ERROR, get_messages
 from django.urls import reverse
 
 import pytest
 from phac_aspc.rules import patch_rules
 
-from my_app.model_factories import BulkWorkflowRequestFactory
+from my_app.model_factories import (
+    BulkWorkflowRequestFactory,
+    L1ScreeningQuestionFactory,
+    L1ScreeningQuestionOptionFactory,
+)
 from my_app.models import BulkWorkflowRequest, L1CriticalScreeningResult
 from my_app.services.bulk_workflow import QueueBulkResultsService
 from tests.bulk_workflow_cases import bulk_context
@@ -100,6 +105,34 @@ def test_pending_bulk_is_shown_as_form_error(phase, vanilla_client):
     assert response.status_code == 200
     assert b"already pending" in response.content
     assert BulkWorkflowRequest.objects.count() == 1
+
+
+@pytest.mark.parametrize("citation_count, question_count", [(51, 1), (50, 11)])
+def test_oversized_bulk_launch_shows_limits(
+    citation_count,
+    question_count,
+    vanilla_client,
+    django_capture_on_commit_callbacks,
+):
+    review, _, _, _ = bulk_context(1, count=citation_count)
+    for _ in range(question_count - 1):
+        question = L1ScreeningQuestionFactory(review=review)
+        L1ScreeningQuestionOptionFactory(question=question)
+
+    with (
+        patch_rules(can_access_review=True),
+        django_capture_on_commit_callbacks() as callbacks,
+    ):
+        response = vanilla_client.post(launch_url(1, review))
+
+    assert response.status_code == 200
+    (message,) = get_messages(response.wsgi_request)
+    assert message.level == ERROR
+    assert "at most 50 citations" in str(message)
+    assert "at most 500" in str(message)
+    assert str(message) in response.content.decode()
+    assert not BulkWorkflowRequest.objects.exists()
+    assert not callbacks
 
 
 @pytest.mark.parametrize("phase", [1, 3])
