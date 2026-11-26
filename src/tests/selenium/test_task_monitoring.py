@@ -123,7 +123,7 @@ def test_signed_in_user_sees_task_summary(
         ec.visibility_of_element_located((By.CSS_SELECTOR, ".dropdown-menu"))
     )
     assert not menu.find_elements(By.LINK_TEXT, "Background tasks")
-    menu.find_element(By.LINK_TEXT, "Task summary").click()
+    menu.find_element(By.LINK_TEXT, "System status").click()
 
     totals = wait.until(
         ec.visibility_of_all_elements_located(
