@@ -106,21 +106,7 @@ def test_import_replaces_criteria_and_cascades(criteria_data):
         ("Yes", "Primary data", ScreeningActions.ScreenIn),
         ("No", "Commentary", ScreeningActions.ScreenOut),
     ]
-    mirror = review.l2_screening_questions.get(l1_question=question)
-    assert mirror.question_text == question.question_text
-    for option in options:
-        copy = mirror.options.get(l1_option=option)
-        assert (
-            copy.option_text,
-            copy.option_value,
-            copy.screening_action,
-        ) == (option.option_text, option.option_value, option.screening_action)
-    assert (
-        review.l2_screening_questions.get(
-            l1_question__isnull=True
-        ).question_text
-        == "English?"
-    )
+    assert review.l2_screening_questions.get().question_text == "English?"
     parameter = review.parameters.get()
     assert (parameter.name, parameter.description, parameter.option_type) == (
         "Delay",

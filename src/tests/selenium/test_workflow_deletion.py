@@ -36,7 +36,6 @@ def test_delete_question_ui(
             question_text="Is the study relevant?"
         )
         L1ScreeningQuestionOptionFactory(question=question, option_text="Yes")
-        mirror = question.sync_to_l2()
     else:
         question = L2ScreeningQuestionFactory(
             question_text="Is the study eligible?"
@@ -77,9 +76,6 @@ def test_delete_question_ui(
     assert not driver.find_elements(*button)
     question.refresh_from_db()
     assert question.is_deleted
-    if stage == "l1":
-        mirror.refresh_from_db()
-        assert mirror.is_deleted
 
 
 @pytest.mark.parametrize(

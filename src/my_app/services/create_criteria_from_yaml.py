@@ -118,7 +118,6 @@ class CreateCriteriaFromYaml:
                     entry.get("question"), f"{path}.question"
                 ),
             )
-            options = []
             for option_index, answer in enumerate(
                 require_list(entry.get("answers"), f"{path}.answers")
             ):
@@ -133,24 +132,18 @@ class CreateCriteriaFromYaml:
                             "{path}.decision must be include or exclude."
                         ).format(path=answer_path)
                     )
-                options.append(
-                    option_model.objects.create(
-                        question=question,
-                        option_text=require_text(
-                            answer.get("label"),
-                            f"{answer_path}.label",
-                            max_length=255,
-                        ),
-                        option_value=require_text(
-                            answer.get("context"), f"{answer_path}.context"
-                        ),
-                        screening_action=actions[decision],
-                    )
+                option_model.objects.create(
+                    question=question,
+                    option_text=require_text(
+                        answer.get("label"),
+                        f"{answer_path}.label",
+                        max_length=255,
+                    ),
+                    option_value=require_text(
+                        answer.get("context"), f"{answer_path}.context"
+                    ),
+                    screening_action=actions[decision],
                 )
-            if question_model is L1ScreeningQuestion:
-                question.sync_to_l2()
-                for option in options:
-                    option.sync_to_l2()
 
     def create_parameters(self, entries):
         for index, entry in enumerate(entries):

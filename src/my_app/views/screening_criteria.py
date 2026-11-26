@@ -121,28 +121,10 @@ class L1FormsetAdapter(FormsetAdapter):
             model = L1ScreeningQuestion
             fields = ["question_text", "disable_screening", "confidence"]
 
-        def save(self, commit=True):
-            question = super().save(commit=commit)
-            if commit:
-                question.sync_to_l2()
-            return question
-
     class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
             model = L1ScreeningQuestionOption
             fields = ["option_text", "option_value", "screening_action"]
-
-        def save(self, commit=True):
-            option = super().save(commit=commit)
-            if commit:
-                option.sync_to_l2()
-            return option
-
-    class FormSetClass(SoftDeleteInlineFormSet):
-        def delete_existing(self, obj, commit=True):
-            super().delete_existing(obj, commit=commit)
-            if commit:
-                obj.sync_to_l2()
 
     @staticmethod
     def get_new_url(review):
@@ -322,9 +304,6 @@ class ScreeningCriteriaPageContent(HtpyComponent):
         parent_records = adapter.parent_model.active_objects.filter(
             review=review
         )
-        if adapter is L2FormsetAdapter:
-            # filter out 'mirrored' questions
-            parent_records = parent_records.filter(l1_question__isnull=True)
         child_fetcher.prefetch_keys([parent.pk for parent in parent_records])
 
         if parent_records:
@@ -478,14 +457,11 @@ class ChildEditor:
         else:
             extra = 1
 
-        formset_class = getattr(
-            self.adapter, "FormSetClass", SoftDeleteInlineFormSet
-        )
         FormSetCls = forms.models.inlineformset_factory(
             parent_model=self.adapter.parent_model,
             model=self.adapter.child_model,
             form=self.adapter.ChildFormClass,
-            formset=formset_class,
+            formset=SoftDeleteInlineFormSet,
             extra=extra,
             can_delete=True,
         )
@@ -632,10 +608,6 @@ class ChildEditorEditView(ChildEditorModalFormView):
         except self.adapter.parent_model.DoesNotExist:
             raise Http404
 
-        if isinstance(parent, L2ScreeningQuestion) and parent.l1_question_id:
-            # mirrored L2 questions can't be edited through forms
-            raise Http404
-
         editor = ChildEditor(
             parent=parent,
             adapter=self.adapter,
@@ -681,8 +653,6 @@ class DeleteScreeningQuestionView(MustAccessReviewMixin):
         queryset = self.adapter.parent_model.active_objects.filter(
             review=self.review
         )
-        if self.adapter is L2FormsetAdapter:
-            queryset = queryset.filter(l1_question__isnull=True)
         if lock:
             queryset = queryset.select_for_update()
         try:
@@ -696,11 +666,6 @@ class DeleteScreeningQuestionView(MustAccessReviewMixin):
             "This question will be removed from active screening. "
             "Past answers and results will be kept."
         )
-        if isinstance(question, L1ScreeningQuestion):
-            message = tdt(
-                "This question and its L2 copy will be removed from active screening. "
-                "Past answers and results will be kept."
-            )
         return HttpResponse(
             DeleteConfirmation(
                 tdt("Delete question"),

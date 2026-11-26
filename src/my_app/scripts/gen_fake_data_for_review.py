@@ -153,7 +153,6 @@ class FakeScreeningData(FakeStageData):
             question = self.question_model.objects.create(
                 review=self.review, question_text=tdt(text)
             )
-            self.sync_question(question)
             actions = [ScreeningActions.ScreenIn, ScreeningActions.ScreenOut]
             actions.extend(
                 random.choice(ScreeningActions.values)
@@ -163,20 +162,13 @@ class FakeScreeningData(FakeStageData):
                 label = tdt("Eligible")
                 if action == ScreeningActions.ScreenOut:
                     label = tdt("Ineligible")
-                option = self.option_model.objects.create(
+                self.option_model.objects.create(
                     question=question,
                     option_text=f"{label} {number}",
                     option_value=tdt("Synthetic criterion response."),
                     screening_action=action,
                 )
-                self.sync_option(option)
             self.advance_time()
-
-    def sync_question(self, question):
-        pass
-
-    def sync_option(self, option):
-        pass
 
     def validate_options(self, question, options):
         actions = {option.screening_action for option in options}
@@ -186,7 +178,7 @@ class FakeScreeningData(FakeStageData):
             )
 
     def generate_included_answers(self, citation, question, options):
-        selected_option = self.included_option(citation, question, options)
+        selected_option = self.included_option(options)
         defaults = self.result_defaults(erroneous=False)
         defaults.update(
             selected_option=selected_option,
@@ -209,7 +201,7 @@ class FakeScreeningData(FakeStageData):
         )
         self.advance_time()
 
-    def included_option(self, citation, question, options):
+    def included_option(self, options):
         return random.choice(
             [
                 option
@@ -218,7 +210,7 @@ class FakeScreeningData(FakeStageData):
             ]
         )
 
-    def base_answer(self, citation, question, options):
+    def base_answer(self, options):
         roll = random.random()
         action = ScreeningActions.ScreenIn
         if 0.95 <= roll < 0.98:
@@ -229,9 +221,7 @@ class FakeScreeningData(FakeStageData):
         return intended_option, roll >= 0.98
 
     def generate_answers(self, citation, question, options):
-        intended_option, erroneous = self.base_answer(
-            citation, question, options
-        )
+        intended_option, erroneous = self.base_answer(options)
         alternatives = [
             option
             for option in options
@@ -292,12 +282,6 @@ class FakeL1Data(FakeScreeningData):
     critical_model = L1CriticalScreeningResult
     human_model = L1HumanAnswer
 
-    def sync_question(self, question):
-        question.sync_to_l2()
-
-    def sync_option(self, option):
-        option.sync_to_l2()
-
 
 class FakeL2Data(FakeScreeningData):
     question_count_range = (2, 5)
@@ -306,52 +290,6 @@ class FakeL2Data(FakeScreeningData):
     result_model = L2ScreeningResult
     critical_model = L2CriticalScreeningResult
     human_model = L2HumanAnswer
-
-    @cached_property
-    def l1_answers(self):
-        return {
-            (citation_id, question_id): option_id
-            for citation_id, question_id, option_id in L1ScreeningResult.objects.filter(
-                question__review=self.review,
-                status=ScreeningResultStatus.COMPLETED,
-                selected_option__deletion_time__isnull=True,
-            ).values_list(
-                "citation_id", "question_id", "selected_option_id"
-            )
-        }
-
-    def mirrored_option(self, citation, question, options):
-        if question.l1_question_id is None:
-            return None
-        option_id = self.l1_answers.get((citation.pk, question.l1_question_id))
-        if option_id is None:
-            return None
-        return next(
-            (option for option in options if option.l1_option_id == option_id),
-            None,
-        )
-
-    def included_option(self, citation, question, options):
-        option = self.mirrored_option(citation, question, options)
-        if (
-            option is not None
-            and option.screening_action == ScreeningActions.ScreenIn
-        ):
-            return option
-        return super().included_option(citation, question, options)
-
-    def base_answer(self, citation, question, options):
-        option = self.mirrored_option(citation, question, options)
-        if option is None:
-            return super().base_answer(citation, question, options)
-        if random.random() < 0.99:
-            return option, False
-        return (
-            random.choice(
-                [other for other in options if other.pk != option.pk]
-            ),
-            False,
-        )
 
 
 class FakeParameterData(FakeStageData):

@@ -194,7 +194,7 @@ class CreateHumanAnswersView(
                 (
                     "l2",
                     L2ScreeningQuestion.active_objects.filter(
-                        review=self.review, l1_question__isnull=True
+                        review=self.review
                     ),
                 ),
             )

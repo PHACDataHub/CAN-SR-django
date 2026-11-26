@@ -41,101 +41,12 @@ from my_app.models import (
 )
 from my_app.scripts.gen_fake_data_for_review import (
     FakeL1Data,
-    FakeL2Data,
     FakeParameterData,
     human_answer_count,
     run,
 )
 
 SCRIPT = "my_app.scripts.gen_fake_data_for_review"
-
-
-@pytest.mark.parametrize("action", ScreeningActions.values)
-@pytest.mark.parametrize(
-    "roll,agrees", [(0, True), (0.989, True), (0.99, False), (0.999, False)]
-)
-def test_mirrored_l2_answer_matches_exact_l1_option(action, roll, agrees):
-    question = L1ScreeningQuestionFactory()
-    options = [
-        L1ScreeningQuestionOptionFactory(
-            question=question, screening_action=value
-        )
-        for value in [
-            ScreeningActions.ScreenIn,
-            ScreeningActions.ScreenIn,
-            ScreeningActions.ScreenOut,
-        ]
-    ]
-    l2_question = question.sync_to_l2()
-    l2_options = [option.sync_to_l2() for option in options]
-    selected_option = next(
-        option for option in options if option.screening_action == action
-    )
-    citation = CitationFactory(dataset__review=question.review)
-    L1ScreeningResult.objects.create(
-        citation=citation,
-        question=question,
-        selected_option=selected_option,
-        status=ScreeningResultStatus.COMPLETED,
-    )
-    generator = FakeL2Data(question.review)
-    with freeze_time("2026-09-09") as clock:
-        generator.clock = clock
-        with patch(f"{SCRIPT}.random.random", side_effect=[roll, 0.0, 0.99]):
-            generator.generate_answers(citation, l2_question, l2_options)
-    result = L2ScreeningResult.objects.get()
-    assert result.status == ScreeningResultStatus.COMPLETED
-    assert (
-        result.selected_option.l1_option_id == selected_option.pk
-    ) == agrees
-    assert result.critical_result.selected_option is None
-
-
-@pytest.mark.parametrize("status", [None, ScreeningResultStatus.ABANDONED])
-def test_mirrored_l2_without_valid_l1_answer_uses_random_logic(status):
-    question = L1ScreeningQuestionFactory()
-    options = [
-        L1ScreeningQuestionOptionFactory(
-            question=question, screening_action=action
-        )
-        for action in ScreeningActions.values
-    ]
-    l2_question = question.sync_to_l2()
-    l2_options = [option.sync_to_l2() for option in options]
-    citation = CitationFactory(dataset__review=question.review)
-    if status is not None:
-        L1ScreeningResult.objects.create(
-            citation=citation, question=question, status=status
-        )
-    with patch(f"{SCRIPT}.random.random", return_value=0.96):
-        option, erroneous = FakeL2Data(question.review).base_answer(
-            citation, l2_question, l2_options
-        )
-    assert option.screening_action == ScreeningActions.ScreenOut
-    assert not erroneous
-
-
-def test_included_l2_citation_reuses_exact_l1_screen_in_option():
-    question = L1ScreeningQuestionFactory()
-    options = [
-        L1ScreeningQuestionOptionFactory(question=question) for _ in range(2)
-    ]
-    l2_question = question.sync_to_l2()
-    l2_options = [option.sync_to_l2() for option in options]
-    citation = CitationFactory(dataset__review=question.review)
-    L1ScreeningResult.objects.create(
-        citation=citation,
-        question=question,
-        selected_option=options[1],
-        status=ScreeningResultStatus.COMPLETED,
-    )
-    generator = FakeL2Data(question.review)
-    assert (
-        generator.included_option(
-            citation, l2_question, l2_options
-        ).l1_option_id
-        == options[1].pk
-    )
 
 
 def test_run_generates_l1_and_l2_data_for_all_review_citations():
@@ -158,14 +69,7 @@ def test_run_generates_l1_and_l2_data_for_all_review_citations():
             assert {option.screening_action for option in options} == set(
                 ScreeningActions.values
             )
-            mirror = question.l2_copies.get()
-            assert mirror.question_text == question.question_text
-            assert mirror.options.count() == len(options)
-            for option in options:
-                assert (
-                    option.l2_copies.get().screening_action
-                    == option.screening_action
-                )
+        assert not review.l2_screening_questions.exists()
         results = list(L1ScreeningResult.objects.order_by("pk"))
         assert all(result.created_at >= start for result in results)
         for previous, following in zip(results, results[1:]):
@@ -186,11 +90,7 @@ def test_run_generates_l1_and_l2_data_for_all_review_citations():
             for answer in L1HumanAnswer.objects.all()
         )
         run(str(review.pk), "L2")
-        assert (
-            len(questions) + 2
-            <= review.l2_screening_questions.count()
-            <= len(questions) + 5
-        )
+        assert 2 <= review.l2_screening_questions.count() <= 5
         assert (
             L2ScreeningResult.objects.count()
             == len(citations) * review.l2_screening_questions.count()
@@ -198,9 +98,6 @@ def test_run_generates_l1_and_l2_data_for_all_review_citations():
         assert not L2ScreeningResult.objects.filter(
             citation=other_citation
         ).exists()
-        assert L2ScreeningResult.objects.filter(
-            question__l1_question__isnull=False
-        ).count() == len(citations) * len(questions)
         run(str(review.pk), "l1")
         assert (
             L1ScreeningResult.objects.count()
@@ -495,9 +392,7 @@ def test_reset_hard_deletes_all_stages_and_preserves_other_reviews():
                 run(str(current_review.pk), stage)
 
     review.l1_screening_questions.first().soft_delete()
-    review.l2_screening_questions.filter(
-        l1_question__isnull=True
-    ).first().soft_delete()
+    review.l2_screening_questions.first().soft_delete()
     review.parameters.first().soft_delete()
     criteria_models = (
         L1ScreeningQuestion,

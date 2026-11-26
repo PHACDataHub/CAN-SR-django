@@ -135,48 +135,6 @@ def test_invalid_values_do_not_modify_existing_answers(mapping):
     assert answer.selected_option_id == option.pk
 
 
-def test_mirrored_answers_are_created_updated_and_cleared(mapping):
-    review, column, question, option = mapping
-    mirror = question.sync_to_l2()
-    mirrored_option = option.sync_to_l2()
-    L2ScreeningQuestionOptionFactory(question=mirror, l1_option=None)
-    citation = CitationFactory(
-        dataset=column.dataset, data={"Answer": "notapplicable"}
-    )
-    named = L2HumanAnswerFactory(
-        citation=citation, question=mirror, selected_option=mirrored_option
-    )
-    create_human_answers(review, [(question, column)])
-    answer = L2HumanAnswer.objects.get(user=None)
-    assert answer.question_id == mirror.pk
-    assert answer.selected_option_id == mirrored_option.pk
-    other = L1ScreeningQuestionOptionFactory(
-        question=question, option_text="Yes"
-    )
-    mirrored_other = other.sync_to_l2()
-    citation.data = {"Answer": "yes"}
-    citation.save()
-    create_human_answers(review, [(question, column)])
-    answer.refresh_from_db()
-    assert answer.selected_option_id == mirrored_other.pk
-    citation.data = {}
-    citation.save()
-    create_human_answers(review, [(question, column)])
-    answer.refresh_from_db()
-    named.refresh_from_db()
-    assert answer.selected_option_id is None
-    assert named.selected_option_id == mirrored_option.pk
-
-
-def test_missing_or_deleted_mirror_option_aborts(mapping):
-    review, column, question, option = mapping
-    question.sync_to_l2()
-    CitationFactory(dataset=column.dataset, data={"Answer": "notapplicable"})
-    with pytest.raises(ValidationError, match="mirrored options"):
-        create_human_answers(review, [(question, column)])
-    assert not L1HumanAnswer.objects.exists()
-
-
 def test_deleted_options_are_excluded_and_ambiguous_labels_rejected(mapping):
     review, column, question, option = mapping
     citation = CitationFactory(
@@ -207,13 +165,6 @@ def test_service_rejects_foreign_and_deleted_questions_and_columns(mapping):
     question.soft_delete()
     with pytest.raises(ValidationError, match="does not belong"):
         create_human_answers(review, [(question, column)])
-
-
-def test_service_rejects_explicit_mirror_mapping(mapping):
-    review, column, question, _ = mapping
-    mirror = question.sync_to_l2()
-    with pytest.raises(ValidationError, match="through L1"):
-        create_human_answers(review, [(mirror, column)])
 
 
 def test_no_mappings_is_noop(mapping):
@@ -265,7 +216,6 @@ def post_data(column=None):
 
 def test_view_permissions_static_rows_and_link(vanilla_client, mapping):
     review, column, question, option = mapping
-    question.sync_to_l2()
     deleted = L1ScreeningQuestionFactory(
         review=review, question_text="Deleted question"
     )
@@ -393,15 +343,4 @@ def test_validation_collects_errors_from_multiple_questions(mapping):
     assert "bad L1" in str(error.value)
     assert "bad L2" in str(error.value)
     assert not L1HumanAnswer.objects.exists()
-    assert not L2HumanAnswer.objects.exists()
-
-
-def test_deleted_mirrors_are_not_backfilled(mapping):
-    review, column, question, option = mapping
-    mirror = question.sync_to_l2()
-    option.sync_to_l2()
-    mirror.soft_delete()
-    CitationFactory(dataset=column.dataset, data={"Answer": "notapplicable"})
-    create_human_answers(review, [(question, column)])
-    assert L1HumanAnswer.objects.count() == 1
     assert not L2HumanAnswer.objects.exists()
