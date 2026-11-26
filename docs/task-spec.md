@@ -41,6 +41,7 @@ These aren't background tasks in the technical sense, but a vague process that c
 ### PDF Auto Download (doi_pdf_task)
 - scope: citation
 - requires a non-empty DOI field, should fail if not present
+- When a download replaces an attached PDF, the previous file is removed only after no document records reference it. Cloned reviews use separate document records that reference the same stored PDF.
 - What can run next? PDF processing, through the phase 2 citation workflow (implemented).
 - notes:
     - phase 2 skips citations with an attached PDF; otherwise it uses the regular queue service, which rejects pending requests and resets finished/failed/canceled requests

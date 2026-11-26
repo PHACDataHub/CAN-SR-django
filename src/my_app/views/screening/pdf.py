@@ -28,6 +28,7 @@ from my_app.services.doi_pdf_service import (
     PendingDocumentProcessingError,
     QueueDoiPdfService,
     delete_stored_file,
+    delete_unreferenced_document_file,
     ensure_no_pending_processing,
     is_doi_pdf_configured,
     log_doi_pdf_event,
@@ -234,14 +235,18 @@ class CitationDocumentDeleteView(CitationDocumentModalView):
             )
         ensure_no_pending_processing(citation)
 
-        files = [
-            document.file,
-            *(figure.file for figure in document.documentfigures.all()),
-        ]
+        pdf = document.file
+        figures = [figure.file for figure in document.documentfigures.all()]
         L2ScreeningResult.objects.filter(citation=citation).delete()
         ParameterExtractionResult.objects.filter(citation=citation).delete()
         document.delete()
-        for file in files:
+        if pdf.name:
+            transaction.on_commit(
+                lambda: delete_unreferenced_document_file(
+                    pdf.storage, pdf.name, reason="deleted_document_file"
+                )
+            )
+        for file in figures:
             if file.name:
                 transaction.on_commit(
                     lambda storage=file.storage, name=file.name: delete_stored_file(
