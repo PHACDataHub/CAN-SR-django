@@ -26,7 +26,7 @@ def set_viewport(driver):
     )
 
 
-def _prepare_page(driver):
+def _prepare_page(driver, *, preserve_focus=False):
     from selenium.webdriver.support.ui import WebDriverWait
 
     WebDriverWait(driver, 10).until(
@@ -38,7 +38,7 @@ def _prepare_page(driver):
     )
     driver.execute_script(
         """
-        document.activeElement.blur();
+        if (!arguments[0]) document.activeElement.blur();
         window.scrollTo(0, 0);
         const style = document.createElement('style');
         style.textContent = `*, *::before, *::after {
@@ -47,7 +47,8 @@ def _prepare_page(driver):
             caret-color: transparent !important;
         } html, body { scroll-behavior: auto !important; }`;
         document.head.appendChild(style);
-        """
+        """,
+        preserve_focus,
     )
 
 
@@ -111,10 +112,10 @@ def scroll_into_view(driver, element):
     WebDriverWait(driver, 10, poll_frequency=0.1).until(settled)
 
 
-def _capture_screenshot(driver, element=None):
+def _capture_screenshot(driver, element=None, *, preserve_focus=False):
     from selenium.webdriver.support.ui import WebDriverWait
 
-    _prepare_page(driver)
+    _prepare_page(driver, preserve_focus=preserve_focus)
     if element is None:
         return Image.open(BytesIO(driver.get_screenshot_as_png())).convert(
             "RGB"
@@ -143,14 +144,18 @@ def _capture_screenshot(driver, element=None):
     return WebDriverWait(driver, 10, poll_frequency=0.1).until(capture)
 
 
-def save_screenshot(driver, snapshot_name, element=None):
+def save_screenshot(
+    driver, snapshot_name, element=None, *, preserve_focus=False
+):
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]*", snapshot_name):
         raise ValueError(
             "snapshot_name must contain only letters, digits, - or _"
         )
     output_path = RESULT_DIR / "snapshots" / f"{snapshot_name}.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    _capture_screenshot(driver, element).save(output_path)
+    _capture_screenshot(driver, element, preserve_focus=preserve_focus).save(
+        output_path
+    )
     return output_path
 
 

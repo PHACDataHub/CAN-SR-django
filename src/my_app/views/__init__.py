@@ -13,5 +13,6 @@ from . import (
     screening_criteria,
     tables,
     task_cancellation,
+    task_monitoring,
     user_management,
 )

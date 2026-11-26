@@ -1,4 +1,8 @@
+from django.core.exceptions import PermissionDenied
+
 from autocomplete import Autocomplete, ModelAutocomplete, register
+from django_tasks_db.models import DBTaskResult
+from phac_aspc.rules import test_rule
 
 from proj.models import User
 from proj.text import tdt, tm
@@ -30,6 +34,38 @@ class UserAutocomplete(
     model = User
     search_attrs = ["email"]
     minimum_search_length = 0
+
+
+def short_task_name(task_path):
+    return task_path.removeprefix("my_app.tasks.")
+
+
+@register
+class TaskNameAutocomplete(
+    FixRequiredFieldBaseAutocomplete, SuppressAutofillMixin
+):
+    minimum_search_length = 0
+
+    @classmethod
+    def auth_check(cls, request):
+        if not test_rule("is_admin", request.user):
+            raise PermissionDenied
+
+    @classmethod
+    def search_items(cls, search, context):
+        names = (
+            DBTaskResult.objects.filter(task_path__icontains=search)
+            .order_by("task_path")
+            .values_list("task_path", flat=True)
+            .distinct()
+        )
+        return cls.get_items_from_keys(names, context)
+
+    @classmethod
+    def get_items_from_keys(cls, keys, context):
+        return [
+            {"key": key, "label": short_task_name(key)} for key in keys if key
+        ]
 
 
 class StaticChoiceAutocomplete(
