@@ -10,6 +10,8 @@ there are two main packages:
   - also includes all translations
 - my_app: the 'domain specific' application with all the models, views, etc.
 
+Things are mostly organized around reviews. When adding new pages, if they are review-scoped, make sure the breadcrumb trail from that review to the page is included. This doesn't apply to modals.
+
 # App development notes
 
 code style
