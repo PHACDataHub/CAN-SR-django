@@ -172,14 +172,7 @@ def PaginatedCitationPanel(
     )
 
     return h.section(".border.rounded.p-3")[
-        h.div(".d-flex.justify-content-between.align-items-center.mb-3")[
-            h.h2(".h5.mb-0")[tdt("Citations")],
-            h.div(".text-muted.small")[
-                tdt("Page"),
-                " ",
-                str(page_obj.number),
-            ],
-        ],
+        h.h2(".h5.mb-3")[tdt("Citations")],
         pagination,
         h.div(".list-group")[rows],
     ]
@@ -192,54 +185,51 @@ def CitationPagination(
     page_obj,
     request,
 ):
-    def page_url(page_number):
-        return url_with_same_params(
-            request,
-            path=component_url,
-            page=page_number,
+    total_pages = page_obj.paginator.num_pages
+    destinations = []
+    if page_obj.has_previous():
+        destinations.extend(
+            [
+                (tdt("First"), 1),
+                (tdt("Previous"), page_obj.previous_page_number()),
+            ]
+        )
+    if page_obj.has_next():
+        destinations.extend(
+            [
+                (tdt("Next"), page_obj.next_page_number()),
+                (tdt("Last"), total_pages),
+            ]
         )
 
-    common_button_attrs = {
-        "hx_target": f"#{component_id}",
-        "hx_swap": "morph:outerHTML",
-        "hx_disabled_elt": "this",
-        "type": "button",
-        "class": "btn btn-outline-primary btn-sm",
-        "data_focus_after": "#page_x_of_y",
-    }
-    previous_button = h.button(
-        hx_get=(
-            page_url(page_obj.previous_page_number())
-            if page_obj.has_previous()
-            else None
-        ),
-        disabled=not page_obj.has_previous(),
-        **common_button_attrs,
-    )[tdt("Previous")]
-    next_button = h.button(
-        hx_get=(
-            page_url(page_obj.next_page_number())
-            if page_obj.has_next()
-            else None
-        ),
-        disabled=not page_obj.has_next(),
-        **common_button_attrs,
-    )[tdt("Next")]
+    buttons = [
+        h.button(
+            ".btn.btn-outline-primary.btn-sm",
+            type="button",
+            hx_get=url_with_same_params(
+                request, path=component_url, page=page_number
+            ),
+            hx_target=f"#{component_id}",
+            # Morphing skips the focused button, whose destination may change.
+            hx_swap="outerHTML",
+            data_focus_after="#page_x_of_y",
+        )[label]
+        for label, page_number in destinations
+    ]
+    button_group = None
+    if buttons:
+        button_group = h.div(".btn-group")[buttons]
 
-    return h.div(".d-flex.justify-content-between.align-items-center.mb-3")[
-        h.div(".small.text-muted", tabindex="-1", id="page_x_of_y")[
-            tdt("Page"),
-            " ",
-            str(page_obj.number),
-            " ",
-            tdt("of"),
-            " ",
-            str(page_obj.paginator.num_pages),
+    return h.nav(
+        ".d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mb-3",
+        aria_label=tdt("Citation pagination"),
+    )[
+        h.div(".small", tabindex="-1", id="page_x_of_y")[
+            tdt("Page {current} of {total}").format(
+                current=page_obj.number, total=total_pages
+            )
         ],
-        h.div(".btn-group")[
-            previous_button,
-            next_button,
-        ],
+        button_group,
     ]
 
 
