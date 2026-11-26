@@ -26,10 +26,9 @@ from shortcuts import (
     GenericForm,
     HtpyTemplateMixin,
     HttpResponseRedirect,
-    messages,
-    reverse,
-    tdt,
 )
+from shortcuts import breadcrumbs as bc
+from shortcuts import messages, reverse, tdt
 
 
 class CitationUploadForm(StandardFormMixin):
@@ -68,7 +67,10 @@ class CitationUploadPage(BasePageTemplate):
         review = self.context["review"]
 
         return [
-            h.h1[tdt("Import citation dataset")],
+            bc.BreadcrumbTrailForReview(review)[
+                bc.BreadcrumbItem(label=self.title())
+            ],
+            h.h1[self.title()],
             h.p(".text-muted")[
                 tdt(
                     "Upload a CSV or RIS file to add citations to the dataset."
@@ -219,7 +221,14 @@ class CitationMappingPage(BasePageTemplate):
         review = self.context["review"]
         formset = self.context["formset"]
         return [
-            h.h1[tdt("Map citation columns")],
+            bc.BreadcrumbTrailForReview(review)[
+                bc.BreadcrumbItem(
+                    label=tdt("Import citation dataset"),
+                    href=reverse("citation_upload", args=[review.id]),
+                ),
+                bc.BreadcrumbItem(label=self.title()),
+            ],
+            h.h1[self.title()],
             h.p[
                 tdt("Rows to import: {count}").format(
                     count=self.context["row_count"]

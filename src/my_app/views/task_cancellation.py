@@ -6,6 +6,7 @@ from django.views.generic import TemplateView
 import htpy as h
 from phac_aspc.rules import test_rule
 
+from proj.htpy import breadcrumbs as bc
 from proj.htpy.base_page import BasePageTemplate
 from proj.htpy.components import CsrfInput
 from proj.text import tdt
@@ -25,8 +26,16 @@ class TaskCancellationPage(BasePageTemplate):
         return self.context["title"]
 
     def content(self):
+        title = self.head_title()
+        review = self.context.get("review")
+        breadcrumbs = None
+        if review is not None:
+            breadcrumbs = bc.BreadcrumbTrailForReview(review)[
+                bc.BreadcrumbItem(label=title)
+            ]
         return [
-            h.h1[self.context["title"]],
+            breadcrumbs,
+            h.h1[title],
             h.p[
                 tdt(
                     "Tasks that have already started can finish. Pending tasks and follow-up tasks from those workflows will be canceled."

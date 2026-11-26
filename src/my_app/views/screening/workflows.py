@@ -23,9 +23,9 @@ from shortcuts import (
     GenericForm,
     HtpyTemplateMixin,
     StandardFormMixin,
-    reverse,
-    tdt,
 )
+from shortcuts import breadcrumbs as bc
+from shortcuts import reverse, tdt
 
 
 class BulkWorkflowForm(StandardFormMixin, forms.Form):
@@ -65,8 +65,12 @@ class WorkflowTemplate(BasePageTemplate):
         citation = self.context.get("citation")
         if citation is not None:
             description = citation.title
+        title = tdt("{phase} workflow").format(phase=phase.label)
         return h.div(".container")[
-            h.h1[tdt("{phase} workflow").format(phase=phase.label)],
+            bc.BreadcrumbTrailForReview(self.context["review"])[
+                bc.BreadcrumbItem(label=title)
+            ],
+            h.h1[title],
             h.p[description],
             h.p[details],
             h.form(method="post")[
@@ -179,8 +183,12 @@ class WorkflowStatusTemplate(BasePageTemplate):
         phase = BulkWorkflowRequest.Phase.L2
         if isinstance(workflow, BulkWorkflowRequest):
             phase = BulkWorkflowRequest.Phase(workflow.phase)
+        title = tdt("{phase} workflow status").format(phase=phase.label)
         return h.div(".container")[
-            h.h1[tdt("{phase} workflow status").format(phase=phase.label)],
+            bc.BreadcrumbTrailForReview(self.context["review"])[
+                bc.BreadcrumbItem(label=title)
+            ],
+            h.h1[title],
             h.p[workflow.get_status_display()],
             h.p[workflow.error],
             h.p[tdt("Requested at"), ": ", str(workflow.requested_at)],
