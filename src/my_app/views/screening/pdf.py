@@ -1,9 +1,15 @@
 import logging
+from urllib.parse import urlsplit
 
 from django import forms
+from django.contrib import messages
 from django.core.validators import FileExtensionValidator
 from django.http import FileResponse, Http404, HttpResponse
+from django.urls import reverse
 
+from django_htmx.http import HttpResponseClientRefresh
+
+from proj.htpy.base_page import MessagesBar
 from proj.util import MissingPreconditionError
 
 from my_app.models import (
@@ -139,11 +145,34 @@ class CitationDoiPdfDownloadView(DocumentCitationMixin):
         )
 
 
+class CitationDocumentModalView(DocumentCitationMixin):
+    def document_changed(self, message):
+        messages.success(self.request, message)
+        current_url = self.request.htmx.current_url
+        if current_url:
+            path = urlsplit(current_url).path
+            args = [self.review.pk, self.citation_row.pk]
+            if path in {
+                reverse("l2_citation_detail", args=args),
+                reverse("parameter_extraction_citation_detail", args=args),
+            }:
+                return HttpResponseClientRefresh()
+
+        return HttpResponse(
+            MessagesBar(self.request),
+            headers={
+                "HX-Trigger": "citations-update",
+                "HX-Trigger-After-Settle": "modal-close",
+                "HX-Reswap": "none",
+            },
+        )
+
+
 @route(
     "/reviews/<int:review_id>/citations/<int:row_pk>/document/<int:document_id>/delete/",
     name="citation_delete_pdf",
 )
-class CitationDocumentDeleteView(DocumentCitationMixin):
+class CitationDocumentDeleteView(CitationDocumentModalView):
     def render_confirmation(self, *, error=None):
         return HttpResponse(
             DeleteConfirmation(
@@ -175,9 +204,7 @@ class CitationDocumentDeleteView(DocumentCitationMixin):
             )
         except MissingPreconditionError as exc:
             return self.render_confirmation(error=str(exc))
-        return HttpResponse(
-            headers={"HX-Trigger": "citations-update", "HX-Reswap": "none"}
-        )
+        return self.document_changed(tdt("PDF deleted."))
 
     def delete_document(self):
         citation = Citation.objects.select_for_update().get(
@@ -227,7 +254,7 @@ class CitationDocumentDeleteView(DocumentCitationMixin):
     "/reviews/<int:review_id>/citations/<int:row_pk>/document/upload/",
     name="citation_upload_pdf_document_modal",
 )
-class CitationDocumentUploadView(DocumentCitationMixin):
+class CitationDocumentUploadView(CitationDocumentModalView):
     @cached_property
     def existing_document(self):
         return self.citation_row.document
@@ -287,11 +314,10 @@ class CitationDocumentUploadView(DocumentCitationMixin):
             self.delete_existing_content()
             self.attach_new_document()
 
-        response = HttpResponse("")
-        response["HX-Trigger"] = "citations-update"
-        response["HX-Trigger-After-Settle"] = "modal-close"
-        response["HX-Reswap"] = "none"
-        return response
+        message = tdt("PDF uploaded.")
+        if self.existing_document is not None:
+            message = tdt("PDF replaced.")
+        return self.document_changed(message)
 
     def form_invalid(self):
         response = HttpResponse(self.render_modal())

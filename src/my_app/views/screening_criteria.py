@@ -4,12 +4,14 @@ import uuid
 from urllib.parse import urlencode
 
 from django import forms
+from django.contrib import messages
 from django.http import Http404, HttpResponseBadRequest
 from django.views.generic import TemplateView
 
 import htpy as h
 
 from proj.form_util import SoftDeleteInlineFormSet
+from proj.htpy.base_page import MessagesBar
 from proj.htpy.form_components import ErrorSummary, InlineFormset
 from proj.htpy.modal_component import ModalComponent
 
@@ -513,7 +515,8 @@ class ChildEditor:
         error_summary = None
         if self.data is not None:
             error_summary = ErrorSummary(
-                [self.child_form, *self.child_formset.forms]
+                [self.child_form, *self.child_formset.forms],
+                formset_errors=self.child_formset.non_form_errors(),
             )
 
         form_attrs = {
@@ -523,6 +526,7 @@ class ChildEditor:
             "hx-select": f"#{self.form_id}",
             "class": "mb-4 border p-3 rounded",
             "id": self.form_id,
+            "novalidate": True,
         }
         if self.adapter is ParameterFormsetAdapter:
             option_type = (
@@ -579,7 +583,11 @@ class ChildEditorModalFormView(MustAccessReviewMixin):
         # re-render the entire parent page
         # hx-swap-oob will take care of swapping updated data
         content = ScreeningCriteriaPageContent(self.review).render()
-        resp = HttpResponse(content)
+        message = tdt("Screening question saved.")
+        if self.adapter is ParameterFormsetAdapter:
+            message = tdt("Parameter saved.")
+        messages.success(self.request, message)
+        resp = HttpResponse(h.fragment[content, MessagesBar(self.request)])
         resp["HX-Trigger-After-Settle"] = "modal-close"
         resp["Hx-Reswap"] = "none"
 
@@ -587,7 +595,7 @@ class ChildEditorModalFormView(MustAccessReviewMixin):
 
     def form_invalid(self):
         resp = HttpResponse(self.editor.render_modal())
-        resp["HX-Refocus"] = f"#{self.editor.form_id}-error-summary"
+        resp["HX-Refocus"] = "#form-error-summary"
         return resp
 
     def post(self, *args, **kwargs):
@@ -704,8 +712,12 @@ class DeleteScreeningQuestionView(MustAccessReviewMixin):
     def post(self, *args, **kwargs):
         with transaction.atomic():
             self.get_question(lock=True).soft_delete()
+        messages.success(self.request, tdt("Screening question deleted."))
         return HttpResponse(
-            ScreeningCriteriaPageContent(self.review).render(),
+            h.fragment[
+                ScreeningCriteriaPageContent(self.review).render(),
+                MessagesBar(self.request),
+            ],
             headers={
                 "HX-Reswap": "none",
                 "HX-Trigger-After-Settle": "modal-close",
@@ -816,6 +828,7 @@ class EditScreeningColumnsModal(MustAccessReviewMixin):
                 hx_select="#screening-columns-form",
                 id="screening-columns-form",
             )[
+                ErrorSummary([self.form]),
                 GenericForm(self.form),
             ],
         ]
@@ -837,12 +850,15 @@ class EditScreeningColumnsModal(MustAccessReviewMixin):
     def form_valid(self):
         self.form.save()
 
-        resp = HttpResponse(self._render_page())
+        messages.success(self.request, tdt("Screening columns saved."))
+        resp = HttpResponse(
+            h.fragment[self._render_page(), MessagesBar(self.request)]
+        )
         resp["HX-Trigger-After-Settle"] = "modal-close"
         resp["Hx-Reswap"] = "none"
         return resp
 
     def form_invalid(self):
         resp = HttpResponse(self._render_modal())
-        resp["HX-Refocus"] = "#screening-columns-form"
+        resp["HX-Refocus"] = "#form-error-summary"
         return resp

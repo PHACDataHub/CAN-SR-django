@@ -192,8 +192,9 @@ class CitationDocumentUploadModal:
                 "citation_upload_pdf_document_modal",
                 args=[self.review.id, self.citation_row.id],
             ),
-            hx_target="#modal-slot",
-            hx_swap="innerHTML",
+            hx_target="this",
+            hx_swap="outerHTML",
+            hx_select=f"#{self.form_id}",
             hx_encoding="multipart/form-data",
         )[
             ErrorSummary([self.form]),

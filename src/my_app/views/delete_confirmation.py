@@ -23,10 +23,17 @@ def DeleteConfirmation(title, message, post_url, *, error=None):
         h.form(
             id=form_id,
             hx_post=post_url,
-            hx_target="#modal-slot",
-            hx_swap="innerHTML",
+            hx_target="this",
+            hx_swap="outerHTML",
+            hx_select=f"#{form_id}",
         )[
-            h.p(".text-danger", role="alert")[error] if error else None,
+            (
+                h.p("#form-error-summary.alert.alert-danger", role="alert")[
+                    error
+                ]
+                if error
+                else None
+            ),
             h.p(".mb-0")[message],
         ]
     ]

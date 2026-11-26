@@ -6,7 +6,6 @@ from django.conf import settings
 import htpy
 from htpy import Node, Renderable
 from markupsafe import Markup
-from phac_aspc.vanilla import flatten
 
 from proj.htpy.context_providers import (
     WithAriaLabelledBy,
@@ -172,22 +171,25 @@ def InlineFormset(
     ]
 
 
-def ErrorSummary(form_list: list[forms.Form]) -> Node:
-
-    has_errors = False
-    for form in form_list:
-        for field in form.visible_fields():
-            if field.errors:
-                has_errors = True
-                break
-
-        if has_errors:
-            break
-
-    if not has_errors:
+def ErrorSummary(form_list: list[forms.Form], *, formset_errors=()) -> Node:
+    fields_with_errors = [
+        field
+        for form in form_list
+        for field in form.visible_fields()
+        if field.errors
+    ]
+    other_errors = [
+        *formset_errors,
+        *(error for form in form_list for error in form.non_field_errors()),
+        *(
+            error
+            for form in form_list
+            for field in form.hidden_fields()
+            for error in field.errors
+        ),
+    ]
+    if not fields_with_errors and not other_errors:
         return None
-
-    all_fields = flatten([form.visible_fields() for form in form_list])
 
     return htpy.div(
         {
@@ -200,7 +202,8 @@ def ErrorSummary(form_list: list[forms.Form]) -> Node:
     )[
         htpy.h2({"class": "h4"})[tm("form_not_saved")],
         htpy.ul[
-            (
+            [htpy.li[error] for error in other_errors],
+            [
                 htpy.li[
                     htpy.a({"href": f"#{field.id_for_label}"})[
                         htpy.strong[field.label],
@@ -208,8 +211,7 @@ def ErrorSummary(form_list: list[forms.Form]) -> Node:
                         htpy.span[", ".join(field.errors)],
                     ]
                 ]
-                for field in all_fields
-                if field.errors
-            )
+                for field in fields_with_errors
+            ],
         ],
     ]

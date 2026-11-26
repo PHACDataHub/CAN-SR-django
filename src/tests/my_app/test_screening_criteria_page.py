@@ -700,6 +700,7 @@ def test_edit_screening_columns_modal_saves_and_returns_page(
     body = response.content.decode()
     assert 'id="screening-columns-section"' in body
     assert 'hx-swap-oob="true"' in body
+    assert "Screening columns saved." in body
     assert "month" in body
     assert "day" in body
     assert "year" not in body
@@ -725,7 +726,7 @@ def test_edit_screening_columns_modal_rejects_invalid_choice(
         )
 
     assert response.status_code == 200
-    assert response["HX-Refocus"] == "#screening-columns-form"
+    assert response["HX-Refocus"] == "#form-error-summary"
     dataset.refresh_from_db()
     assert list(
         dataset.screening_columns.order_by("id").values_list("name", flat=True)
@@ -794,6 +795,7 @@ def test_add_l1_question_modal_saves_valid_data(
     assert "Is this a test question?" in body
     assert "Option 1" in body
     assert "Option 2" in body
+    assert "Screening question saved." in body
 
 
 def test_add_l1_question_modal_shows_errors_for_invalid_data(
@@ -821,7 +823,7 @@ def test_add_l1_question_modal_shows_errors_for_invalid_data(
         response = vanilla_user_client.post(url, data)
 
     assert response.status_code == 200
-    assert response["HX-Refocus"] == "#L1FormsetAdapter-error-summary"
+    assert response["HX-Refocus"] == "#form-error-summary"
     assert L1ScreeningQuestion.objects.filter(review=review).count() == 0
 
     body = response.content.decode()
