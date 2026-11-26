@@ -175,7 +175,7 @@ def test_delete_pdf_clears_only_pdf_work_and_allows_new_download(
     request.refresh_from_db()
     assert request.status == PdfFromDOIRequest.Status.PENDING
     assert request.run_id != previous_run_id
-    enqueue.assert_called_once_with(request.pk, str(request.run_id))
+    enqueue.assert_called_once_with(request.pk, str(request.run_id), 0)
 
     @contextmanager
     def download(url):

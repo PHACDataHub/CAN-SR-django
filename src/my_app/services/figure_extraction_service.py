@@ -2,6 +2,7 @@ from pathlib import Path
 
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.utils import timezone
 
 from my_app.models import (
     Document,
@@ -124,9 +125,17 @@ class FigureExtractionService:
         )
 
     def perform(self):
-        # TODO: add failure handling in the next pass.
-        with transaction.atomic():
-            self.clear_data()
-            self.save_figures()
-            self.save_tables()
-            self.set_success()
+        try:
+            with transaction.atomic():
+                self.clear_data()
+                self.save_figures()
+                self.save_tables()
+                self.set_success()
+        except Exception:
+            FigureExtractionResult.objects.filter(
+                document=self.document
+            ).update(
+                status=FigureExtractionResult.Status.FAILED,
+                updated_at=timezone.now(),
+            )
+            raise

@@ -203,6 +203,8 @@ same artifact-only behavior applies to Dependabot pull requests.
 
 When authoring selenium tests, make sure not to import selenium at the top level, this will break environments that don't support selenium, like the regular CI jobs. 
 
+Selenium tests take screenshots. Some are compared against baseline images to detect visual regressions, others aren't compared at all and are just generated for convenience (e.g. for manual inspection), these go into `<repo-root>/test-results/visual/snapshots/`
+
 ## Calculating code coverage 
 
 From the `src/` directory run the following

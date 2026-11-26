@@ -1,3 +1,4 @@
+from functools import partial
 from typing import List
 
 from django.db import transaction
@@ -18,79 +19,100 @@ from my_app.prompts.l1_screening_prompt import (
     get_l1_screening_results,
 )
 from my_app.queries import get_model_for_review, options_for_question
+from my_app.services.task_cancellation import (
+    current_cancellation_generation_id,
+)
+from my_app.services.workflow_scheduling import DEPENDENT_TASK_PRIORITY
 from shortcuts import logger
-
-# class EnqueueL1ScreeningService(L1ScreeningService):
 
 
 class EnqueueL1ScreeningService:
-    """
-    creates the empty result objects
-    to be later used by the processing task
-
-
-    will make N+1 queries (N=questions, not citations)
-    ideally questions are not very numerous
-    """
+    """Prepare result rows in batches and dispatch their tasks after commit."""
 
     def __init__(
         self,
         rows: List[Citation],
         questions: List[L1ScreeningQuestion],
         overwrite_existing=False,
+        bulk_request=None,
     ):
         self.rows = rows
         self.questions = [
             question for question in questions if question.is_active
         ]
         self.overwrite_existing = overwrite_existing
+        self.bulk_request = bulk_request
 
     def perform(self):
-
-        citation_ids = {row.id for row in self.rows}
-
-        if self.overwrite_existing:
-            # all or nothing, may want to configure alternatives, but will be complicated
-            L1ScreeningResult.objects.filter(
+        citation_ids = {row.pk for row in self.rows}
+        models_by_review = {
+            review_id: get_model_for_review(review_id)
+            for review_id in {
+                question.review_id for question in self.questions
+            }
+        }
+        if self.bulk_request is None:
+            cancellation_generation_id = current_cancellation_generation_id()
+        else:
+            cancellation_generation_id = (
+                self.bulk_request.cancellation_generation_id
+            )
+        with transaction.atomic():
+            existing = L1ScreeningResult.objects.filter(
                 question__in=self.questions,
                 citation_id__in=citation_ids,
-            ).delete()
-
-        for question in self.questions:
-            model = get_model_for_review(question.review_id)
-            existing_results = L1ScreeningResult.objects.filter(
-                question=question,
-                citation_id__in=citation_ids,
             )
-            # exclude existing citation-question pairs from processing
-            citations_with_existing_results = {
-                result.citation_id for result in existing_results
-            }
-
-            citations_to_process = [
-                citation_id
-                for citation_id in citation_ids
-                if citation_id not in citations_with_existing_results
-            ]
-
-            for citation_id in citations_to_process:
-                result = L1ScreeningResult.objects.create(
-                    citation_id=citation_id,
-                    question_id=question.id,
-                    language_model=model,
-                    status=ScreeningResultStatus.PENDING,
+            if self.overwrite_existing:
+                existing.delete()
+                existing_pairs = set()
+            else:
+                existing_pairs = set(
+                    existing.values_list("citation_id", "question_id")
                 )
+            results = L1ScreeningResult.objects.bulk_create(
+                [
+                    L1ScreeningResult(
+                        citation_id=citation_id,
+                        question=question,
+                        language_model=models_by_review[question.review_id],
+                        status=ScreeningResultStatus.PENDING,
+                        bulk_request=self.bulk_request,
+                    )
+                    for question in self.questions
+                    for citation_id in citation_ids
+                    if (citation_id, question.pk) not in existing_pairs
+                ]
+            )
+            for result in results:
+                transaction.on_commit(
+                    partial(
+                        self.enqueue_task_for_result,
+                        result.pk,
+                        cancellation_generation_id,
+                    )
+                )
+        return results
 
-                self.enqueue_task_for_result(result.id)
-
-    def enqueue_task_for_result(self, result_id: int):
-        logger.info(
-            "Enqueuing background L1 screening processing for result_id=%s",
-            result_id,
-        )
+    def enqueue_task_for_result(
+        self, result_id: int, cancellation_generation_id: int
+    ) -> None:
         from my_app.tasks.l1_screening import process_l1_screening_task
 
-        process_l1_screening_task.enqueue(result_id=result_id)
+        try:
+            process_l1_screening_task.enqueue(
+                result_id=result_id,
+                cancellation_generation_id=cancellation_generation_id,
+            )
+        except Exception:
+            if self.bulk_request is None:
+                raise
+            L1ScreeningResult.objects.filter(pk=result_id).update(
+                status=ScreeningResultStatus.ABANDONED,
+                abandoned_at=timezone.now(),
+            )
+            logger.exception(
+                "Could not dispatch L1ScreeningResult id=%s", result_id
+            )
 
 
 class ProcessL1ScreeningService:
@@ -101,8 +123,11 @@ class ProcessL1ScreeningService:
 
     NUM_RETRIES_ON_UNEXPECTED_LLM_OUTPUT = 3
 
-    def __init__(self, result_id: int):
+    def __init__(
+        self, result_id: int, cancellation_generation_id: int = 0
+    ) -> None:
         self.result_id = result_id
+        self.cancellation_generation_id = cancellation_generation_id
 
     def _mark_abandoned(self, result: L1ScreeningResult, error: Exception):
         result.status = ScreeningResultStatus.ABANDONED
@@ -203,8 +228,14 @@ class ProcessL1ScreeningService:
                 process_l1_critical_screening_task,
             )
 
+            critical_task = process_l1_critical_screening_task
+            if result.bulk_request_id:
+                critical_task = critical_task.using(
+                    priority=DEPENDENT_TASK_PRIORITY
+                )
             transaction.on_commit(
-                lambda: process_l1_critical_screening_task.enqueue(
-                    result_id=critical_result.pk
+                lambda: critical_task.enqueue(
+                    result_id=critical_result.pk,
+                    cancellation_generation_id=self.cancellation_generation_id,
                 )
             )

@@ -93,7 +93,9 @@ def _build_parameter_extraction_context(
     return review, dataset, citation, text_extraction_result, parameter
 
 
-def test_deferred_parameter_extraction_service_enqueues_created_results():
+def test_deferred_parameter_extraction_service_enqueues_created_results(
+    django_capture_on_commit_callbacks,
+):
     model = LanguageModel.get_default_model()
     review, _, row_1, _, parameter = _build_parameter_extraction_context(
         language_model=model
@@ -111,9 +113,12 @@ def test_deferred_parameter_extraction_service_enqueues_created_results():
     task_mock = MagicMock()
     task_mock.enqueue = MagicMock()
 
-    with patch(
-        "my_app.tasks.parameter_extraction.process_parameter_extraction_task",
-        task_mock,
+    with (
+        patch(
+            "my_app.tasks.parameter_extraction.process_parameter_extraction_task",
+            task_mock,
+        ),
+        django_capture_on_commit_callbacks(execute=True),
     ):
         service = EnqueueParameterExtractionService(
             rows=[row_1, row_2],
@@ -134,10 +139,15 @@ def test_deferred_parameter_extraction_service_enqueues_created_results():
     assert results[1].status == ScreeningResultStatus.PENDING
     assert results[1].language_model == model
     assert task_mock.enqueue.call_count == 1
-    assert task_mock.enqueue.call_args.kwargs == {"result_id": results[1].id}
+    assert task_mock.enqueue.call_args.kwargs == {
+        "result_id": results[1].id,
+        "cancellation_generation_id": 0,
+    }
 
 
-def test_deferred_parameter_extraction_service_overwrite_targets_only_requested_rows_and_parameters():
+def test_deferred_parameter_extraction_service_overwrite_targets_only_requested_rows_and_parameters(
+    django_capture_on_commit_callbacks,
+):
     _, _, target_row, _, parameter = _build_parameter_extraction_context()
     _, _, untouched_row, _, other_parameter = (
         _build_parameter_extraction_context()
@@ -164,9 +174,12 @@ def test_deferred_parameter_extraction_service_overwrite_targets_only_requested_
     task_mock = MagicMock()
     task_mock.enqueue = MagicMock()
 
-    with patch(
-        "my_app.tasks.parameter_extraction.process_parameter_extraction_task",
-        task_mock,
+    with (
+        patch(
+            "my_app.tasks.parameter_extraction.process_parameter_extraction_task",
+            task_mock,
+        ),
+        django_capture_on_commit_callbacks(execute=True),
     ):
         service = EnqueueParameterExtractionService(
             rows=[target_row],
@@ -210,7 +223,8 @@ def test_deferred_parameter_extraction_service_overwrite_targets_only_requested_
     assert target_pair_results[0].status == ScreeningResultStatus.PENDING
     assert task_mock.enqueue.call_count == 1
     assert task_mock.enqueue.call_args.kwargs == {
-        "result_id": target_pair_results[0].id
+        "result_id": target_pair_results[0].id,
+        "cancellation_generation_id": 0,
     }
 
 

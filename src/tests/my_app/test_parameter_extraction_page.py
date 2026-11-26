@@ -441,6 +441,7 @@ def test_parameter_extraction_human_answer_selects_parameter_option(
 
 def test_parameter_extraction_process_view_enqueues_extraction_and_returns_control(
     vanilla_client,
+    django_capture_on_commit_callbacks,
 ):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
@@ -461,9 +462,12 @@ def test_parameter_extraction_process_view_enqueues_extraction_and_returns_contr
     deleted_parameter.soft_delete()
 
     with patch_rules(can_access_review=True):
-        with patch(
-            "my_app.tasks.parameter_extraction.process_parameter_extraction_task"
-        ) as task_mock:
+        with (
+            patch(
+                "my_app.tasks.parameter_extraction.process_parameter_extraction_task"
+            ) as task_mock,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
             response = vanilla_client.post(
                 reverse(
                     "parameter_extraction_citation_process_extraction",

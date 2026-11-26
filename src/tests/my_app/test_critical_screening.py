@@ -199,7 +199,9 @@ def test_initial_success_enqueues_critical_only_after_commit_and_rescreens_repla
             initial.refresh_from_db()
             assert initial.status == ScreeningResultStatus.COMPLETED
         critical = model.objects.get(initial_result=initial)
-        task.enqueue.assert_called_once_with(result_id=critical.pk)
+        task.enqueue.assert_called_once_with(
+            result_id=critical.pk, cancellation_generation_id=0
+        )
         assert critical.language_model == initial.language_model
         old_pk = critical.pk
         with django_capture_on_commit_callbacks(execute=True):

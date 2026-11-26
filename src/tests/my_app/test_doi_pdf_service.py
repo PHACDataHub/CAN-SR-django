@@ -240,7 +240,7 @@ def test_queue_creates_resets_and_rejects_pending_requests(
             result = QueueDoiPdfService(
                 citation, requesting_user=user
             ).perform()
-        enqueue.assert_called_once_with(result.pk, str(result.run_id))
+        enqueue.assert_called_once_with(result.pk, str(result.run_id), 0)
         assert result.requesting_user == user
         assert result.citation_id == citation.pk
         assert result.selected_url is None

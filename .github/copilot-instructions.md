@@ -91,6 +91,10 @@ Javascript
 - small bits of data, like ids, flags or labels, can be passed via `data-*` attributes and accessed via a small helper function
   - this includes translations, although the tdt() function is also available in JS files for demo-text
 
+# Background tasks
+
+- When touching background tasks, have a look at ./docs/task-spec.md, update any relevant sections to reflect changes in task behavior or new tasks added
+
 # Testing
 
 Write pytests in the src/tests/, focus on integration tests of views, unit tests for helpers

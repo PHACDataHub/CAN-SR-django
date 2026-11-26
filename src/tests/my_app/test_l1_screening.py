@@ -27,7 +27,9 @@ from my_app.services.l1_screening import (
 pytestmark = [pytest.mark.backend, pytest.mark.l1_screening]
 
 
-def test_deferred_l1_screening_service_enqueues_created_results():
+def test_deferred_l1_screening_service_enqueues_created_results(
+    django_capture_on_commit_callbacks,
+):
     model = LanguageModel.get_default_model()
     review = ReviewFactory(language_model=model)
     dataset = CitationDatasetFactory(review=review)
@@ -67,9 +69,12 @@ def test_deferred_l1_screening_service_enqueues_created_results():
     task_mock = MagicMock()
     task_mock.enqueue = MagicMock()
 
-    with patch(
-        "my_app.tasks.l1_screening.process_l1_screening_task",
-        task_mock,
+    with (
+        patch(
+            "my_app.tasks.l1_screening.process_l1_screening_task",
+            task_mock,
+        ),
+        django_capture_on_commit_callbacks(execute=True),
     ):
         service = EnqueueL1ScreeningService(
             rows=[row_1, row_2],
@@ -90,10 +95,15 @@ def test_deferred_l1_screening_service_enqueues_created_results():
     assert results[1].status == ScreeningResultStatus.PENDING
     assert results[1].language_model == model
     assert task_mock.enqueue.call_count == 1
-    assert task_mock.enqueue.call_args.kwargs == {"result_id": results[1].id}
+    assert task_mock.enqueue.call_args.kwargs == {
+        "result_id": results[1].id,
+        "cancellation_generation_id": 0,
+    }
 
 
-def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and_questions():
+def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and_questions(
+    django_capture_on_commit_callbacks,
+):
     review = ReviewFactory()
     dataset = CitationDatasetFactory(review=review)
     target_row = CitationFactory(
@@ -156,9 +166,12 @@ def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and
     task_mock = MagicMock()
     task_mock.enqueue = MagicMock()
 
-    with patch(
-        "my_app.tasks.l1_screening.process_l1_screening_task",
-        task_mock,
+    with (
+        patch(
+            "my_app.tasks.l1_screening.process_l1_screening_task",
+            task_mock,
+        ),
+        django_capture_on_commit_callbacks(execute=True),
     ):
         service = EnqueueL1ScreeningService(
             rows=[target_row],
@@ -199,7 +212,8 @@ def test_deferred_l1_screening_service_overwrite_targets_only_requested_rows_and
     assert target_pair_results[0].status == ScreeningResultStatus.PENDING
     assert task_mock.enqueue.call_count == 1
     assert task_mock.enqueue.call_args.kwargs == {
-        "result_id": target_pair_results[0].id
+        "result_id": target_pair_results[0].id,
+        "cancellation_generation_id": 0,
     }
 
 

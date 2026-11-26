@@ -229,7 +229,15 @@ class ParameterExtractionPageTemplate(BasePageTemplate):
         return WorkflowListPageContent(
             review,
             tdt("Parameter extraction"),
-            component.render(),
+            [
+                h.p[
+                    h.a(
+                        ".btn.btn-primary",
+                        href=reverse("phase3_bulk_workflow", args=[review.pk]),
+                    )[tdt("Run all AI")]
+                ],
+                component.render(),
+            ],
         )
 
 

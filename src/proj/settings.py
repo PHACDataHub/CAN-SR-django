@@ -106,6 +106,17 @@ TASKS = {
 }
 
 
+WORKFLOW_CHECK_INITIAL_SECONDS = config(
+    "WORKFLOW_CHECK_INITIAL_SECONDS", default=5, cast=float
+)
+WORKFLOW_CHECK_FOLLOWUP_SECONDS = config(
+    "WORKFLOW_CHECK_FOLLOWUP_SECONDS", default=2, cast=float
+)
+WORKFLOW_EFFECTIVE_SCREENING_WORKERS = config(
+    "WORKFLOW_EFFECTIVE_SCREENING_WORKERS", default=1, cast=int
+)
+
+
 # LLM settings
 # see llm_client.py to see usage
 from decouple import Csv, config

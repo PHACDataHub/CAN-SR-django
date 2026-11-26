@@ -10,10 +10,7 @@ from my_app.models import (
     Citation,
     Document,
     L1ScreeningResult,
-    L2ScreeningQuestion,
-    L2ScreeningQuestionOption,
     L2ScreeningResult,
-    Parameter,
     ParameterExtractionResult,
     PdfFromDOIRequest,
 )
@@ -51,14 +48,6 @@ class CitationDocumentUploadForm(StandardFormMixin):
         validators=[FileExtensionValidator(["pdf"])],
         widget=forms.FileInput(attrs={"accept": ".pdf,application/pdf"}),
     )
-    should_run_l2_screening = forms.BooleanField(
-        label=tdt("Run L2 screening immediately"),
-        required=False,
-    )
-    should_run_parameter_extraction = forms.BooleanField(
-        label=tdt("Run parameter extraction immediately"),
-        required=False,
-    )
     confirm_replace = forms.BooleanField(
         label=tdt(
             "I understand this will delete the existing document, text extraction result, and screening results before uploading the replacement."
@@ -70,8 +59,6 @@ class CitationDocumentUploadForm(StandardFormMixin):
         self,
         *args,
         existing_document=False,
-        l2_screening_configured=False,
-        parameter_extraction_configured=False,
         **kwargs,
     ):
         self.existing_document = existing_document
@@ -79,20 +66,6 @@ class CitationDocumentUploadForm(StandardFormMixin):
 
         if not self.existing_document:
             self.fields.pop("confirm_replace", None)
-
-        if not l2_screening_configured:
-            field = self.fields["should_run_l2_screening"]
-            field.disabled = True
-            field.help_text = tdt(
-                "L2 screening criteria have not been configured for this review."
-            )
-
-        if not parameter_extraction_configured:
-            field = self.fields["should_run_parameter_extraction"]
-            field.disabled = True
-            field.help_text = tdt(
-                "Parameters have not been configured for this review."
-            )
 
 
 @route(
@@ -260,27 +233,11 @@ class CitationDocumentUploadView(DocumentCitationMixin):
         return self.citation_row.document
 
     @cached_property
-    def l2_screening_configured(self):
-        return L2ScreeningQuestionOption.active_objects.filter(
-            question__review=self.review,
-            deletion_time__isnull=True,
-            question__deletion_time__isnull=True,
-        ).exists()
-
-    @cached_property
-    def parameter_extraction_configured(self):
-        return Parameter.active_objects.filter(review=self.review).exists()
-
-    @cached_property
     def form(self):
         return CitationDocumentUploadForm(
             self.request.POST or None,
             self.request.FILES or None,
             existing_document=self.existing_document is not None,
-            l2_screening_configured=self.l2_screening_configured,
-            parameter_extraction_configured=(
-                self.parameter_extraction_configured
-            ),
         )
 
     @cached_property
@@ -322,13 +279,7 @@ class CitationDocumentUploadView(DocumentCitationMixin):
         self.citation_row.document = document
         self.citation_row.save(update_fields=["document"])
         QueueProcessDocumentService(
-            document=document,
-            should_run_l2_screening=self.form.cleaned_data[
-                "should_run_l2_screening"
-            ],
-            should_run_parameter_extraction=self.form.cleaned_data[
-                "should_run_parameter_extraction"
-            ],
+            document=document, review_id=self.kwargs["review_id"]
         ).perform()
 
     def form_valid(self):

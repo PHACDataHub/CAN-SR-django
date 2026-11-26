@@ -230,6 +230,12 @@ class L1ScreeningPageTemplate(BasePageTemplate):
             review,
             tdt("L1 Screening"),
             [
+                h.p[
+                    h.a(
+                        ".btn.btn-primary",
+                        href=reverse("phase1_bulk_workflow", args=[review.pk]),
+                    )[tdt("Run all AI")]
+                ],
                 ScreeningFilters(
                     self.context["filter_form"],
                     reverse("l1_citations_list", args=[review.id]),

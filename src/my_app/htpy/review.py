@@ -145,6 +145,11 @@ class ReviewDetailPage(BasePageTemplate):
             ),
             h.h1[review.title],
             h.p(".text-muted.fs-5")[review.description],
+            h.p[
+                h.a(href=reverse("cancel_review_tasks", args=[review.id]))[
+                    tdt("Cancel tasks for this review")
+                ],
+            ],
             h.div(".d-grid.gap-3.mb-4")[
                 h.div[
                     self.build_stage_card(

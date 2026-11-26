@@ -34,6 +34,7 @@ class TextExtractionStatus(models.TextChoices):
     PENDING = ("pending", tdt("Pending"))
     COMPLETED = ("completed", tdt("Completed"))
     FAILED = ("failed", tdt("Failed"))
+    CANCELED = ("canceled", tdt("Canceled"))
 
 
 class BoundingBoxJSONField(models.JSONField):
@@ -50,11 +51,20 @@ class FigureExtractionStatus(models.TextChoices):
     PENDING = ("pending", tdt("Pending"))
     COMPLETED = ("completed", tdt("Completed"))
     FAILED = ("failed", tdt("Failed"))
+    CANCELED = ("canceled", tdt("Canceled"))
 
 
 @add_to_admin
 class TextExtractionResult(models.Model):
     TextExtractionStatus = TextExtractionStatus
+
+    workflow_request = models.ForeignKey(
+        "my_app.Phase2CitationWorkflowRequest",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="text_extraction_results",
+    )
 
     document = fields.OneToOneField(
         Document,
@@ -131,6 +141,14 @@ class DocumentFigure(AbstractArtifact):
 @add_to_admin
 class FigureExtractionResult(models.Model):
     Status = FigureExtractionStatus
+
+    workflow_request = models.ForeignKey(
+        "my_app.Phase2CitationWorkflowRequest",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="figure_extraction_results",
+    )
 
     document = fields.OneToOneField(
         Document,

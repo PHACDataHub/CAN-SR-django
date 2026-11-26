@@ -29,6 +29,7 @@ def test_download_states_and_pdf_viewer_refresh(
     with (
         override_settings(
             ENABLE_HTMX_POLLING=False,
+            UNPAYWALL_EMAIL="test@example.com",
             STORAGES={
                 "default": {
                     "BACKEND": "django.core.files.storage.InMemoryStorage"

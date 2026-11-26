@@ -1,6 +1,7 @@
 import logging
 
 from django.tasks import task
+from django.utils import timezone
 
 from proj.util import MissingPreconditionError
 
@@ -10,17 +11,20 @@ from my_app.services.doi_pdf_service import (
     DoiPdfService,
     log_doi_pdf_event,
 )
+from my_app.services.task_cancellation import task_was_canceled
 
 
 @task
-def process_doi_pdf_request(request_id: int, run_id: str):
+def process_doi_pdf_request(
+    request_id: int, run_id: str, cancellation_generation_id: int = 0
+):
     run_id = str(run_id)
     context = {"request_id": request_id, "run_id": run_id}
     log_doi_pdf_event("task_started", **context)
     stage = "load_request"
     try:
         result = (
-            PdfFromDOIRequest.objects.select_related("citation")
+            PdfFromDOIRequest.objects.select_related("citation__dataset")
             .filter(pk=request_id)
             .first()
         )
@@ -39,6 +43,15 @@ def process_doi_pdf_request(request_id: int, run_id: str):
             log_doi_pdf_event(
                 "task_not_pending", **context, status=result.status
             )
+            return
+        if task_was_canceled(
+            cancellation_generation_id,
+            review_ids=[result.citation.dataset.review_id],
+        ):
+            PdfFromDOIRequest.objects.filter(
+                pk=request_id, run_id=run_id, status=result.Status.PENDING
+            ).update(status=result.Status.CANCELED, updated_dt=timezone.now())
+            log_doi_pdf_event("task_canceled", **context)
             return
         stage = "process_request"
         outcome = DoiPdfService(result.citation, run_id=run_id).perform()

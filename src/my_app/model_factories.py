@@ -244,3 +244,17 @@ class ParameterHumanAnswerFactory(factory.django.DjangoModelFactory):
         review=factory.SelfAttribute("..citation.dataset.review"),
     )
     user = factory.SubFactory(UserFactory)
+
+
+class BulkWorkflowRequestFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = "my_app.BulkWorkflowRequest"
+
+    review = factory.SubFactory(ReviewFactory)
+
+
+class Phase2CitationWorkflowRequestFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = "my_app.Phase2CitationWorkflowRequest"
+
+    citation = factory.SubFactory(CitationFactory)
