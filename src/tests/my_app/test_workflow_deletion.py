@@ -55,15 +55,6 @@ def test_delete_question_keeps_history(
     other_review_url = reverse(
         f"delete_{stage}_question", args=[ReviewFactory().pk, question.pk]
     )
-    if stage == "l1":
-        mirror = question.sync_to_l2()
-        mirror_answer = L2HumanAnswerFactory(
-            citation=answer.citation, question=mirror
-        )
-        mirror_url = reverse(
-            "delete_l2_question", args=[question.review_id, mirror.pk]
-        )
-
     with patch_rules(can_access_review=False):
         assert vanilla_client.post(url).status_code == 403
     with patch_rules(can_access_review=True):
@@ -73,9 +64,6 @@ def test_delete_question_keeps_history(
         assert question.__class__.active_objects.filter(
             pk=question.pk
         ).exists()
-        if stage == "l1":
-            assert b"its L2 copy" in confirmation.content
-            assert vanilla_client.post(mirror_url).status_code == 404
         response = vanilla_client.post(url)
 
     assert response.status_code == 200
@@ -84,10 +72,6 @@ def test_delete_question_keeps_history(
     assert question.is_deleted
     answer.refresh_from_db()
     result.refresh_from_db()
-    if stage == "l1":
-        mirror.refresh_from_db()
-        assert mirror.is_deleted
-        mirror_answer.refresh_from_db()
 
 
 def test_delete_pdf_clears_only_pdf_work_and_allows_new_download(

@@ -111,6 +111,14 @@ class GetJsonDataColumn(Column):
         return str(value)
 
 
+class CitationIDColumn(AttributeColumn):
+    def render_cell(self, record):
+        return f"#{self.get_value(record)}"
+
+    def render_plaintext_cell(self, record):
+        return super().render_cell(record)
+
+
 class ReviewTableDef(TableDef):
     def __init__(self, *, review, **kwargs):
         self.review = review

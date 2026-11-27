@@ -635,6 +635,11 @@ def download_pdf(url):
         yield content
 
 
+def delete_unreferenced_document_file(storage, name, *, reason="replaced_pdf"):
+    if not Document.objects.filter(file=name).exists():
+        delete_stored_file(storage, name, reason=reason)
+
+
 def delete_stored_file(storage, name, *, reason="replaced_pdf"):
     try:
         storage.delete(name)
@@ -997,7 +1002,7 @@ class DoiPdfService:
                 result.save()
                 if old_file:
                     transaction.on_commit(
-                        lambda: delete_stored_file(
+                        lambda: delete_unreferenced_document_file(
                             document.file.storage, old_file
                         )
                     )

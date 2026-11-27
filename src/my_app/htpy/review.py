@@ -61,6 +61,13 @@ class ReviewEditPage(BasePageTemplate):
             GenericFormWithContainer(
                 self.context["form"],
             ),
+            h.button(
+                ".btn.btn-secondary.mt-3",
+                type="button",
+                hx_get=reverse("clone_review", args=[review.id]),
+                hx_target="#modal-slot",
+                hx_swap="innerHTML",
+            )[tdt("Clone review")],
             (
                 h.details(".border.border-danger.rounded.p-3.mt-5")[
                     h.summary(".text-danger.fw-semibold")[tdt("Danger zone")],

@@ -22,10 +22,6 @@ let viewerInitializing = false;
 const pageViewports = new Map();
 let selectedEvidenceHighlights = [];
 
-document.body.addEventListener('citations-update', () => {
-    window.location.reload();
-});
-
 document.body.addEventListener('htmx:afterSettle', (event) => {
     if (event.detail.elt?.id === 'workflow-detail-component') {
         args = pdfViewerArgs();

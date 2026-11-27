@@ -4,12 +4,14 @@ import uuid
 from urllib.parse import urlencode
 
 from django import forms
+from django.contrib import messages
 from django.http import Http404, HttpResponseBadRequest
 from django.views.generic import TemplateView
 
 import htpy as h
 
 from proj.form_util import SoftDeleteInlineFormSet
+from proj.htpy.base_page import MessagesBar
 from proj.htpy.form_components import ErrorSummary, InlineFormset
 from proj.htpy.modal_component import ModalComponent
 
@@ -119,28 +121,10 @@ class L1FormsetAdapter(FormsetAdapter):
             model = L1ScreeningQuestion
             fields = ["question_text", "disable_screening", "confidence"]
 
-        def save(self, commit=True):
-            question = super().save(commit=commit)
-            if commit:
-                question.sync_to_l2()
-            return question
-
     class ChildFormClass(ModelForm, StandardFormMixin):
         class Meta:
             model = L1ScreeningQuestionOption
             fields = ["option_text", "option_value", "screening_action"]
-
-        def save(self, commit=True):
-            option = super().save(commit=commit)
-            if commit:
-                option.sync_to_l2()
-            return option
-
-    class FormSetClass(SoftDeleteInlineFormSet):
-        def delete_existing(self, obj, commit=True):
-            super().delete_existing(obj, commit=commit)
-            if commit:
-                obj.sync_to_l2()
 
     @staticmethod
     def get_new_url(review):
@@ -320,9 +304,6 @@ class ScreeningCriteriaPageContent(HtpyComponent):
         parent_records = adapter.parent_model.active_objects.filter(
             review=review
         )
-        if adapter is L2FormsetAdapter:
-            # filter out 'mirrored' questions
-            parent_records = parent_records.filter(l1_question__isnull=True)
         child_fetcher.prefetch_keys([parent.pk for parent in parent_records])
 
         if parent_records:
@@ -476,14 +457,11 @@ class ChildEditor:
         else:
             extra = 1
 
-        formset_class = getattr(
-            self.adapter, "FormSetClass", SoftDeleteInlineFormSet
-        )
         FormSetCls = forms.models.inlineformset_factory(
             parent_model=self.adapter.parent_model,
             model=self.adapter.child_model,
             form=self.adapter.ChildFormClass,
-            formset=formset_class,
+            formset=SoftDeleteInlineFormSet,
             extra=extra,
             can_delete=True,
         )
@@ -513,7 +491,8 @@ class ChildEditor:
         error_summary = None
         if self.data is not None:
             error_summary = ErrorSummary(
-                [self.child_form, *self.child_formset.forms]
+                [self.child_form, *self.child_formset.forms],
+                formset_errors=self.child_formset.non_form_errors(),
             )
 
         form_attrs = {
@@ -523,6 +502,7 @@ class ChildEditor:
             "hx-select": f"#{self.form_id}",
             "class": "mb-4 border p-3 rounded",
             "id": self.form_id,
+            "novalidate": True,
         }
         if self.adapter is ParameterFormsetAdapter:
             option_type = (
@@ -579,7 +559,11 @@ class ChildEditorModalFormView(MustAccessReviewMixin):
         # re-render the entire parent page
         # hx-swap-oob will take care of swapping updated data
         content = ScreeningCriteriaPageContent(self.review).render()
-        resp = HttpResponse(content)
+        message = tdt("Screening question saved.")
+        if self.adapter is ParameterFormsetAdapter:
+            message = tdt("Parameter saved.")
+        messages.success(self.request, message)
+        resp = HttpResponse(h.fragment[content, MessagesBar(self.request)])
         resp["HX-Trigger-After-Settle"] = "modal-close"
         resp["Hx-Reswap"] = "none"
 
@@ -587,7 +571,7 @@ class ChildEditorModalFormView(MustAccessReviewMixin):
 
     def form_invalid(self):
         resp = HttpResponse(self.editor.render_modal())
-        resp["HX-Refocus"] = f"#{self.editor.form_id}-error-summary"
+        resp["HX-Refocus"] = "#form-error-summary"
         return resp
 
     def post(self, *args, **kwargs):
@@ -622,10 +606,6 @@ class ChildEditorEditView(ChildEditorModalFormView):
                 pk=parent_id, review=self.review
             )
         except self.adapter.parent_model.DoesNotExist:
-            raise Http404
-
-        if isinstance(parent, L2ScreeningQuestion) and parent.l1_question_id:
-            # mirrored L2 questions can't be edited through forms
             raise Http404
 
         editor = ChildEditor(
@@ -673,8 +653,6 @@ class DeleteScreeningQuestionView(MustAccessReviewMixin):
         queryset = self.adapter.parent_model.active_objects.filter(
             review=self.review
         )
-        if self.adapter is L2FormsetAdapter:
-            queryset = queryset.filter(l1_question__isnull=True)
         if lock:
             queryset = queryset.select_for_update()
         try:
@@ -688,11 +666,6 @@ class DeleteScreeningQuestionView(MustAccessReviewMixin):
             "This question will be removed from active screening. "
             "Past answers and results will be kept."
         )
-        if isinstance(question, L1ScreeningQuestion):
-            message = tdt(
-                "This question and its L2 copy will be removed from active screening. "
-                "Past answers and results will be kept."
-            )
         return HttpResponse(
             DeleteConfirmation(
                 tdt("Delete question"),
@@ -704,8 +677,12 @@ class DeleteScreeningQuestionView(MustAccessReviewMixin):
     def post(self, *args, **kwargs):
         with transaction.atomic():
             self.get_question(lock=True).soft_delete()
+        messages.success(self.request, tdt("Screening question deleted."))
         return HttpResponse(
-            ScreeningCriteriaPageContent(self.review).render(),
+            h.fragment[
+                ScreeningCriteriaPageContent(self.review).render(),
+                MessagesBar(self.request),
+            ],
             headers={
                 "HX-Reswap": "none",
                 "HX-Trigger-After-Settle": "modal-close",
@@ -816,6 +793,7 @@ class EditScreeningColumnsModal(MustAccessReviewMixin):
                 hx_select="#screening-columns-form",
                 id="screening-columns-form",
             )[
+                ErrorSummary([self.form]),
                 GenericForm(self.form),
             ],
         ]
@@ -837,12 +815,15 @@ class EditScreeningColumnsModal(MustAccessReviewMixin):
     def form_valid(self):
         self.form.save()
 
-        resp = HttpResponse(self._render_page())
+        messages.success(self.request, tdt("Screening columns saved."))
+        resp = HttpResponse(
+            h.fragment[self._render_page(), MessagesBar(self.request)]
+        )
         resp["HX-Trigger-After-Settle"] = "modal-close"
         resp["Hx-Reswap"] = "none"
         return resp
 
     def form_invalid(self):
         resp = HttpResponse(self._render_modal())
-        resp["HX-Refocus"] = "#screening-columns-form"
+        resp["HX-Refocus"] = "#form-error-summary"
         return resp

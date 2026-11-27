@@ -51,6 +51,7 @@ def _build_pdf_file(name="example.pdf"):
     )
 
 
+@override_settings(ENABLE_HTMX_POLLING=True)
 def test_screening_l2_shell_renders_component_and_refresh_button(
     vanilla_client,
 ):
@@ -75,8 +76,12 @@ def test_screening_l2_shell_renders_component_and_refresh_button(
     assert response.status_code == 200
     assert "L2 Screening" in body
     assert reverse("l2_citations_list_partial", args=[review.id]) in body
-    assert 'hx-target="#l2-screening-component"' in body
-    assert 'hx-swap="morph:outerHTML"' in body
+    component = soup_from_str(response.content).select_one(
+        "#l2-screening-component.workflow-refresh"
+    )
+    assert component is not None
+    assert component["hx-target"] == "this"
+    assert component["hx-swap"] == "morph:outerHTML"
     assert (
         'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s [!document.hidden]"'
         in body
@@ -615,6 +620,7 @@ def test_l2_human_answer_modal_saves_question_option_and_notes(
         response["HX-Retarget"] == f"#l2-question-panel-{row.id}-{question.id}"
     )
     assert response["HX-Reswap"] == "morph:outerHTML"
+    assert "Answer saved." in body
     assert answer.option_text in body
     assert "Human review notes." in body
     assert "Edit your answer" in body
@@ -1053,6 +1059,7 @@ def test_citation_document_upload_view_uploads_document_and_triggers_refresh(
     assert response["HX-Trigger"] == "citations-update"
     assert response["HX-Trigger-After-Settle"] == "modal-close"
     assert response["HX-Reswap"] == "none"
+    assert "PDF uploaded." in response.content.decode()
     assert perform_mock.call_count == 1
     row.refresh_from_db()
     assert row.document is not None

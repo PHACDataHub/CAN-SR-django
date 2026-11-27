@@ -3,6 +3,7 @@ from django.http import HttpResponse
 
 import htpy as h
 from autocomplete import AutocompleteWidget
+from django_htmx.http import HttpResponseClientRedirect
 
 from proj.htpy.generic_form import GenericForm
 from proj.htpy.modal_component import ModalComponent
@@ -18,6 +19,7 @@ from my_app.htpy.review import (
 from my_app.models import LanguageModel, Review, ReviewUserLink
 from my_app.queries import get_accessible_reviews
 from my_app.router import route
+from my_app.services.clone_review import clone_review
 from my_app.views.view_utils import MustAccessReviewMixin, ReviewMixin
 from shortcuts import (
     CreateView,
@@ -29,6 +31,8 @@ from shortcuts import (
     MustPassRuleMixin,
     StandardFormMixin,
     UpdateView,
+    cached_property,
+    get_object_or_404,
     messages,
     redirect,
     reverse,
@@ -245,3 +249,74 @@ class HardDeleteReviewView(MustPassRuleMixin, ReviewMixin, FormView):
             footer=footer,
             modal_id="hard-delete-review-modal",
         )[body]
+
+
+class CloneReviewForm(forms.Form):
+    confirm = forms.BooleanField(
+        label=tdt("I confirm that I want to clone this review."),
+        required=True,
+    )
+
+
+@route("reviews/<int:review_id>/clone/", name="clone_review")
+class CloneReviewView(MustAccessReviewMixin, FormView):
+    form_class = CloneReviewForm
+    form_id = "clone-review-form"
+
+    @cached_property
+    def review(self):
+        return get_object_or_404(Review, pk=self.kwargs["review_id"])
+
+    def get(self, request, *args, **kwargs):
+        return self.render_modal(self.get_form())
+
+    def form_valid(self, form):
+        clone = clone_review(self.review, self.request.user)
+        messages.success(self.request, tdt("Review cloned."))
+        success_url = reverse("review_detail", args=[clone.pk])
+
+        if self.request.headers.get("HX-Request") == "true":
+            return HttpResponseClientRedirect(success_url)
+
+        return redirect(success_url)
+
+    def form_invalid(self, form):
+        return self.render_modal(form)
+
+    def render_modal(self, form):
+        url = reverse("clone_review", args=[self.review.pk])
+        footer = h.fragment[
+            h.button(
+                ".btn.btn-secondary", type="button", data_modal_close=True
+            )[tdt("Cancel")],
+            h.button(
+                ".btn.btn-primary",
+                type="submit",
+                form=self.form_id,
+            )[tdt("Clone review")],
+        ]
+        return HttpResponse(
+            ModalComponent(
+                title=tdt("Clone review"),
+                modal_id="clone-review-modal",
+                footer=footer,
+            )[
+                h.p[
+                    tdt(
+                        "The new review will include the screening criteria, "
+                        "dataset columns, citations, and attached PDFs. "
+                        "Screening answers, extracted content, and workflow "
+                        "results will be left behind."
+                    )
+                ],
+                h.form(
+                    id=self.form_id,
+                    method="post",
+                    action=url,
+                    hx_post=url,
+                    hx_target="#modal-slot",
+                    hx_swap="innerHTML",
+                    hx_disabled_elt=f'[form="{self.form_id}"]',
+                )[GenericForm(form)],
+            ]
+        )

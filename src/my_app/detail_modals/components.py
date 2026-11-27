@@ -385,8 +385,7 @@ def AnswerDetails(citation, question, data):
     if threshold is None:
         threshold = DEFAULT_CONFIDENCE
     return h.div[
-        h.h2(".h5")[citation.title or tdt("Untitled citation")],
-        h.p(".small.text-muted")[tdt("Citation ID"), ": ", str(citation.pk)],
+        h.h2(".h5")[citation.display_title],
         CitationModalButton(citation, question, data.stage),
         h.p[StageDetailLink(citation, data.stage)],
         h.h2(".h5")[question.question_text],
@@ -653,8 +652,7 @@ def CitationDetails(citation, stage):
         key=lambda item: (item[0] not in priority, item[0]),
     )
     return h.div[
-        h.h2(".h4")[citation.title or tdt("Untitled citation")],
-        h.p(".small.text-muted")[tdt("Citation ID"), ": ", str(citation.pk)],
+        h.h2(".h4")[citation.display_title],
         h.h2(".h5")[tdt("Abstract")],
         h.p(".detail-value")[
             citation.abstract or tdt("No abstract available.")
@@ -745,7 +743,7 @@ def CitationDetails(citation, stage):
 def ParameterAnswerDetails(citation, question, data):
     answers = data.human_answers.get(question.pk, [])
     return h.div[
-        h.h2(".h5")[citation.title or tdt("Untitled citation")],
+        h.h2(".h5")[citation.display_title],
         CitationModalButton(citation, question, data.stage),
         h.p[StageDetailLink(citation, data.stage)],
         h.h2(".h5")[question.name],

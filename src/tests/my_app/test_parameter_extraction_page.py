@@ -31,10 +31,12 @@ from my_app.models import (
     ScreeningResultStatus,
     TextExtractionResult,
 )
+from tests.utils_for_testing import soup_from_str
 
 pytestmark = [pytest.mark.view]
 
 
+@override_settings(ENABLE_HTMX_POLLING=True)
 def test_parameter_extraction_shell_renders_component_and_refresh_button(
     vanilla_client,
 ):
@@ -57,8 +59,12 @@ def test_parameter_extraction_shell_renders_component_and_refresh_button(
         )
         in body
     )
-    assert 'hx-target="#parameter-extraction-component"' in body
-    assert 'hx-swap="morph:outerHTML"' in body
+    component = soup_from_str(response.content).select_one(
+        "#parameter-extraction-component.workflow-refresh"
+    )
+    assert component is not None
+    assert component["hx-target"] == "this"
+    assert component["hx-swap"] == "morph:outerHTML"
     assert (
         'hx-trigger="click from:#refresh-button, citations-update from:body, every 5s [!document.hidden]"'
         in body

@@ -76,38 +76,13 @@ def prepare_selections(question, column, citations):
     }
 
 
-def prepare_mirror_selections(mirror, selections):
-    mirror_options = {
-        option.l1_option_id: option.pk
-        for option in mirror.options.all()
-        if option.deletion_time is None and option.l1_option_id is not None
-    }
-    if any(
-        option_id is not None and option_id not in mirror_options
-        for option_id in selections.values()
-    ):
-        raise ValidationError(
-            tdt("Missing active mirrored options for question: %s")
-            % mirror.question_text
-        )
-    return {
-        citation_id: mirror_options.get(option_id)
-        for citation_id, option_id in selections.items()
-    }
-
-
 @transaction.atomic
 def create_human_answers(review, mappings):
-    """Backfill (question, dataset column) mappings, including L2 mirrors."""
+    """Backfill (question, dataset column) mappings."""
     mappings = list(mappings)
     if not mappings:
         return
     questions = load_questions(review)
-    mirrors = {
-        question.l1_question_id: question
-        for (model, _), question in questions.items()
-        if model is L2ScreeningQuestion and question.l1_question_id is not None
-    }
     columns = {
         column.pk: column
         for column in CitationDatasetColumn.objects.filter(
@@ -128,27 +103,12 @@ def create_human_answers(review, mappings):
             raise ValidationError(
                 tdt("Question or column does not belong to this review.")
             )
-        if (
-            isinstance(question, L2ScreeningQuestion)
-            and question.l1_question_id
-        ):
-            raise ValidationError(
-                tdt("Mirrored L2 questions must be mapped through L1.")
-            )
         try:
             selections = prepare_selections(question, column, citations)
             answer_model = L1HumanAnswer
             if isinstance(question, L2ScreeningQuestion):
                 answer_model = L2HumanAnswer
             plans[answer_model][question.pk] = selections
-            if (
-                isinstance(question, L1ScreeningQuestion)
-                and question.pk in mirrors
-            ):
-                mirror = mirrors[question.pk]
-                plans[L2HumanAnswer][mirror.pk] = prepare_mirror_selections(
-                    mirror, selections
-                )
         except ValidationError as error:
             errors.extend(error.messages)
     if errors:

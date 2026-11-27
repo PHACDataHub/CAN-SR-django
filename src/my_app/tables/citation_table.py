@@ -1,9 +1,10 @@
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from django.db.models import DateTimeField, OuterRef, Subquery, Value
 from django.db.models.functions import Coalesce, Greatest, NullIf
 
-from proj.text import tdt
+import htpy as h
 
 from my_app.models import (
     Citation,
@@ -14,35 +15,55 @@ from my_app.models import (
     L2HumanAnswer,
     L2ScreeningResult,
 )
+from shortcuts import reverse, tdt
 
 from .common import (
     AnnotateCitationStatuses,
+    CitationIDColumn,
     DetailColumn,
     ReviewTableDef,
     StatusColumns,
 )
 from .table_framework import (
     AbbreviatedAttributeColumn,
-    AttributeColumn,
     DateTimeAttributeColumn,
 )
+
+
+class CitationTitleColumn(AbbreviatedAttributeColumn):
+    def render_cell(self, record):
+        title = super().render_cell(record) or tdt("Untitled citation")
+        return f"#{record.pk} {title}"
+
+
+@dataclass
+class CitationTitleLinkColumn(CitationTitleColumn):
+    review_id: int = None
+
+    def render_cell(self, record):
+        return h.a(
+            href=reverse("citation_detail", args=[self.review_id, record.pk])
+        )[super().render_cell(record)]
 
 
 class CitationDatasetTableDef(ReviewTableDef):
     title = tdt("Dataset")
     default_ordering = ("order", "pk")
 
+    def get_title_column(self):
+        return CitationTitleLinkColumn(
+            "title", tdt("Title"), sort_field="title", review_id=self.review.pk
+        )
+
     def get_citation_columns(self):
         return [
-            AttributeColumn(
+            CitationIDColumn(
                 "id",
                 tdt("Citation ID"),
                 sort_field="pk",
                 default_enabled=False,
             ),
-            AbbreviatedAttributeColumn(
-                "title", tdt("Title"), sort_field="title"
-            ),
+            self.get_title_column(),
             AbbreviatedAttributeColumn("abstract", tdt("Abstract")),
             AbbreviatedAttributeColumn("doi", tdt("DOI")),
         ]
@@ -56,6 +77,9 @@ class CitationDatasetTableDef(ReviewTableDef):
 
 class CitationTableDef(CitationDatasetTableDef):
     title = tdt("Citations")
+
+    def get_title_column(self):
+        return CitationTitleColumn("title", tdt("Title"), sort_field="title")
 
     def get_columns(self):
         return [

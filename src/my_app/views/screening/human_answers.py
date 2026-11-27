@@ -1,8 +1,11 @@
 from django import forms
+from django.contrib import messages
 from django.http import HttpResponse
 
 import htpy as h
 
+from proj.htpy.base_page import MessagesBar
+from proj.htpy.form_components import ErrorSummary
 from proj.htpy.modal_component import ModalComponent
 
 from my_app.models import Citation, ScreeningResultStatus
@@ -96,7 +99,7 @@ class ScreeningHumanAnswerViewMixin(MustAccessReviewMixin, View):
         panels = QuestionPanels(
             self.citation, self.review, self.request.user, self.stage
         )
-        return str(panels.panel(self.question).render())
+        return panels.panel(self.question).render()
 
     def can_validate(self):
         return (
@@ -174,9 +177,11 @@ class HumanAnswerFormView:
                 h.form(
                     id=form_id,
                     hx_post=self.request.path,
-                    hx_target="#modal-slot",
-                    hx_swap="innerHTML",
-                )[GenericForm(self.form)],
+                    hx_target="this",
+                    hx_swap="outerHTML",
+                    hx_select=f"#{form_id}",
+                    novalidate=True,
+                )[ErrorSummary([self.form]), GenericForm(self.form)],
             ]
         )
 
@@ -185,12 +190,19 @@ class HumanAnswerFormView:
 
     def post(self, request, *args, **kwargs):
         if not self.form.is_valid():
-            return HttpResponse(self.render_modal())
+            return HttpResponse(
+                self.render_modal(),
+                headers={"HX-Refocus": "#form-error-summary"},
+            )
 
         self.form.save()
-        response = HttpResponse(self.render_control())
+        messages.success(self.request, tdt("Answer saved."))
+        response = HttpResponse(
+            h.fragment[self.render_control(), MessagesBar(self.request)]
+        )
         response["HX-Retarget"] = f"#{self.control_id}"
         response["HX-Reswap"] = "morph:outerHTML"
+        response["HX-Reselect"] = f"#{self.control_id}"
         response["HX-Trigger-After-Settle"] = "modal-close"
         return response
 

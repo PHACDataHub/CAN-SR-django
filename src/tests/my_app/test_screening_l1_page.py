@@ -19,10 +19,12 @@ from my_app.models import (
     L1ScreeningResult,
     ScreeningResultStatus,
 )
+from tests.utils_for_testing import soup_from_str
 
 pytestmark = [pytest.mark.view, pytest.mark.l1_screening]
 
 
+@override_settings(ENABLE_HTMX_POLLING=True)
 def test_screening_l1_shell_renders_component_and_refresh_button(
     vanilla_client,
 ):
@@ -46,8 +48,12 @@ def test_screening_l1_shell_renders_component_and_refresh_button(
     assert response.status_code == 200
     assert "L1 Screening" in body
     assert reverse("l1_citations_list_partial", args=[review.id]) in body
-    assert 'hx-target="#l1-screening-component"' in body
-    assert 'hx-swap="morph:outerHTML"' in body
+    component = soup_from_str(response.content).select_one(
+        "#l1-screening-component.workflow-refresh"
+    )
+    assert component is not None
+    assert component["hx-target"] == "this"
+    assert component["hx-swap"] == "morph:outerHTML"
     assert (
         'hx-trigger="click from:#refresh-button, every 5s [!document.hidden]"'
         in body

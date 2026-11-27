@@ -64,7 +64,7 @@ class WorkflowTemplate(BasePageTemplate):
             )
         citation = self.context.get("citation")
         if citation is not None:
-            description = citation.title
+            description = citation.display_title
         title = tdt("{phase} workflow").format(phase=phase.label)
         return h.div(".container")[
             bc.BreadcrumbTrailForReview(self.context["review"])[
@@ -141,7 +141,7 @@ class WorkflowStatusTemplate(BasePageTemplate):
                             "phase2_citation_workflow_status",
                             args=[workflow.review_id, child.pk],
                         )
-                    )[child.citation.title],
+                    )[child.citation.display_title],
                     ": ",
                     child.get_status_display(),
                 ]
@@ -174,21 +174,29 @@ class WorkflowStatusTemplate(BasePageTemplate):
                     args=[workflow.review_id, citation_id],
                 )
             members.append(
-                h.li[h.a(href=url)[rows[0].citation.title], ": ", status.label]
+                h.li[
+                    h.a(href=url)[rows[0].citation.display_title],
+                    ": ",
+                    status.label,
+                ]
             )
         return members
 
     def content(self):
         workflow = self.context["object"]
         phase = BulkWorkflowRequest.Phase.L2
+        citation_title = None
         if isinstance(workflow, BulkWorkflowRequest):
             phase = BulkWorkflowRequest.Phase(workflow.phase)
+        else:
+            citation_title = h.p[workflow.citation.display_title]
         title = tdt("{phase} workflow status").format(phase=phase.label)
         return h.div(".container")[
             bc.BreadcrumbTrailForReview(self.context["review"])[
                 bc.BreadcrumbItem(label=title)
             ],
             h.h1[title],
+            citation_title,
             h.p[workflow.get_status_display()],
             h.p[workflow.error],
             h.p[tdt("Requested at"), ": ", str(workflow.requested_at)],

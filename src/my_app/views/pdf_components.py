@@ -175,7 +175,7 @@ class CitationDocumentUploadModal:
             title=title,
             modal_id=self.modal_id,
             footer=footer,
-        )[self.render_form_body()]
+        )[h.p[self.citation_row.display_title], self.render_form_body()]
 
     def render_form_body(self):
         if self.existing_document is not None:
@@ -192,8 +192,9 @@ class CitationDocumentUploadModal:
                 "citation_upload_pdf_document_modal",
                 args=[self.review.id, self.citation_row.id],
             ),
-            hx_target="#modal-slot",
-            hx_swap="innerHTML",
+            hx_target="this",
+            hx_swap="outerHTML",
+            hx_select=f"#{self.form_id}",
             hx_encoding="multipart/form-data",
         )[
             ErrorSummary([self.form]),
@@ -224,9 +225,7 @@ def DocumentWorkflowCitationRow(
     )[
         h.div(".d-flex.justify-content-between.align-items-start.gap-3")[
             h.div(".flex-grow-1")[
-                h.div(".fw-semibold")[
-                    citation_row.title or tdt("Untitled citation")
-                ],
+                h.div(".fw-semibold")[citation_row.display_title],
                 (
                     h.div(".text-muted.small.mt-1")[citation_row.abstract]
                     if citation_row.abstract
@@ -406,8 +405,8 @@ def DocumentWorkflowCitationPanel(
         ],
         h.div(
             ".fw-semibold",
-            title=citation_row.title or None,
-        )[Truncator(citation_row.title or tdt("Untitled citation")).chars(60)],
+            title=citation_row.display_title,
+        )[Truncator(citation_row.display_title).chars(60)],
         h.div(".vstack.gap-2.mt-3.small")[
             DocumentUploadControl(citation_row, review),
             DoiPdfDownloadControl(citation_row, review),
