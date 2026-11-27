@@ -1,7 +1,6 @@
 from itertools import groupby
 
 from django import forms
-from django.contrib import messages
 from django.http import HttpResponseRedirect
 from django.views.generic import DetailView, FormView
 
@@ -12,7 +11,7 @@ from proj.util import MissingPreconditionError
 from my_app.models import BulkWorkflowRequest
 from my_app.router import route
 from my_app.services.bulk_workflow import (
-    BulkWorkflowLimitError,
+    MAX_BULK_CITATIONS,
     QueueBulkResultsService,
     parameter_status,
     screening_status,
@@ -43,25 +42,26 @@ class WorkflowTemplate(BasePageTemplate):
             ]
         if phase == BulkWorkflowRequest.Phase.L1:
             description = tdt(
-                "Run L1 screening for all citations in this review. List filters do not change this selection."
+                "Run L1 screening for the first {limit} citations in this review. Citations are selected in ascending ID order. List filters do not change this selection."
             )
             details = tdt(
                 "Each question runs initial screening followed by critical screening. Previous L1 screening results are replaced."
             )
         elif phase == BulkWorkflowRequest.Phase.PARAMETERS:
             description = tdt(
-                "Run parameter extraction for all citations whose L2 overall status is included. List filters do not change this selection."
+                "Run parameter extraction for the first {limit} citations whose L2 overall status is included. Citations are selected in ascending ID order. List filters do not change this selection."
             )
             details = tdt(
                 "Text and figure extraction must already be complete. One extraction runs per citation and parameter, without critical screening. Previous parameter results are replaced."
             )
         else:
             description = tdt(
-                "Run phase 2 for all citations whose L1 overall status is included. List filters do not change this selection."
+                "Run phase 2 for the first {limit} citations whose L1 overall status is included. Citations are selected in ascending ID order. List filters do not change this selection."
             )
             details = tdt(
                 "Processes run in order: download missing PDFs, process PDFs, then L2 screening. Existing PDF extraction results are reused. L2 screening replaces previous screening results."
             )
+        description = description.format(limit=MAX_BULK_CITATIONS)
         citation = self.context.get("citation")
         if citation is not None:
             description = citation.display_title
@@ -93,9 +93,6 @@ class WorkflowLaunchView(MustAccessReviewMixin, HtpyTemplateMixin, FormView):
     def form_valid(self, form):
         try:
             workflow = self.queue(form.cleaned_data)
-        except BulkWorkflowLimitError as exc:
-            messages.error(self.request, str(exc))
-            return self.form_invalid(form)
         except MissingPreconditionError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)

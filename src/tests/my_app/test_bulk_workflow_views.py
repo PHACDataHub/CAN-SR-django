@@ -1,4 +1,3 @@
-from django.contrib.messages import ERROR, get_messages
 from django.urls import reverse
 
 import pytest
@@ -6,10 +5,16 @@ from phac_aspc.rules import patch_rules
 
 from my_app.model_factories import (
     BulkWorkflowRequestFactory,
+    L1HumanAnswerFactory,
     L1ScreeningQuestionFactory,
     L1ScreeningQuestionOptionFactory,
 )
-from my_app.models import BulkWorkflowRequest, L1CriticalScreeningResult
+from my_app.models import (
+    BulkWorkflowRequest,
+    L1CriticalScreeningResult,
+    L2HumanAnswer,
+    ScreeningActions,
+)
 from my_app.services.bulk_workflow import QueueBulkResultsService
 from tests.bulk_workflow_cases import bulk_context
 
@@ -107,32 +112,51 @@ def test_pending_bulk_is_shown_as_form_error(phase, vanilla_client):
     assert BulkWorkflowRequest.objects.count() == 1
 
 
-@pytest.mark.parametrize("citation_count, question_count", [(51, 1), (50, 11)])
-def test_oversized_bulk_launch_shows_limits(
-    citation_count,
-    question_count,
-    vanilla_client,
-    django_capture_on_commit_callbacks,
+@pytest.mark.parametrize("phase", [1, 2, 3])
+def test_bulk_launch_selects_first_100_eligible_citations(
+    phase, vanilla_client
 ):
-    review, _, _, _ = bulk_context(1, count=citation_count)
-    for _ in range(question_count - 1):
-        question = L1ScreeningQuestionFactory(review=review)
-        L1ScreeningQuestionOptionFactory(question=question)
+    context_phase = 1 if phase == 2 else phase
+    review, citations, question, _ = bulk_context(context_phase, count=102)
+    eligible = citations
+    url = launch_url(phase, review)
+    options = {}
+    if phase == 1:
+        for _ in range(5):
+            extra_question = L1ScreeningQuestionFactory(review=review)
+            L1ScreeningQuestionOptionFactory(question=extra_question)
+    elif phase == 2:
+        eligible = citations[1:]
+        include = L1ScreeningQuestionOptionFactory(
+            question=question, screening_action=ScreeningActions.ScreenIn
+        )
+        for citation in eligible:
+            L1HumanAnswerFactory(
+                citation=citation, question=question, selected_option=include
+            )
+        url = reverse("phase2_bulk_workflow", args=[review.pk])
+        options = {"should_download_pdf": "on"}
+    else:
+        eligible = citations[1:]
+        L2HumanAnswer.objects.filter(citation=citations[0]).delete()
 
-    with (
-        patch_rules(can_access_review=True),
-        django_capture_on_commit_callbacks() as callbacks,
-    ):
-        response = vanilla_client.post(launch_url(1, review))
+    with patch_rules(can_access_review=True):
+        response = vanilla_client.post(url, options)
 
-    assert response.status_code == 200
-    (message,) = get_messages(response.wsgi_request)
-    assert message.level == ERROR
-    assert "at most 50 citations" in str(message)
-    assert "at most 500" in str(message)
-    assert str(message) in response.content.decode()
-    assert not BulkWorkflowRequest.objects.exists()
-    assert not callbacks
+    assert response.status_code == 302
+    bulk = BulkWorkflowRequest.objects.get(review=review, phase=phase)
+    if phase == 1:
+        results = bulk.l1_results
+        assert results.count() == 600
+    elif phase == 2:
+        results = bulk.citation_requests
+        assert results.count() == 100
+    else:
+        results = bulk.parameter_results
+        assert results.count() == 100
+    assert set(results.values_list("citation_id", flat=True)) == {
+        citation.pk for citation in eligible[:100]
+    }
 
 
 @pytest.mark.parametrize("phase", [1, 3])

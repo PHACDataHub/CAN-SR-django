@@ -29,28 +29,7 @@ from my_app.services.task_cancellation import (
 from my_app.services.workflow_scheduling import BULK_CHECK_PRIORITY
 
 CHECK_INTERVAL = timedelta(seconds=5)
-MAX_BULK_CITATIONS = 50
-MAX_BULK_PAIRS = 500
-
-
-class BulkWorkflowLimitError(MissingPreconditionError):
-    pass
-
-
-def validate_bulk_size(citation_count, question_count):
-    if (
-        citation_count > MAX_BULK_CITATIONS
-        or citation_count * question_count > MAX_BULK_PAIRS
-    ):
-        raise BulkWorkflowLimitError(
-            tdt(
-                "A bulk workflow can run on at most {max_citations} citations, "
-                "and the number of citations multiplied by the number of "
-                "questions or parameters must be at most {max_pairs}."
-            ).format(
-                max_citations=MAX_BULK_CITATIONS, max_pairs=MAX_BULK_PAIRS
-            )
-        )
+MAX_BULK_CITATIONS = 100
 
 
 def bulk_checker_task(bulk, *, run_after=None):
@@ -177,10 +156,9 @@ class QueueBulkResultsService:
                 service = EnqueueParameterExtractionService
             rows = list(
                 citations.order_by("pk").select_for_update()[
-                    : MAX_BULK_CITATIONS + 1
+                    :MAX_BULK_CITATIONS
                 ]
             )
-            validate_bulk_size(len(rows), len(questions))
             bulk = BulkWorkflowRequest.objects.create(
                 review=self.review,
                 phase=self.phase,

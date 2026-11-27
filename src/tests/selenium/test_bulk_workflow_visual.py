@@ -4,19 +4,7 @@ from django.urls import reverse
 
 import pytest
 
-from my_app.model_factories import (
-    L1HumanAnswerFactory,
-    L1ScreeningQuestionFactory,
-    L1ScreeningQuestionOptionFactory,
-    L2ScreeningQuestionFactory,
-    L2ScreeningQuestionOptionFactory,
-    ParameterFactory,
-)
-from my_app.models import (
-    BulkWorkflowRequest,
-    L1CriticalScreeningResult,
-    ScreeningActions,
-)
+from my_app.models import L1CriticalScreeningResult
 from my_app.services.bulk_workflow import QueueBulkResultsService
 from tests.bulk_workflow_cases import bulk_context
 from tests.selenium.test_phase2_workflow_visual import (
@@ -74,71 +62,6 @@ def test_bulk_launch_screenshots(
         )
     assert save_screenshot(
         driver, snapshot_name=f"phase{phase}-bulk-launch-{case}-{viewport}"
-    ).is_file()
-
-
-@pytest.mark.parametrize("phase", [1, 2, 3])
-@pytest.mark.parametrize(
-    "citation_count, question_count",
-    [(51, 1), (50, 11)],
-    ids=["citation-limit", "pair-limit"],
-)
-def test_bulk_limit_screenshots(
-    live_server,
-    driver,
-    admin_user,
-    force_login,
-    save_screenshot,
-    viewport,
-    phase,
-    citation_count,
-    question_count,
-):
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support import expected_conditions as ec
-    from selenium.webdriver.support.ui import WebDriverWait
-
-    context_phase = 1 if phase == 2 else phase
-    review, citations, l1_question, _ = bulk_context(
-        context_phase, count=citation_count
-    )
-    if phase == 1:
-        for _ in range(question_count - 1):
-            question = L1ScreeningQuestionFactory(review=review)
-            L1ScreeningQuestionOptionFactory(question=question)
-    elif phase == 2:
-        include = L1ScreeningQuestionOptionFactory(
-            question=l1_question, screening_action=ScreeningActions.ScreenIn
-        )
-        for citation in citations:
-            L1HumanAnswerFactory(
-                citation=citation,
-                question=l1_question,
-                selected_option=include,
-            )
-        for _ in range(question_count):
-            question = L2ScreeningQuestionFactory(review=review)
-            L2ScreeningQuestionOptionFactory(question=question)
-    else:
-        ParameterFactory.create_batch(question_count - 1, review=review)
-
-    force_login(admin_user)
-    driver.get(live_server.url + launch_url(phase, review))
-    wait = WebDriverWait(driver, 10)
-    wait.until(
-        ec.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']"))
-    ).click()
-    alert = wait.until(
-        ec.visibility_of_element_located(
-            (By.CSS_SELECTOR, "#message-bar .django-message.alert-danger")
-        )
-    )
-    assert "at most 50 citations" in alert.text
-    assert "at most 500" in alert.text
-    assert not BulkWorkflowRequest.objects.filter(review=review).exists()
-    limit = "citation-limit" if citation_count == 51 else "pair-limit"
-    assert save_screenshot(
-        driver, snapshot_name=f"phase{phase}-bulk-launch-{limit}-{viewport}"
     ).is_file()
 
 

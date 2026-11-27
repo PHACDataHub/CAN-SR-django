@@ -114,7 +114,7 @@ All three use `BulkWorkflowRequest`. Its fields are `id`, `review`, `phase` (1/2
 
 Bulk-layer behavior:
 
-- Selection covers the review and ignores frontend list filters. Users review results and make inclusion/exclusion decisions between phases; finishing one bulk phase does not automatically start another.
+- Each bulk workflow selects up to 100 eligible citations in ascending citation ID order, regardless of frontend list filters. Users review results and make inclusion/exclusion decisions between phases; finishing one bulk phase does not automatically start another.
 - Only one pending bulk request per review/phase is allowed. Different phases may run independently. Phase 2 also permits only one pending workflow per citation, including requests started individually; a conflicting bulk submission is rejected atomically.
 - Selected screening/extraction steps require their questions/options or parameters to be configured. Phase 3 also validates completed text and figure extraction for every selected citation before replacing any results.
 - Request/result rows are prepared in batches and tasks are dispatched after commit. Phase 2 citations advance independently; a slow citation does not hold up other citations' next steps.
