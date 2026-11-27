@@ -187,3 +187,122 @@ def test_dataset_table_column_selection_sorting_and_pagination(
     assert "sort_form-column=id" in response.content.decode()
     assert f"{prefix}-columns={key}" in response.content.decode()
     assert "Select at least one column" in empty_selection.content.decode()
+
+
+def test_add_and_edit_citation(vanilla_user_client, vanilla_user):
+    review = _create_review_with_dataset(vanilla_user)
+    dataset = review.citation_dataset
+    dataset_url = reverse("citation_dataset_detail", args=[review.pk])
+    add_url = reverse("add_citation", args=[review.pk])
+    columns = list(dataset.columns.order_by("pk"))
+    fields = {column.name: f"columns-{column.pk}-value" for column in columns}
+    payload = {
+        "title": "Manual citation",
+        "abstract": "Manual abstract",
+        "doi": "10.1000/example",
+        "columns-TOTAL_FORMS": len(columns),
+        "columns-INITIAL_FORMS": len(columns),
+        fields["year"]: "2026",
+        fields["month"]: "November",
+        fields["day"]: "",
+        "columns-unknown-value": "Ignored",
+    }
+
+    with patch_rules(can_access_review=True):
+        assert add_url in vanilla_user_client.get(dataset_url).content.decode()
+        add_page = vanilla_user_client.get(add_url)
+        assert add_page.status_code == 200
+        assert len(add_page.context["column_formset"]) == len(columns)
+        for field in ("title", "abstract"):
+            response = vanilla_user_client.post(
+                add_url, {**payload, field: ""}
+            )
+            assert response.status_code == 200
+            assert response.context["form"].has_error(field, "required")
+        assert (
+            vanilla_user_client.post(
+                add_url, {**payload, "columns-TOTAL_FORMS": 0}
+            ).status_code
+            == 200
+        )
+        assert dataset.rows.count() == 6
+
+        response = vanilla_user_client.post(add_url, payload)
+        citation = dataset.rows.get(title="Manual citation")
+        detail_url = reverse("citation_detail", args=[review.pk, citation.pk])
+        assert response.url == detail_url
+        assert citation.order == 7
+        assert citation.abstract == "Manual abstract"
+        assert citation.doi == "10.1000/example"
+        assert citation.data == {"year": "2026", "month": "November"}
+        assert dataset.columns.count() == len(columns)
+        assert (
+            detail_url in vanilla_user_client.get(dataset_url).content.decode()
+        )
+
+        edit_url = reverse("edit_citation", args=[review.pk, citation.pk])
+        detail = vanilla_user_client.get(detail_url).content.decode()
+        assert edit_url in detail
+        assert "November" in detail
+        edit_page = vanilla_user_client.get(edit_url)
+        assert (
+            edit_page.context["column_formset"][0]["value"].value() == "2026"
+        )
+
+        payload.update(title="Updated citation")
+        payload[fields["month"]] = ""
+        for field in ("title", "abstract"):
+            response = vanilla_user_client.post(
+                edit_url, {**payload, field: ""}
+            )
+            assert response.status_code == 200
+            assert response.context["form"].has_error(field, "required")
+        citation.refresh_from_db()
+        assert citation.title == "Manual citation"
+        assert citation.abstract == "Manual abstract"
+
+        assert vanilla_user_client.post(edit_url, payload).url == detail_url
+
+    citation.refresh_from_db()
+    assert citation.title == "Updated citation"
+    assert citation.order == 7
+    assert citation.data == {"year": "2026", "month": ""}
+
+
+def test_delete_citation_requires_review_access_and_confirmation(
+    vanilla_user_client, vanilla_user
+):
+    review = _create_review_with_dataset(vanilla_user)
+    dataset = review.citation_dataset
+    citation = dataset.rows.first()
+    args = [review.pk, citation.pk]
+    url = reverse("delete_citation", args=args)
+    dataset_url = reverse("citation_dataset_detail", args=[review.pk])
+
+    with patch_rules(can_access_review=False):
+        assert (
+            vanilla_user_client.post(url, {"confirm": "on"}).status_code == 403
+        )
+
+    with patch_rules(can_access_review=True):
+        other_review = _create_review_with_dataset(vanilla_user)
+        for route in ("citation_detail", "edit_citation", "delete_citation"):
+            foreign_url = reverse(route, args=[other_review.pk, citation.pk])
+            assert vanilla_user_client.get(foreign_url).status_code == 404
+
+        detail_url = reverse("citation_detail", args=args)
+        assert url in vanilla_user_client.get(detail_url).content.decode()
+        assert (
+            'id="delete-citation-modal"'
+            in vanilla_user_client.get(url).content.decode()
+        )
+        assert vanilla_user_client.post(url, {}).status_code == 200
+        assert dataset.rows.filter(pk=citation.pk).exists()
+
+        response = vanilla_user_client.post(
+            url, {"confirm": "on"}, headers={"HX-Request": "true"}
+        )
+        assert response.headers["HX-Redirect"] == dataset_url
+
+    assert not dataset.rows.filter(pk=citation.pk).exists()
+    assert dataset.rows.count() == 5

@@ -70,7 +70,15 @@ class CitationDatasetDetailPage(BasePageTemplate):
                 ],
             ],
             h.div(".border.rounded.p-3.h-100")[
-                h.h2(".h5")[tdt("All data")],
+                h.div(
+                    ".d-flex.justify-content-between.align-items-center.mb-2"
+                )[
+                    h.h2(".h5.mb-0")[tdt("All data")],
+                    h.a(
+                        ".btn.btn-primary",
+                        href=reverse("add_citation", args=[review.pk]),
+                    )[tdt("Manually add citation")],
+                ],
                 TableComponent(
                     page_obj=self.context["page_obj"],
                     columns=self.context["columns"],
