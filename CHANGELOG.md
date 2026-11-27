@@ -5,6 +5,16 @@ skip the technical section; it records maintenance and development work.
 
 See our [user-facing-issues](https://github.com/PHACDataHub/CAN-SR-django/issues?q=is%3Aissue+state%3Aopen+label%3Auser-facing) for a list of open user-facing features and bugs that we're already aware of. 
 
+## [3.0.0](https://github.com/PHACDataHub/CAN-SR-django/compare/v2.1.0...v3.0.0) (2026-11-27)
+
+
+### User-facing changes
+
+* add deletion of screening questions and PDF ([#87](https://github.com/PHACDataHub/CAN-SR-django/issues/87)) ([3607cf1](https://github.com/PHACDataHub/CAN-SR-django/commit/3607cf1c1190af131cb54ae3ed4e1a95083f5765))
+* add doi field, auto PDF downloads ([#83](https://github.com/PHACDataHub/CAN-SR-django/issues/83)) ([201ac59](https://github.com/PHACDataHub/CAN-SR-django/commit/201ac590eb3658517df5e7c90cca763b0f01e9cf))
+* lots of small changes ([#94](https://github.com/PHACDataHub/CAN-SR-django/issues/94)) ([fce73d9](https://github.com/PHACDataHub/CAN-SR-django/commit/fce73d9e130f7761ea9624d3ec30a58de01396e2))
+* run all tasks ([#93](https://github.com/PHACDataHub/CAN-SR-django/issues/93)) ([e81e2f9](https://github.com/PHACDataHub/CAN-SR-django/commit/e81e2f917c9d78c4ddec7077a3d71057b45ac8b7))
+
 ## [2.1.0](https://github.com/PHACDataHub/CAN-SR-django/compare/v2.0.0...v2.1.0) (2026-10-26)
 
 
