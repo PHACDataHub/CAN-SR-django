@@ -124,4 +124,4 @@ class CitationPhase2WorkflowStatusView(
     def get_queryset(self):
         return Phase2CitationWorkflowRequest.objects.filter(
             citation__dataset__review=self.review
-        )
+        ).select_related("citation")

@@ -175,9 +175,12 @@ class CitationDocumentModalView(DocumentCitationMixin):
 )
 class CitationDocumentDeleteView(CitationDocumentModalView):
     def render_confirmation(self, *, error=None):
+        title = tdt("Delete PDF for citation #{id}").format(
+            id=self.citation_row.pk
+        )
         return HttpResponse(
             DeleteConfirmation(
-                tdt("Delete PDF"),
+                title,
                 tdt(
                     "This will delete the PDF, its extracted text, figures and tables, "
                     "and the AI results for L2 screening and parameter extraction. "

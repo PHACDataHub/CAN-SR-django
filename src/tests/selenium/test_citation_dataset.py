@@ -69,16 +69,22 @@ def test_add_and_edit_citation(
     assert citation.data == {column.name: "2024"}
 
     driver.get(dataset_url)
-    driver.find_element(By.LINK_TEXT, citation.title).click()
+    driver.find_element(
+        By.LINK_TEXT, f"#{citation.pk} {citation.title}"
+    ).click()
     wait.until(ec.url_to_be(detail_url))
     details = driver.find_element(By.TAG_NAME, "dl").text
+    assert f"#{citation.pk} {citation.title}" in details
     assert citation.abstract in details
     assert citation.doi in details
     assert "2024" in details
     assert save_screenshot(driver, "citation-detail").is_file()
 
     driver.find_element(By.LINK_TEXT, "Edit citation").click()
-    assert driver.find_element(By.TAG_NAME, "h1").text == "Edit citation"
+    assert (
+        driver.find_element(By.TAG_NAME, "h1").text
+        == f"Edit citation #{citation.pk}"
+    )
     year = driver.find_element(By.NAME, year_field)
     assert year.get_property("value") == "2024"
     assert save_screenshot(driver, "citation-edit-form").is_file()
@@ -101,7 +107,9 @@ def test_delete_citation_requires_confirmation(
         "citation_dataset_detail", args=[dataset.review_id]
     )
     driver.get(dataset_url)
-    driver.find_element(By.LINK_TEXT, citation.title).click()
+    driver.find_element(
+        By.LINK_TEXT, f"#{citation.pk} {citation.title}"
+    ).click()
 
     wait = WebDriverWait(driver, 10)
     delete_url = reverse(
@@ -114,6 +122,7 @@ def test_delete_citation_requires_confirmation(
     )
     wait.until(ec.element_to_be_clickable(delete_button)).click()
     modal = wait.until(ec.visibility_of_element_located(MODAL))
+    assert f"#{citation.pk} {citation.title}" in modal.text
     assert save_screenshot(driver, "citation-delete-confirmation").is_file()
 
     modal.find_element(
@@ -134,6 +143,8 @@ def test_delete_citation_requires_confirmation(
     wait.until(ec.element_to_be_clickable(confirm_button)).click()
     wait.until(ec.url_to_be(dataset_url))
     assert "Citation deleted." in driver.find_element(By.TAG_NAME, "body").text
-    assert not driver.find_elements(By.LINK_TEXT, citation.title)
+    assert not driver.find_elements(
+        By.LINK_TEXT, f"#{citation.pk} {citation.title}"
+    )
     assert not dataset.rows.filter(pk=citation.pk).exists()
     assert save_screenshot(driver, "citation-deleted").is_file()

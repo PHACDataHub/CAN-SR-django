@@ -8,6 +8,7 @@ from my_app.models import Citation, ScreeningResultStatus
 
 from .common import (
     AnnotateCitationStatuses,
+    CitationIDColumn,
     DetailColumn,
     QuestionColumn,
     ReviewTableDef,
@@ -31,7 +32,7 @@ class AnswerTableDef(ReviewTableDef):
     def get_columns(self):
         return [
             AttributeColumn("id", tdt("Answer ID"), sort_field="pk"),
-            AttributeColumn(
+            CitationIDColumn(
                 "citation_id", tdt("Citation ID"), sort_field="citation_id"
             ),
             AbbreviatedAttributeColumn(

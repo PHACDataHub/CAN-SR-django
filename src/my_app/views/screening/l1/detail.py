@@ -128,12 +128,7 @@ class L1CitationScreeningPage(BasePageTemplate):
         return h.section(".border.rounded.p-3")[
             h.h2(".h5.mb-3")[tdt("Citation")],
             h.div(".vstack.gap-4")[
-                h.div[
-                    h.div(".small.text-muted.mb-1")[tdt("Title")],
-                    h.div(".fs-5.fw-semibold")[
-                        citation_row.title or tdt("Untitled citation")
-                    ],
-                ],
+                h.div[h.div(".fs-5.fw-semibold")[citation_row.display_title],],
                 h.div[
                     h.div(".small.text-muted.mb-1")[tdt("Abstract")],
                     h.p(".mb-0")[

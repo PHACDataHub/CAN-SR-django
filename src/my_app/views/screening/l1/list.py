@@ -89,9 +89,7 @@ def CitationRowDisplay(citation_row: Citation, review: Review):
     )[
         h.div(".d-flex.justify-content-between.align-items-start.gap-3")[
             h.div(".flex-grow-1")[
-                h.div(".fw-semibold")[
-                    citation_row.title or tdt("Untitled citation")
-                ],
+                h.div(".fw-semibold")[citation_row.display_title],
                 (
                     h.div(".text-muted.small.mt-1")[citation_row.abstract]
                     if citation_row.abstract

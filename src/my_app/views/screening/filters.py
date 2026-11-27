@@ -41,7 +41,7 @@ class ScreeningFilterForm(FormControlMixin, SelectMixin, forms.Form):
         ),
     )
     search = forms.CharField(
-        label=tdt("Title or abstract"),
+        label=tdt("Title/abstract/ID"),
         required=False,
         widget=forms.TextInput(
             attrs={
@@ -69,7 +69,9 @@ class ScreeningFilterForm(FormControlMixin, SelectMixin, forms.Form):
         search = self.cleaned_data.get("search")
         if search:
             citations = citations.filter(
-                Q(title__icontains=search) | Q(abstract__icontains=search)
+                Q(id__icontains=search)
+                | Q(title__icontains=search)
+                | Q(abstract__icontains=search)
             )
         return citations
 

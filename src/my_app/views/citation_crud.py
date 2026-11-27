@@ -79,7 +79,7 @@ def CitationBreadcrumbs(review, label, citation=None):
         items.insert(
             1,
             bc.BreadcrumbItem(
-                label=tdt("Citation"),
+                label=f'{tdt("Citation")} #{citation.pk}',
                 href=reverse("citation_detail", args=[review.pk, citation.pk]),
             ),
         )
@@ -95,7 +95,7 @@ class CitationDetailPage(BasePageTemplate):
         citation = self.context["object"]
         args = [review.pk, citation.pk]
         values = [
-            (tdt("Title"), citation.title),
+            (tdt("Title"), citation.display_title),
             (tdt("Abstract"), citation.abstract),
             (tdt("DOI"), citation.doi),
             *[
@@ -135,7 +135,7 @@ class CitationFormPage(BasePageTemplate):
     def title(self):
         if self.context["citation"].pk is None:
             return tdt("Manually add citation")
-        return tdt("Edit citation")
+        return f'{tdt("Edit citation")} #{self.context["citation"].pk}'
 
     def content(self):
         review = self.context["review"]
@@ -336,6 +336,7 @@ class DeleteCitationView(DatasetCitationMixin, FormView):
                     )[tdt("Delete citation")],
                 ],
             )[
+                h.p[citation.display_title],
                 h.form(
                     id=self.form_id,
                     method="post",
@@ -343,6 +344,6 @@ class DeleteCitationView(DatasetCitationMixin, FormView):
                     hx_post=url,
                     hx_target="#modal-slot",
                     hx_swap="innerHTML",
-                )[GenericForm(form)]
+                )[GenericForm(form)],
             ]
         )

@@ -19,25 +19,31 @@ from shortcuts import reverse, tdt
 
 from .common import (
     AnnotateCitationStatuses,
+    CitationIDColumn,
     DetailColumn,
     ReviewTableDef,
     StatusColumns,
 )
 from .table_framework import (
     AbbreviatedAttributeColumn,
-    AttributeColumn,
     DateTimeAttributeColumn,
 )
 
 
+class CitationTitleColumn(AbbreviatedAttributeColumn):
+    def render_cell(self, record):
+        title = super().render_cell(record) or tdt("Untitled citation")
+        return f"#{record.pk} {title}"
+
+
 @dataclass
-class CitationTitleLinkColumn(AbbreviatedAttributeColumn):
+class CitationTitleLinkColumn(CitationTitleColumn):
     review_id: int = None
 
     def render_cell(self, record):
         return h.a(
             href=reverse("citation_detail", args=[self.review_id, record.pk])
-        )[super().render_cell(record) or tdt("Untitled citation")]
+        )[super().render_cell(record)]
 
 
 class CitationDatasetTableDef(ReviewTableDef):
@@ -51,7 +57,7 @@ class CitationDatasetTableDef(ReviewTableDef):
 
     def get_citation_columns(self):
         return [
-            AttributeColumn(
+            CitationIDColumn(
                 "id",
                 tdt("Citation ID"),
                 sort_field="pk",
@@ -73,9 +79,7 @@ class CitationTableDef(CitationDatasetTableDef):
     title = tdt("Citations")
 
     def get_title_column(self):
-        return AbbreviatedAttributeColumn(
-            "title", tdt("Title"), sort_field="title"
-        )
+        return CitationTitleColumn("title", tdt("Title"), sort_field="title")
 
     def get_columns(self):
         return [

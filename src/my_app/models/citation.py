@@ -349,6 +349,13 @@ class Citation(models.Model):
     def __str__(self):
         return f"{self.dataset_id} row {self.order}"
 
+    @property
+    def display_title(self):
+        title = self.title or tdt("Untitled citation")
+        if self.pk is None:
+            return title
+        return f"#{self.pk} {title}"
+
     def serialize_for_prompt(self, columns: List[CitationDatasetColumn]):
         # could be used to flexibly include different columns in the prompt
         column_data = [
